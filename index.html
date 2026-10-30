@@ -1281,8 +1281,27 @@ function toggleCloseUp(b) {
   closeUpId = b.id; followId = b.id; opt.follow = true; syncToggles();
   toast('Close-up', ['The hole pulls harder on the side of the star facing it than on the far side', 'That difference stretches the star along the line to the hole and squeezes it from the sides'], 'w');
 }
-// how stretched a star looks: grows steeply as it nears the point where it's torn apart
-function stretchOf(b) { const q = clamp((b.f - 0.75) / 0.85, 0, 1); return 1 + 3 * Math.pow(q, 1.6); }
+// The shape tides give a star, in units of its radius, along the line to the hole (f = radius / Roche lobe).
+// Weak tides raise two equal bulges (a mild football, deformation ~ f³). As the star fills its lobe the near side
+// is drawn to a point at L1 (a Roche lobe is a teardrop, about 1.3 times longer than wide), and overflowing
+// pulls it out further. An intact star stays under about 2×; the long noodle only forms after it's torn apart.
+function tideShape(b) {
+  const f = b.f || 0, sym = 0.22 * Math.pow(Math.min(f, 1), 3);
+  const p = Math.pow(clamp((f - 0.8) / 0.4, 0, 1), 1.5), o = clamp((f - 1) / 0.6, 0, 1);
+  const near = 1 + sym + 0.25 * p + 0.6 * o, far = 1 + sym + 0.2 * o, str = (near + far) / 2;
+  return { near, far, w: 1 / Math.sqrt(str), pinch: clamp(0.6 * p + 0.3 * o, 0, 0.9), str };
+}
+function stretchOf(b) { return tideShape(b).str; }
+// teardrop outline in a frame where +x points at the hole
+function tidePath(ctx, t, R) {
+  ctx.beginPath();
+  for (let i = 0; i <= 48; i++) {
+    const th = i / 48 * Math.PI * 2, c = Math.cos(th), sn = Math.sin(th);
+    const x = c * (c > 0 ? t.near : t.far) * R, y = sn * t.w * R * (c > 0 ? 1 - t.pinch * c ** 4 : 1);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+}
 function retype(st, t, keepMass) {
   st.type = t; st.m0 = st.m; st.R = st.R0 = st.real ? t.Rsun * RSUN_U : t.R; st.core = 0;
   st.noted = false; st.emitAcc = 0; st.ep = null; st.f = 0;
@@ -1814,11 +1833,11 @@ function drawScene() {
     if (b.kind !== 'star') continue;
     const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, R = Math.max(b.R * zoom, 1.6) * s;
     if (b.sn) { drawCollapse(b, X, Y, R, snP(b)); continue; }
-    const st = stretchOf(b), e = st - 1;
-    if (e > 0.01) { // tidally stretched toward the hole, squeezed from the sides
+    const td = tideShape(b);
+    if (td.str > 1.01 && b.hx != null) { // tidally stretched toward the hole, pointed at L1, squeezed from the sides
       const ang = Math.atan2(toSY(b.hx, b.hy) * s - Y, toSX(b.hx, b.hy) * s - X);
-      sctx.save(); sctx.translate(X, Y); sctx.rotate(ang); sctx.translate(R * e * 0.25, 0); sctx.scale(st, 1 / Math.sqrt(st));
-      sctx.drawImage(starCore[b.type.id], -R, -R, 2 * R, 2 * R); sctx.restore();
+      sctx.save(); sctx.translate(X, Y); sctx.rotate(ang); tidePath(sctx, td, R); sctx.clip();
+      sctx.drawImage(starCore[b.type.id], -td.far * R, -td.w * R, (td.far + td.near) * R, 2 * td.w * R); sctx.restore();
     } else sctx.drawImage(starCore[b.type.id], X - R, Y - R, 2 * R, 2 * R);
   }
 }
@@ -2154,14 +2173,16 @@ function drawOverlay() {
         const a = Math.atan2(y2 - y1, x2 - x1); c.beginPath(); c.moveTo(x2, y2);
         c.lineTo(x2 - 9 * Math.cos(a - 0.4), y2 - 9 * Math.sin(a - 0.4)); c.lineTo(x2 - 9 * Math.cos(a + 0.4), y2 - 9 * Math.sin(a + 0.4)); c.closePath(); c.fill();
       };
-      const L = R * str + 14, W = R / Math.sqrt(str) + 30, k = clamp((b.f - 0.5) * 2, 0, 1);
+      const td = tideShape(b), W = R * td.w + 30, k = clamp((b.f - 0.5) * 2, 0, 1);
       const out = `rgba(255,179,106,${0.9 * k})`, inn = `rgba(127,211,230,${0.9 * k})`;
       for (const sg of [1, -1]) {
+        const L = R * (sg > 0 ? td.near : td.far) + 14;
         arrow(X + ca * L * sg, Y + sa * L * sg, X + ca * (L + 34) * sg, Y + sa * (L + 34) * sg, out);
         arrow(X - sa * (W + 30) * sg, Y + ca * (W + 30) * sg, X - sa * W * sg, Y + ca * W * sg, inn);
       }
       c.font = `600 12px "Saira Condensed", sans-serif`; c.textAlign = 'center';
-      c.fillStyle = out; c.fillText('STRETCHED', X + ca * (L + 52), Y + sa * (L + 52) + 4);
+      const Ln = R * td.near + 14;
+      c.fillStyle = out; c.fillText('STRETCHED', X + ca * (Ln + 52), Y + sa * (Ln + 52) + 4);
       c.fillStyle = inn; c.fillText('SQUEEZED', X - sa * (W + 44), Y + ca * (W + 44) + 4);
       c.fillStyle = 'rgba(236,230,218,0.85)'; c.font = `500 11px ${MONO}`;
       c.fillText(`tidal stretch ${str.toFixed(1)}× · Roche lobe ${Math.round(b.f * 100)}% full`, X, Y + Math.max(R, W) + 62);
