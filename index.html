@@ -107,9 +107,19 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
 .ctx .grp{display:flex;align-items:center;gap:8px}
 .ctx input[type=range]{width:min(150px,32vw);accent-color:var(--accent)}
 .ctx output{font-size:12.5px;color:var(--accent);min-width:60px}
-.tools{pointer-events:auto;display:flex;gap:4px;overflow-x:auto;max-width:100%;padding:5px;background:var(--glass);border:1px solid var(--line);
-  border-radius:13px;scrollbar-width:none;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.tools{pointer-events:auto;display:flex;gap:4px;overflow-x:auto;max-width:100%;padding:5px 5px 4px;background:var(--glass);border:1px solid var(--line);
+  border-radius:13px;scrollbar-width:none;overscroll-behavior-x:contain;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .tools::-webkit-scrollbar{display:none}
+.tscroll{pointer-events:auto;position:relative;height:14px;margin-top:-3px;cursor:pointer;touch-action:none}
+.tscroll::before{content:"";position:absolute;left:0;right:0;top:5px;height:4px;border-radius:2px;background:rgba(255,255,255,.08)}
+.tscroll .thumb{position:absolute;top:3px;height:8px;border-radius:4px;background:rgba(255,179,106,.6);cursor:grab}
+.tscroll:hover .thumb,.tscroll .thumb.drag{background:rgba(255,179,106,.95)}
+.tscroll .thumb.drag{cursor:grabbing}
+/* fade the edge that has more stars beyond it */
+.tools.more-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 48px),transparent)}
+.tools.more-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 48px);mask-image:linear-gradient(90deg,transparent,#000 48px)}
+.tools.more-l.more-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 48px,#000 calc(100% - 48px),transparent);mask-image:linear-gradient(90deg,transparent,#000 48px,#000 calc(100% - 48px),transparent)}
 .chip{flex:0 0 auto;display:flex;align-items:center;gap:7px;height:38px;padding:0 12px 0 9px;border-radius:9px;border:1px solid transparent;
   background:transparent;color:var(--dim);font:500 14.5px/1 var(--f-ui);letter-spacing:.03em;cursor:pointer;white-space:nowrap}
 .chip:hover{color:var(--ink);background:rgba(255,255,255,.04)}
@@ -255,6 +265,7 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
 <nav class="dock" id="dock" aria-label="Objects">
   <div class="ctx" id="ctx"></div>
   <div class="tools" id="tools" role="radiogroup" aria-label="Object to place"></div>
+  <div class="tscroll" id="tscroll" aria-hidden="true"><div class="thumb"></div></div>
 </nav>
 
 <aside class="inspect" id="inspect" hidden aria-label="Selected object"></aside>
@@ -2050,7 +2061,7 @@ for (const t of TOOLS) {
 function spinText() { return Math.abs(bhSpin) < 0.005 ? 'χ 0 · none' : `χ ${fmtChi(bhSpin)} ${bhSpin > 0 ? '↺' : '↻'}`; }
 function setTool(id) {
   tool = id;
-  for (const b of toolsEl.querySelectorAll('.chip')) { const on = b.dataset.tool === id; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; }
+  for (const b of toolsEl.querySelectorAll('.chip')) { const on = b.dataset.tool === id; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; if (on && b.scrollIntoView) b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
   const ctx = $('ctx');
   if (id === 'bh') {
     ctx.innerHTML = `<span class="grp"><label for="bhMass"><b>Mass</b></label><input id="bhMass" type="range" min="3" max="80" step="1" value="${bhMass}"><output id="bhMassOut" class="mono">${bhMass} M☉</output></span>`
@@ -2073,6 +2084,39 @@ function setTool(id) {
   ui.style.cursor = id === 'move' ? 'grab' : 'crosshair';
   requestAnimationFrame(() => document.documentElement.style.setProperty('--dock-h', $('dock').offsetHeight + 'px'));
 }
+// toolbar: the mouse wheel scrolls it sideways, and the edges fade where more stars are hidden
+const tsc = $('tscroll'), tth = tsc.querySelector('.thumb');
+function toolsEdges() {
+  const max = toolsEl.scrollWidth - toolsEl.clientWidth;
+  toolsEl.classList.toggle('more-l', toolsEl.scrollLeft > 2);
+  toolsEl.classList.toggle('more-r', toolsEl.scrollLeft < max - 2);
+  // always-visible scrollbar under the toolbar (native ones hide on macOS and phones)
+  tsc.hidden = max <= 2;
+  if (max > 2) {
+    const w = toolsEl.offsetWidth; tsc.style.width = w + 'px';
+    const tw = Math.max(36, w * toolsEl.clientWidth / toolsEl.scrollWidth);
+    tth.style.width = tw + 'px'; tth.style.left = ((w - tw) * toolsEl.scrollLeft / max) + 'px';
+  }
+}
+let tDrag = null;
+tsc.addEventListener('pointerdown', e => {
+  const max = toolsEl.scrollWidth - toolsEl.clientWidth, w = tsc.offsetWidth, tw = tth.offsetWidth;
+  const r = tsc.getBoundingClientRect(), x = e.clientX - r.left, thumbL = parseFloat(tth.style.left) || 0;
+  if (e.target !== tth) toolsEl.scrollLeft = clamp((x - tw / 2) / Math.max(w - tw, 1), 0, 1) * max; // click the track: jump there
+  tDrag = { x: e.clientX, s: toolsEl.scrollLeft, k: max / Math.max(w - tw, 1) };
+  tsc.setPointerCapture(e.pointerId); tth.classList.add('drag'); e.preventDefault();
+});
+tsc.addEventListener('pointermove', e => { if (tDrag) toolsEl.scrollLeft = tDrag.s + (e.clientX - tDrag.x) * tDrag.k; });
+const tEnd = () => { tDrag = null; tth.classList.remove('drag'); };
+tsc.addEventListener('pointerup', tEnd); tsc.addEventListener('pointercancel', tEnd);
+toolsEl.addEventListener('wheel', e => {
+  if (toolsEl.scrollWidth <= toolsEl.clientWidth) return;
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  if (!d) return;
+  toolsEl.scrollLeft += d; e.preventDefault();
+}, { passive: false });
+toolsEl.addEventListener('scroll', toolsEdges, { passive: true });
+addEventListener('resize', toolsEdges);
 const coarse = matchMedia('(pointer: coarse)').matches;
 let moveKey = '';
 function renderMoveCtx(force) {
@@ -2451,6 +2495,7 @@ function frameBody(now) {
 
 resize();
 setTool('move');
+toolsEdges();
 drawGizmo();
 syncPlay(); syncToggles();
 presetSel.value = currentPreset;
