@@ -242,6 +242,7 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     <li>A black hole rarely eats a star whole. Gas spills off through the Roche lobe and the star keeps going. A giant stays big until its envelope is gone, then its helium core is left orbiting, as a white dwarf for a red giant or a Wolf–Rayet star for a blue supergiant. A small star can be whittled down to a brown dwarf. On a stretched orbit, each close pass takes a little (like ASASSN-14ko, which flares every 115 days).</li>
     <li>Not all the stolen gas gets eaten. Near the hole, part of it is blown back out by its own light, 15–65% here and more when the hole is feeding hard, as in ultraluminous X-ray sources. The purple band on the scope tracks how fast gas is falling in.</li>
     <li>Stars above about 8 M☉ can go supernova from the inspector. The iron core collapses, bounces at nuclear density, and the shock stalls until neutrinos reheat it; then it blows the envelope off at thousands of km/s. Stars born above about 20 M☉ leave a black hole here, the rest a neutron star with a kick of a few hundred km/s. Collisions can build stars no galaxy makes on its own: from about 140 to 260 M☉ the star ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ it collapses straight into an intermediate-mass black hole. A real star like that would live a couple of million years first; here it ends at once. In reality the collapse takes a fraction of a second and the shock needs hours to reach a supergiant's surface; here the sequence takes about 5 seconds. Because stars here are drawn far smaller than real ones, ejecta is launched fast enough to escape their exaggerated surface gravity and then coasts away at a realistic 5,000–20,000 km/s. In a tight binary it is launched faster still, to keep the real ratio of ejecta speed to orbital speed (about 50 to 1 in nature), since binaries here are compressed to about 1,000 km.</li>
+    <li>White dwarfs are held up by electron pressure, which fails at 1.44 M☉ (the Chandrasekhar limit), and they shrink as they gain mass. Two carbon–oxygen white dwarfs that merge below the limit make one smaller, heavier white dwarf; two helium white dwarfs reignite as a helium-burning hot subdwarf, and a helium plus a carbon–oxygen white dwarf swell into an R Coronae Borealis giant. Past the limit, carbon ignites in a runaway and the whole star explodes as a Type Ia supernova, leaving nothing (some may instead collapse quietly into a neutron star; that outcome isn't modeled). A white dwarf that hits an ordinary star sinks into it.</li>
     <li>Click any object to inspect it. Masses and rates are live; rates are per second of simulation time, and orbital periods are given in real seconds.</li>
     <li>Not to scale: ordinary stars are drawn thousands of times smaller than life (a white dwarf is really Earth-sized, about 500× a neutron star, but here only 1.6×), and mass transfer runs fast enough to watch.</li>
   </ul>
@@ -288,7 +289,9 @@ const STAR_TYPES = [
   { id:'BSG', name:'Blue supergiant',  short:'Blue supergiant', m:25, R:30, T:22000, col:[122,164,255], kind:'giant', core:9 },
   { id:'WD',  name:'White dwarf',      short:'White dwarf', m:0.8, R:1.6, T:20000, col:[236,242,255], kind:'wd' },
   // remnants that only appear when a star is stripped (not in the toolbar)
-  { id:'HeWD', name:'Helium white dwarf', short:'He white dwarf', m:0.35, R:1.9, T:25000, col:[226,236,255], kind:'wd', hidden:true },
+  { id:'HeWD', name:'Helium white dwarf', short:'He white dwarf', m:0.35, R:1.9, T:25000, col:[226,236,255], kind:'wd' },
+  { id:'sdB', name:'Hot subdwarf',     short:'Hot subdwarf', m:0.5, R:2.4, T:30000, col:[176,200,255], kind:'ms', hidden:true },
+  { id:'RCB', name:'R Coronae Borealis star', short:'R CrB star', m:0.9, R:14, T:6500, col:[255,224,168], kind:'giant', hidden:true },
   { id:'WR',  name:'Wolf–Rayet star',  short:'Wolf–Rayet', m:9, R:4.2, T:60000, col:[150,186,255], kind:'ms', hidden:true },
   { id:'BD',  name:'Brown dwarf',      short:'Brown dwarf', m:0.07, R:0.9, T:1800, col:[176,84,60], kind:'bd', hidden:true },
 ];
@@ -651,7 +654,7 @@ function collisions() {
       if (r < Math.max(1.3 * bh.kPlus * rs, 1.5 * rp) + st.R * 0.2) { swallow(bh, st); return true; }
     } else if (isNS(a) && isNS(b)) {
       if (r < 1.3 * (a.R + b.R)) { mergeNS(a, b); return true; }
-    } else if (r < 0.6 * (a.R + b.R)) { mergeStars(a, b); return true; }
+    } else if (r < 0.6 * (a.R + b.R) && !(a.sn && a.sn.mode === 'ia') && !(b.sn && b.sn.mode === 'ia')) { mergeStars(a, b); return true; }
   }
   return false;
 }
@@ -758,13 +761,27 @@ function mergeStars(a, b) {
     } else shred(st, ns, Math.hypot(st.x - ns.x, st.y - ns.y), 'ns');
     return;
   }
+  const wdA = a.type.kind === 'wd', wdB = b.type.kind === 'wd';
+  if (wdA && wdB) { mergeWhiteDwarfs(a, b); return; }
+  if (wdA !== wdB) { // a white dwarf hitting an ordinary star sinks into it and becomes part of its core
+    const wd = wdA ? a : b, st = wdA ? b : a;
+    if (st.type.kind === 'ms' || st.type.kind === 'giant') {
+      const M = a.m + b.m;
+      st.vx = (a.vx * a.m + b.vx * b.m) / M; st.vy = (a.vy * a.m + b.vy * b.m) / M;
+      st.x = (a.x * a.m + b.x * b.m) / M; st.y = (a.y * a.m + b.y * b.m) / M;
+      st.m = M; st.m0 = M; st.mBirth = Math.max(st.mBirth || 0, M); if (st.core) st.core += wd.m;
+      bodies = bodies.filter(o => o !== wd);
+      toast('White dwarf swallowed', [`The white dwarf sank into the ${st.type.name.toLowerCase()} and became part of its core`, `${st.type.name} now ${fmtM(M)} M☉`]);
+      return;
+    }
+  }
   const big = a.m >= b.m ? a : b, small = big === a ? b : a, M = a.m + b.m;
   big.vx = (a.vx * a.m + b.vx * b.m) / M; big.vy = (a.vy * a.m + b.vy * b.m) / M;
   big.x = (a.x * a.m + b.x * b.m) / M; big.y = (a.y * a.m + b.y * b.m) / M;
   big.R = big.R * Math.pow(M / big.m, 0.5); big.R0 = big.R; big.m = M; big.m0 = M;
   big.mBirth = Math.max(big.mBirth || 0, M); if (big.core) big.core = Math.max(big.core, 0.36 * M);
   bodies = bodies.filter(o => o !== small);
-  if (big.sn) big.sn.mode = snMode(big); // still gaining mass while it collapses
+  if (big.sn && big.sn.mode !== 'ia') big.sn.mode = snMode(big); // still gaining mass while it collapses
   if (M >= 140 && !big.sn && (big.type.kind === 'ms' || big.type.kind === 'giant')) {
     startSupernova(big);
     toast('Too massive to survive', [`Collisions built a ${fmtM(M)} M☉ star, far past the ~150 M☉ that stars can hold together`,
@@ -772,6 +789,37 @@ function mergeStars(a, b) {
   } else toast('Stellar collision', [`${small.type.name} merged into the ${big.type.name} · now ${fmtM(M)} M☉`]);
 }
 
+// White dwarfs are held up by electron pressure, which fails at the Chandrasekhar limit (1.44 Msun).
+// Below it a merger leaves one smaller, heavier white dwarf (they shrink as they gain mass);
+// above it carbon ignites in a runaway and the whole star explodes as a Type Ia supernova.
+const M_CH = 1.44;
+function wdRadius(m) { return clamp(TYPE.WD.R * Math.pow(m / 0.8, -1 / 3) * Math.sqrt(Math.max(0.05, 1 - Math.pow(m / M_CH, 4 / 3))) / 0.737, 0.6, 2.6); }
+function mergeWhiteDwarfs(a, b) {
+  const big = a.m >= b.m ? a : b, small = big === a ? b : a, M = a.m + b.m;
+  big.vx = (a.vx * a.m + b.vx * b.m) / M; big.vy = (a.vy * a.m + b.vy * b.m) / M;
+  big.x = (a.x * a.m + b.x * b.m) / M; big.y = (a.y * a.m + b.y * b.m) / M;
+  big.m = M; big.m0 = M; big.mBirth = M;
+  if (big.type.id === 'HeWD' && M > 0.5 && !(a.type.id === 'HeWD' && b.type.id === 'HeWD')) big.type = TYPE.WD;
+  big.R = big.R0 = wdRadius(Math.min(M, M_CH * 0.99));
+  bodies = bodies.filter(o => o !== small);
+  if (followId === small.id) followId = big.id;
+  const heA = a.type.id === 'HeWD', heB = b.type.id === 'HeWD';
+  if (M < M_CH && heA && heB && M >= 0.4) { // helium ignites: a new, helium-burning star
+    retype(big, TYPE.sdB); big.mBirth = M;
+    toast('A new star', [`Two helium white dwarfs merged into ${fmtM(M)} M☉ and the helium ignited`, 'It is a hot subdwarf now, burning helium in its core for about 100 million years'], 'w');
+    return;
+  }
+  if (M < M_CH && heA !== heB) { // helium burning on the surface puffs it up into a hydrogen-poor giant
+    retype(big, TYPE.RCB); big.mBirth = M; big.core = 0.9 * M; big.R = big.R0 = TYPE.RCB.R;
+    toast('A new star', [`A helium and a carbon–oxygen white dwarf merged into ${fmtM(M)} M☉; helium burning around the core puffed it into a giant`, 'This is how R Coronae Borealis stars are thought to form: hydrogen-poor giants that dim without warning behind clouds of their own soot'], 'w');
+    return;
+  }
+  if (M >= M_CH) {
+    if (big.sn) return; // already exploding; the extra mass just goes with it
+    big.sn = { t0: wallNow, mode: 'ia' };
+    toast('Over the Chandrasekhar limit', [`Two white dwarfs merged into ${fmtM(M)} M☉, past the 1.44 M☉ that a white dwarf can hold up`, 'Carbon is about to ignite']);
+  } else toast('White dwarfs merged', [`Now ${fmtM(M)} M☉, and smaller than before: white dwarfs shrink as they gain mass`, `${fmtM(M_CH - M)} M☉ short of the Chandrasekhar limit`]);
+}
 function updateRadius(s) {
   const x = s.m / s.m0;
   if (s.type.kind === 'ms') s.R = s.R0 * Math.pow(x, 0.8);
@@ -825,6 +873,7 @@ function stellarProcesses(simDt) {
    it reaches the surface and the envelope is blown off. What's left is a neutron star, or a black hole
    for the heaviest stars. Only stars above ~8 Msun can do this. */
 const SN_DUR = 5200, SN_BREAK = 0.8;
+function snP(b) { return (wallNow - b.sn.t0) / (b.sn.mode === 'ia' ? 1800 : SN_DUR); }
 function canSupernova(b) {
   if (b.kind !== 'star' || b.sn) return false;
   if (b.type.id === 'WR') return true;
@@ -832,7 +881,7 @@ function canSupernova(b) {
 }
 function snBlocker(b) {
   if (b.kind !== 'star') return '';
-  if (b.type.kind === 'wd') return 'A white dwarf has no fuel left to collapse. It can only explode if it gains enough mass to pass 1.44 M☉.';
+  if (b.type.kind === 'wd') return `A white dwarf can only explode by passing 1.44 M☉ (this one is ${fmtM(b.m)} M☉). Crash another white dwarf into it to see a Type Ia supernova.`;
   if (b.type.kind === 'bd') return 'A brown dwarf never fused hydrogen, so it never builds an iron core.';
   if (isNS(b)) return '';
   return `Too light to collapse: it needs at least 8 M☉ and this one is ${fmtM(b.m)} M☉. A star this size sheds its outer layers gently and ends as a white dwarf. Try the O star or the blue supergiant.`;
@@ -855,11 +904,11 @@ function escapeSpeed(x, y, skip, extra, ex, ey, extraHole) {
 function explode(st) {
   const name = st.type.name.toLowerCase(), mode = st.sn ? st.sn.mode : 'cc';
   const toBH = mode === 'dc' || (mode === 'cc' && st.mBirth >= 20 && st.type.id !== 'WR');
-  const mRem = mode === 'pi' ? 0 : mode === 'dc' ? 0.9 * st.m : toBH ? clamp(0.3 * st.m, 5, 15) : 1.25 + 0.2 * Math.random();
+  const mRem = mode === 'pi' || mode === 'ia' ? 0 : mode === 'dc' ? 0.9 * st.m : toBH ? clamp(0.3 * st.m, 5, 15) : 1.25 + 0.2 * Math.random();
   const ej = Math.max(0, st.m - mRem);
   // ejecta. Stars here are drawn far smaller than real ones, so gravity at their surface is far too strong;
   // launch fast enough to escape and still coast away at a realistic speed (about 5,000-20,000 km/s).
-  const N = Math.min(mode === 'pi' ? 1000 : mode === 'dc' ? 250 : 700, MAXG - gN);
+  const N = Math.min(mode === 'pi' ? 1000 : mode === 'dc' ? 250 : mode === 'ia' ? 400 : 700, MAXG - gN);
   // In a real binary the ejecta move ~50x faster than the orbit. Binaries here are compressed to ~1,000 km, so
   // orbits run near 0.2c; keep the ejecta several times faster than the orbit or the partner sweeps most of it up.
   const pt = partnerOf(st), vOrb = pt ? Math.sqrt(G * (st.m + pt.m) / Math.max(Math.hypot(pt.x - st.x, pt.y - st.y), 1)) : 0;
@@ -874,6 +923,17 @@ function explode(st) {
     vmean += vReal;
   }
   vmean = N ? vmean / N : 0;
+  if (mode === 'ia') { // nothing survives
+    bodies = bodies.filter(o => o !== st);
+    if (followId === st.id) followId = null;
+    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 12000, scale: 1.4, kind: 'sn' });
+    toast('Type Ia supernova', [
+      `The ${fmtM(st.m)} M☉ white dwarf exploded completely. Nothing is left behind`,
+      'Carbon and oxygen burned to nickel in about a second; the glow that follows is that nickel decaying to iron',
+      'These all peak at nearly the same brightness, which is how they revealed that the universe is speeding up',
+    ], 'w');
+    return;
+  }
   if (mode === 'pi') { // nothing survives
     bodies = bodies.filter(o => o !== st);
     if (followId === st.id) followId = null;
@@ -1404,7 +1464,7 @@ function drawScene() {
   for (const b of bodies) {
     if (b.kind !== 'star') continue;
     const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, R = Math.max(b.R * zoom, 1.6) * s;
-    if (b.sn) { drawCollapse(b, X, Y, R, (wallNow - b.sn.t0) / SN_DUR); continue; }
+    if (b.sn) { drawCollapse(b, X, Y, R, snP(b)); continue; }
     const e = clamp((b.f - 0.8) / 0.6, 0, 1) * 0.55;
     if (e > 0.01) {
       const ang = Math.atan2(toSY(b.hx, b.hy) * s - Y, toSX(b.hx, b.hy) * s - X);
@@ -1417,6 +1477,19 @@ function drawScene() {
 // cutaway of a collapsing star: the envelope turns translucent so the core is visible
 function drawCollapse(b, X, Y, R, p) {
   const s = RS, coreMax = Math.max(R * 0.32, 5 * s), mode = b.sn.mode;
+  if (mode === 'ia') { // the merged white dwarf heats up until carbon ignites, then a runaway burn
+    const glowAt = (r, a, col) => {
+      const g = sctx.createRadialGradient(X, Y, 0, X, Y, r);
+      g.addColorStop(0, `rgba(${col},${a})`); g.addColorStop(0.5, `rgba(${col},${a * 0.4})`); g.addColorStop(1, `rgba(${col},0)`);
+      sctx.fillStyle = g; sctx.fillRect(X - r, Y - r, 2 * r, 2 * r);
+    };
+    sctx.drawImage(starCore[b.type.id], X - R, Y - R, 2 * R, 2 * R);
+    sctx.globalCompositeOperation = 'lighter';
+    const q = clamp(p / SN_BREAK, 0, 1);
+    glowAt(Math.max(R * (1.5 + 4 * q * q), 8 * s), 0.4 + 0.6 * q, q < 0.55 ? '220,232,255' : '255,246,215');
+    sctx.globalCompositeOperation = 'source-over';
+    return;
+  }
   if (mode === 'pi' || mode === 'dc') {
     const glowAt = (r, a, col) => {
       const g = sctx.createRadialGradient(X, Y, 0, X, Y, r);
@@ -1700,9 +1773,10 @@ function drawOverlay() {
   }
   for (const b of bodies) {
     if (!b.sn) continue;
-    const p = (wallNow - b.sn.t0) / SN_DUR, X = toSX(b.x, b.y), Y = toSY(b.x, b.y), R = Math.max(b.R * zoom, 1.6);
+    const p = snP(b), X = toSX(b.x, b.y), Y = toSY(b.x, b.y), R = Math.max(b.R * zoom, 1.6);
     const mode = b.sn.mode;
-    const cap = mode === 'dc' ? (p < 0.35 ? 'Core collapsing' : 'No bounce · falling into its own black hole')
+    const cap = mode === 'ia' ? (p < 0.35 ? 'Merger heats the core' : p < 0.55 ? 'Carbon ignites' : 'Thermonuclear runaway')
+      : mode === 'dc' ? (p < 0.35 ? 'Core collapsing' : 'No bounce · falling into its own black hole')
       : mode === 'pi' ? (p < 0.2 ? 'Light turning into electron–positron pairs' : p < 0.4 ? 'Core loses pressure and contracts' : 'Oxygen ignites all at once')
       : p < 0.35 ? 'Iron core collapsing' : p < 0.40 ? 'Core bounces' : p < 0.55 ? 'Shock stalls · neutrinos reheat it' : 'Shock heading for the surface';
     c.font = `600 12px "Saira Condensed", sans-serif`; c.textAlign = 'center'; c.fillStyle = 'rgba(255,214,190,0.95)';
@@ -1925,7 +1999,7 @@ function inspectRows(b) {
   return rows;
 }
 function statusOf(b) {
-  if (b.sn) return [b.sn.mode === 'pi' ? 'Pair-instability supernova under way' : b.sn.mode === 'dc' ? 'Collapsing straight into a black hole' : 'Core collapse under way', 'hot'];
+  if (b.sn) return [b.sn.mode === 'ia' ? 'Type Ia supernova under way' : b.sn.mode === 'pi' ? 'Pair-instability supernova under way' : b.sn.mode === 'dc' ? 'Collapsing straight into a black hole' : 'Core collapse under way', 'hot'];
   if (b.kind === 'bh' || isNS(b)) {
     if (b.ring && b.kind === 'bh') return ['Ringing down after a merger', 'feed'];
     return (b.feedRate || 0) > 1e-4 ? ['Feeding on infalling gas', 'feed'] : ['Quiet', ''];
@@ -2171,7 +2245,7 @@ function frameBody(now) {
       const inst = (b.m - b.mPrev) / simDt; b.mPrev = b.m;
       b.mRate = (b.mRate || 0) + (inst - (b.mRate || 0)) * Math.min(1, wallDt * 2.5);
     }
-    for (const b of bodies.slice()) if (b.sn && (wallNow - b.sn.t0) / SN_DUR >= SN_BREAK) explode(b);
+    for (const b of bodies.slice()) if (b.sn && snP(b) >= SN_BREAK) explode(b);
     while (windQueue.length) { const h = windQueue.shift(); toast('Disk wind', [`Gas near the ${h.kind === 'bh' ? fmtM(h.m) + ' M☉ hole' : 'neutron star'} glows so hard its own light blows part of it away`, 'The faint spray heading outward is stolen gas that will never be eaten'], 'w'); }
     while (mspQueue.length) { const ns = mspQueue.shift(); toast('Millisecond pulsar', [`Accretion spun the neutron star up to ${Math.round(ns.spinHz)} turns per second (period ${(1000 / ns.spinHz).toFixed(1)} ms)`, 'This is how most millisecond pulsars are thought to form: “recycled” by a companion'], 'w'); }
     for (const ns of bodies.filter(isNS)) if (ns.m > 2.3) { // accretion-induced collapse
