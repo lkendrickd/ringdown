@@ -19,7 +19,7 @@ It's a single self-contained `index.html` with no build step and no dependencies
 - **Spaghettification close-up.** Follow a star into a hole in slow motion, watch it stretch and squeeze, then tear into a long stream of debris.
 - **Sgr A\*.** The 4.3 million M☉ hole at the center of the Milky Way, with S2 and other S-stars on their measured orbits, at true scale with stars at their real sizes. S2's 16-year orbit plays in about 30 seconds. Throw a star in for a galactic-center tidal disruption.
 - **Share a setup.** The share button packs the whole scene into the link.
-- **Inspect anything.** Click a body to see its mass ticking live, how fast it's gaining or losing mass, what's happening to it, and its orbit.
+- **Inspect anything.** Click a body to see its mass ticking live, how fast it's gaining or losing mass, and what's happening to it. A dashed ring shows the orbit it's on, run a lap ahead with the sim's own gravity: closest and farthest points, precession near a hole, and where it will fall in, get torn apart or escape.
 - **Make it explode.** Stars above about 8 M☉ can go supernova from the inspector: the iron core collapses, bounces, the shock stalls until neutrinos revive it, and the envelope is blown off, leaving a neutron star or a black hole. Pile stars together and collisions build monsters no galaxy makes on its own: 140–260 M☉ ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ the star collapses straight into an intermediate-mass black hole.
 - **Tilt the view.** Seen from the side, the disk is brighter on the side coming toward you (Doppler beaming), spinning holes show their exact Kerr shadow, and jets show up.
 

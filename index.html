@@ -287,7 +287,7 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     <li>Age it jumps a star to its next life stage, skipping the time in between, which the button notes. The path depends on birth mass: below about 0.8 M☉ stars outlive the universe so far; up to 8 M☉ they become red giants, puff off a planetary nebula and leave a white dwarf (mass from the initial–final mass relation); heavier ones become supergiants and end in supernovae, and the heaviest pass through luminous-blue-variable and Wolf–Rayet stages first.</li>
     <li>Spaghettification: the hole pulls harder on a star's near side than its far side, stretching it along the line to the hole and squeezing it sideways. Past the tidal limit it is torn into a long thin stream; the near end is deeper in the hole's gravity, so roughly half the debris is bound and falls back while the rest escapes.</li>
     <li>Sgr A*, the 4.3 million M☉ hole at the center of our galaxy, with five of the S-stars that orbit it on their measured periods and eccentricities (S2: 16 years, swinging to 120 AU at closest approach; S4714: so eccentric it passes within 13 AU). The real orbits are tilted every which way; here they share one plane. This scene runs at true scale with stars at their real sizes, and time is sped up so S2 laps the hole in about half a minute; the readout shows what a screen-second is in real time. S2's orbit really precesses by 12 arcminutes per lap, as general relativity predicts (measured by the GRAVITY team in 2020), too little to see here. Throw a star at the hole to see a galactic-center tidal disruption; time slows down automatically so the debris can be followed.</li>
-    <li>Click any object to inspect it. Masses and rates are live; rates are per second of simulation time, and orbital periods are given in real seconds.</li>
+    <li>Click any object to inspect it. Masses and rates are live; rates are per second of simulation time, and orbital periods are given in real seconds. The dashed ring is the selected object's orbit around the barycenter it shares with its strongest partner, run one lap ahead with the same gravity the simulation uses, so orbits close to a hole visibly fail to close (precession) and paths that end in a plunge or a tidal disruption are marked. Other bodies and gravitational-wave losses are left out of the forecast, so in crowded or chaotic systems it's only the orbit for the moment.</li>
     <li>Not to scale: ordinary stars are drawn thousands of times smaller than life (a white dwarf is really Earth-sized, about 500× a neutron star, but here only 1.6×), and mass transfer runs fast enough to watch.</li>
   </ul>
 </aside>
@@ -2111,6 +2111,89 @@ function predictPath(x, y, vx, vy, isBH) {
   }
   return pts;
 }
+// The orbit a selected body is on: its path around the barycenter it shares with its strongest partner, run
+// forward one lap with the same pairwise gravity the simulation uses (near-hole term included, so close orbits
+// precess, and orbits inside the innermost stable one plunge). Stops early where it would fall in or be torn apart.
+function orbitPath(b) {
+  const p = partnerOf(b); if (!p) return null;
+  const M = b.m + p.m, kb = p.m / M, GM = G * M;
+  let x = b.x - p.x, y = b.y - p.y, vx = b.vx - p.vx, vy = b.vy - p.vy;
+  const bhb = b.kind === 'bh', bhp = p.kind === 'bh';
+  let acc, pot, capR;
+  if (bhb && bhp) { acc = r => GM / (r * r + 0.25); pot = r => -GM / r; capR = 0.9 * (rsOf(b.m) + rsOf(p.m)); }
+  else if (bhb || bhp) {
+    const bh = bhb ? b : p, st = bhb ? p : b, rp = rpFor(bh, x, y, vx, vy);
+    acc = r => { const d = Math.max(r - rp, 0.25 * rp); return G * bh.m / (d * d) + G * st.m / (r * r + st.R * st.R * 0.25); };
+    pot = r => -G * bh.m / Math.max(r - rp, 0.25 * rp) - G * st.m / r; capR = 1.05 * rp;
+  } else { const e = (b.R + p.R) * 0.5; acc = r => GM / (r * r + e * e); pot = r => -GM / Math.sqrt(r * r + e * e); capR = 0.6 * (b.R + p.R); }
+  // a star around a hole, neutron star or white dwarf is torn apart where it overfills its Roche lobe by enough
+  const tidal = b.kind === 'star' && !isNS(b) && isAccretor(p), tf = isWD(b) && isNS(p) ? 1 : 1.6, rf = tidal ? rocheFrac(b.m / p.m) : 0;
+  let r = Math.hypot(x, y) || 1e-6;
+  const bound = 0.5 * (vx * vx + vy * vy) + pot(r) < 0;
+  const lim = 1.5 * Math.max(vw, vh) / zoom / Math.max(kb, 1e-3) / Math.max(cosI, 0.2);
+  const rel = [[x, y]], peri = { r, x, y }, apo = { r, x, y };
+  let swept = 0, ang = Math.atan2(y, x), end = null, lx = x, ly = y, closed = false;
+  let a = acc(r);
+  for (let k = 0; k < 9000; k++) {
+    const dt = 0.006 * Math.sqrt(r * r * r / GM);
+    vx -= 0.5 * dt * a * x / r; vy -= 0.5 * dt * a * y / r; x += dt * vx; y += dt * vy;
+    r = Math.hypot(x, y) || 1e-6; a = acc(r);
+    vx -= 0.5 * dt * a * x / r; vy -= 0.5 * dt * a * y / r;
+    if (r < capR) { end = 'plunge'; break; }
+    if (tidal && b.R / (r * rf) > tf) { end = 'torn'; break; }
+    const na = Math.atan2(y, x); let d = na - ang; if (d > Math.PI) d -= 2 * Math.PI; else if (d < -Math.PI) d += 2 * Math.PI;
+    swept += d; ang = na;
+    if (r < peri.r) Object.assign(peri, { r, x, y });
+    if (r > apo.r) Object.assign(apo, { r, x, y });
+    if (Math.hypot(x - lx, (y - ly) * cosI) * zoom * kb > 2.5) { rel.push([x, y]); lx = x; ly = y; }
+    if (Math.abs(swept) >= 2 * Math.PI) { closed = true; break; }
+    if (!bound && r > lim) break;
+  }
+  rel.push([x, y]);
+  return { p, kb, rel, peri, apo, end, closed, bound };
+}
+function drawOrbit(c, b) {
+  const o = orbitPath(b); if (!o) return;
+  // around a much heavier partner, draw relative to it (it barely moves, and plunges then end on it);
+  // otherwise around the shared barycenter, where both members of a binary trace their own rings
+  const { p } = o, M = b.m + p.m, rel = p.m >= 4 * b.m, kb = rel ? 1 : o.kb;
+  const cx = rel ? p.x : (b.m * b.x + p.m * p.x) / M, cy = rel ? p.y : (b.m * b.y + p.m * p.y) / M;
+  const W = (q) => [cx + kb * q[0], cy + kb * q[1]];
+  const BX = toSX(b.x, b.y), BY = toSY(b.x, b.y);
+  const pts = o.rel.map(q => { const w = W(q); return [toSX(w[0], w[1]), toSY(w[0], w[1])]; });
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [X, Y] of pts) { x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y); }
+  if (Math.max(x1 - x0, y1 - y0) < 14) return; // e.g. a heavy hole barely wobbling around its light companion
+  const col = b.kind === 'bh' ? '200,190,255' : b.type.col.join(',');
+  c.save(); c.lineWidth = 1.3; c.setLineDash([5, 6]); c.lineDashOffset = -wallNow * 0.012; // dashes drift the way it moves
+  c.strokeStyle = `rgba(${col},0.6)`; c.beginPath();
+  pts.forEach(([X, Y], i) => i ? c.lineTo(X, Y) : c.moveTo(X, Y)); c.stroke(); c.setLineDash([]);
+  c.font = `400 10px ${MONO}`; c.textAlign = 'center';
+  const PX = toSX(p.x, p.y), PY = toSY(p.x, p.y), pR = p.kind === 'bh' ? 2.598 * rsOf(p.m) * zoom : Math.max(p.R * zoom, 1.6);
+  const mark = (q, txt, colr, force) => {
+    const [wx, wy] = W(q), X = toSX(wx, wy), Y = toSY(wx, wy);
+    c.fillStyle = colr; c.beginPath(); c.arc(X, Y, 2.6, 0, Math.PI * 2); c.fill();
+    // label just outside the orbit, unless it would land on the partner and its own label
+    let dx = X - toSX(cx, cy), dy = Y - toSY(cx, cy); const L = Math.hypot(dx, dy);
+    if (L < 1) { dx = 0; dy = -1; } else { dx /= L; dy /= L; }
+    let lx = X + dx * 9, ly = Y + dy * 13;
+    if (Math.hypot(X - BX, Y - BY) < 30) { dx = 0; lx = X; ly = Y + 18; } // the body's own label sits up and to the right
+    if (!force && Math.abs(lx - PX) < pR + 50 && ly > PY - pR - 10 && ly < PY + pR + 34) return;
+    const tw = c.measureText(txt).width, al = Math.abs(dx) > 0.5 ? (dx > 0 ? 0 : 1) : 0.5; // keep it on screen
+    const tx = clamp(lx - al * tw, 6, vw - tw - 6), moved = Math.abs(tx - (lx - al * tw)) > 1; // pushed over: drop below the dot
+    c.textAlign = 'left'; c.fillText(txt, tx, ly + 3.5 + (moved ? 14 : 0));
+  };
+  if (o.end === 'plunge') mark([o.rel[o.rel.length - 1][0], o.rel[o.rel.length - 1][1]], p.kind === 'bh' || b.kind === 'bh' ? 'falls in' : 'collides', 'rgba(255,154,114,0.95)', true);
+  else if (o.end === 'torn') mark(o.rel[o.rel.length - 1], 'torn apart here', 'rgba(255,154,114,0.95)', true);
+  if (o.closed && o.apo.r > 1.12 * o.peri.r) {
+    mark([o.peri.x, o.peri.y], `closest ${fmtDist(o.peri.r * KM_PER_UNIT)}`, 'rgba(236,230,218,0.8)');
+    mark([o.apo.x, o.apo.y], `farthest ${fmtDist(o.apo.r * KM_PER_UNIT)}`, 'rgba(236,230,218,0.8)');
+  } else if (!o.bound && !o.end) {
+    const k = pts.findIndex(([X, Y]) => X < 30 || Y < 30 || X > vw - 30 || Y > vh - 30), q = pts[k > 4 ? k : pts.length - 1];
+    c.fillStyle = 'rgba(236,230,218,0.8)'; c.textAlign = 'center'; c.fillText('escapes', q[0], q[1] - 8);
+  }
+  c.restore();
+}
 function placementVelocity(wx, wy, dxs, dys) {
   const dist = Math.hypot(dxs, dys);
   const host = dominantBH(wx, wy) || dominantAny(wx, wy);
@@ -2202,6 +2285,7 @@ function drawOverlay() {
   if (followId != null) {
     const b = bodies.find(o => o.id === followId);
     if (b) {
+      if (!insEl.hidden && !b.sn) drawOrbit(c, b);
       const X = toSX(b.x, b.y), Y = toSY(b.x, b.y);
       const R = (b.kind === 'bh' ? 2.598 * rsOf(b.m) * zoom : Math.max(b.R * zoom, 1.6)) + 9;
       c.setLineDash([4, 5]); c.lineDashOffset = -wallNow * 0.01; c.strokeStyle = 'rgba(255,179,106,0.6)'; c.lineWidth = 1.2;
