@@ -241,6 +241,8 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     <li>Listen plays the GW frequency one octave up. The real 36 + 29 chirp lasts about 0.2 s; here it is stretched out.</li>
     <li>A white dwarf that spirals into a neutron star gets torn into a disk. The neutron star feeds and spins up (about 0.1 M☉ takes it to millisecond periods), the usual story for millisecond pulsars; the fastest known spins 716 times a second. A neutron star that eats past about 2.3 M☉ collapses into a hole. A neutron star sinking into a giant makes a Thorne–Żytkow object.</li>
     <li>A black hole rarely eats a star whole. Gas spills off through the Roche lobe and the star keeps going. A giant stays big until its envelope is gone, then its helium core is left orbiting, as a white dwarf for a red giant or a Wolf–Rayet star for a blue supergiant. A small star can be whittled down to a brown dwarf. On a stretched orbit, each close pass takes a little (like ASASSN-14ko, which flares every 115 days).</li>
+    <li>Black holes, neutron stars and white dwarfs all accept gas. A star feeding a white dwarf builds up a hydrogen layer that ignites as a nova every so often; each one throws most of the layer off, so the white dwarf grows slowly and can eventually pass 1.44 M☉ and explode as a Type Ia. Real novae eject about 0.00001 M☉; here the layer is scaled up so they come every few seconds.</li>
+    <li>Mass transfer is only stable when the star giving mass isn't much heavier than the one taking it. Past about 1.5×, the orbit shrinks as mass moves, the overflow grows, and it runs away into a common envelope: the companion spirals inside the star, and either throws the envelope off (leaving the bare core in an orbit many times tighter) or merges with it. Most merging black-hole and neutron-star pairs are thought to have gone through this.</li>
     <li>Not all the stolen gas gets eaten. Near the hole, part of it is blown back out by its own light, 15–65% here and more when the hole is feeding hard, as in ultraluminous X-ray sources. The purple band on the scope tracks how fast gas is falling in.</li>
     <li>Stars above about 8 M☉ can go supernova from the inspector. The iron core collapses, bounces at nuclear density, and the shock stalls until neutrinos reheat it; then it blows the envelope off at thousands of km/s. Stars born above about 20 M☉ leave a black hole here, the rest a neutron star with a kick of a few hundred km/s. Collisions can build stars no galaxy makes on its own: from about 140 to 260 M☉ the star ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ it collapses straight into an intermediate-mass black hole. A real star like that would live a couple of million years first; here it ends at once. In reality the collapse takes a fraction of a second and the shock needs hours to reach a supergiant's surface; here the sequence takes about 5 seconds. Because stars here are drawn far smaller than real ones, ejecta is launched fast enough to escape their exaggerated surface gravity and then coasts away at a realistic 5,000–20,000 km/s. In a tight binary it is launched faster still, to keep the real ratio of ejecta speed to orbital speed (about 50 to 1 in nature), since binaries here are compressed to about 1,000 km.</li>
     <li>White dwarfs are held up by electron pressure, which fails at 1.44 M☉ (the Chandrasekhar limit), and they shrink as they gain mass. Two carbon–oxygen white dwarfs that merge below the limit make one smaller, heavier white dwarf; two helium white dwarfs reignite as a helium-burning hot subdwarf, and a helium plus a carbon–oxygen white dwarf swell into an R Coronae Borealis giant. Past the limit, carbon ignites in a runaway and the whole star explodes as a Type Ia supernova, leaving nothing (some may instead collapse quietly into a neutron star; that outcome isn't modeled). A white dwarf that hits an ordinary star sinks into it.</li>
@@ -301,6 +303,8 @@ const STAR_TYPES = [
   { g:4, id:'sdB', name:'Hot subdwarf',     short:'Hot subdwarf', m:0.5, R:2.4, T:30000, col:[176,200,255], kind:'ms' },
   { g:4, id:'RCB', name:'R Coronae Borealis star', eg:'like R CrB itself', short:'R CrB star', m:0.9, R:14, T:6500, col:[255,224,168], kind:'giant', core:0.8 },
 ];
+// lowercase name for use mid-sentence, keeping proper names (Wolf–Rayet, R Coronae Borealis) capitalized
+for (const t of STAR_TYPES) t.lc = /Wolf|Coronae/.test(t.name) ? t.name : t.name.toLowerCase();
 const TYPE = Object.fromEntries(STAR_TYPES.map(t => [t.id, t]));
 
 /* ================= state ================= */
@@ -330,7 +334,7 @@ const flashes = [];
 const MAXG = 5000;
 let gasCap = 3200;       // soft budget for streamed gas; the frame-time governor moves it
 const gx = new Float64Array(MAXG), gy = new Float64Array(MAXG), gvx = new Float64Array(MAXG), gvy = new Float64Array(MAXG);
-const gm = new Float64Array(MAXG), gage = new Float64Array(MAXG); const gb = new Uint8Array(MAXG), gf = new Uint8Array(MAXG);
+const gm = new Float64Array(MAXG), gage = new Float64Array(MAXG); const gb = new Uint8Array(MAXG), gf = new Uint8Array(MAXG), gsrc = new Int32Array(MAXG);
 let gN = 0;
 
 /* Kerr helpers: a > 0 prograde. Radii in units of M = GM/c^2 = r_s/2 */
@@ -361,15 +365,15 @@ const isNS = b => b.kind === 'star' && b.type.kind === 'ns';
 const isWD = b => b.kind === 'star' && b.type.kind === 'wd';
 // compact objects radiate gravitational waves strongly enough to inspiral; holes and neutron stars can also accrete gas
 const isCompact = b => b.kind === 'bh' || isNS(b) || isWD(b);
-const isAccretor = b => b.kind === 'bh' || isNS(b);
-function addGas(x, y, vx, vy, m) {
+const isAccretor = b => b.kind === 'bh' || isNS(b) || isWD(b);
+function addGas(x, y, vx, vy, m, src) {
   if (gN >= MAXG) return false;
-  gx[gN] = x; gy[gN] = y; gvx[gN] = vx; gvy[gN] = vy; gm[gN] = m; gage[gN] = 0; gb[gN] = 9; gf[gN] = 0; gN++;
+  gx[gN] = x; gy[gN] = y; gvx[gN] = vx; gvy[gN] = vy; gm[gN] = m; gage[gN] = 0; gb[gN] = 9; gf[gN] = 0; gsrc[gN] = src || 0; gN++;
   return true;
 }
 function removeGas(i) {
   gN--;
-  gx[i] = gx[gN]; gy[i] = gy[gN]; gvx[i] = gvx[gN]; gvy[i] = gvy[gN]; gm[i] = gm[gN]; gage[i] = gage[gN]; gb[i] = gb[gN]; gf[i] = gf[gN];
+  gx[i] = gx[gN]; gy[i] = gy[gN]; gvx[i] = gvx[gN]; gvy[i] = gvy[gN]; gm[i] = gm[gN]; gage[i] = gage[gN]; gb[i] = gb[gN]; gf[i] = gf[gN]; gsrc[i] = gsrc[gN];
 }
 const bhList = () => bodies.filter(b => b.kind === 'bh');
 
@@ -419,11 +423,15 @@ function rpFor(bh, px, py, rvx, rvy) {
 function setCircular(host, body) {
   const dx = body.x - host.x, dy = body.y - host.y, r = Math.hypot(dx, dy) || 1;
   const M = host.m + body.m;
-  let v;
-  if (host.kind === 'bh' && body.kind === 'star') {
-    const rp = (host.chi >= 0 ? host.kP : host.kR) * rsOf(host.m), d = Math.max(r - rp, 0.3 * rp);
-    v = Math.sqrt(G * host.m * r) / d * Math.sqrt(M / host.m);
-  } else v = Math.sqrt(G * M / r);
+  // relative acceleration exactly as computeAccel applies it, so the orbit really is circular
+  let arel;
+  if ((host.kind === 'bh') !== (body.kind === 'bh')) {
+    const bh = host.kind === 'bh' ? host : body, st = bh === host ? body : host;
+    const rp = (bh.chi >= 0 ? bh.kP : bh.kR) * rsOf(bh.m), d = Math.max(r - rp, 0.25 * rp);
+    arel = G * bh.m / (d * d) + G * st.m / (r * r + st.R * st.R * 0.25);
+  } else if (host.kind === 'bh') arel = G * M / (r * r + 0.25);
+  else { const e = ((host.R || 0) + (body.R || 0)) * 0.5; arel = G * M / (r * r + e * e); }
+  const v = Math.sqrt(arel * r);
   const tx = dy / r, ty = -dx / r; // counter-clockwise on screen
   const hvx = host.vx, hvy = host.vy;
   body.vx = hvx + tx * v * host.m / M; body.vy = hvy + ty * v * host.m / M;
@@ -464,8 +472,14 @@ const PRESETS = {
       st.x = ra * M / Mt; bh.x = -ra * st.m / Mt; st.vy = -va * M / Mt; bh.vy = va * st.m / Mt;
       bodies.push(bh, st); } },
   bsg:      { name:'Blue supergiant + hole', extent:130, build() {
-      const bh = makeBH(0, 0, 0, 0, 15, 0.5); const st = makeStar('BSG', 0, 0, 0, 0);
-      bodies.push(bh, st); orbitAround(bh, st, 30 / (1.04 * rocheFrac(25 / 15)), Math.PI); } },
+      const bh = makeBH(0, 0, 0, 0, 20, 0.5); const st = makeStar('BSG', 0, 0, 0, 0);
+      bodies.push(bh, st); orbitAround(bh, st, 30 / (1.04 * rocheFrac(25 / 20)), Math.PI); } },
+  engulf:   { name:'Common envelope · supergiant engulfs a hole', extent:130, build() {
+      const bh = makeBH(0, 0, 0, 0, 10, 0.3); const st = makeStar('BSG', 0, 0, 0, 0);
+      bodies.push(bh, st); orbitAround(bh, st, 30 / (1.06 * rocheFrac(25 / 10)), Math.PI); } },
+  nova:     { name:'Nova · K dwarf feeding a white dwarf', extent:24, build() {
+      const wd = makeStar('WD', 0, 0, 0, 0, 1.0); const st = makeStar('K', 0, 0, 0, 0);
+      bodies.push(wd, st); orbitAround(wd, st, 2.8 / (1.03 * rocheFrac(0.7 / 1.0)), 0); } },
   tde:      { name:'Tidal disruption', extent:300, build() {
       const M = 20, bh = makeBH(0, 0, 0, 0, M); const st = makeStar('RG', 0, 0, 0, 0);
       const rs = rsOf(M), rt = st.R / rocheFrac(st.m / M), rp = 0.45 * rt, r0 = 430;
@@ -780,7 +794,7 @@ function mergeStars(a, b) {
       st.x = (a.x * a.m + b.x * b.m) / M; st.y = (a.y * a.m + b.y * b.m) / M;
       st.m = M; st.m0 = M; st.mBirth = Math.max(st.mBirth || 0, M); if (st.core) st.core += wd.m;
       bodies = bodies.filter(o => o !== wd);
-      toast('White dwarf swallowed', [`The white dwarf sank into the ${st.type.name.toLowerCase()} and became part of its core`, `${st.type.name} now ${fmtM(M)} M☉`]);
+      toast('White dwarf swallowed', [`The white dwarf sank into the ${st.type.lc} and became part of its core`, `${st.type.name} now ${fmtM(M)} M☉`]);
       return;
     }
   }
@@ -844,27 +858,32 @@ function updateRadius(s) {
 function stellarProcesses(simDt) {
   for (const st of bodies.slice()) {
     if (st.kind !== 'star' || isNS(st)) continue;
-    const host = dominantAccretor(st.x, st.y);
+    const host = dominantAccretor(st.x, st.y, st); // never itself: a white dwarf can be a donor and an accretor
     if (!host) { st.f = 0; continue; }
     const dx = host.x - st.x, dy = host.y - st.y, r = Math.hypot(dx, dy);
     st.hx = host.x; st.hy = host.y;
     const rL = rocheFrac(st.m / host.m) * r;
     const f = st.R / rL; st.f = f;
+    // track how far in and out the orbit swings (slowly forgetting), to tell a stretched orbit from a round one
+    st.rMax = Math.max(r, (st.rMax || r) * (1 - simDt * 0.02)); st.rMin = Math.min(r, (st.rMin || r) * (1 + simDt * 0.02));
     // white dwarf mass transfer onto a neutron star is unstable above ~0.2 Msun: it gets torn apart
     if (isWD(st) && isNS(host) && f > 1) { shred(st, host, r, 'ns'); continue; }
     if (f > 1.6 || (st.type.kind === 'wd' && st.m < 0.12 * st.m0)) { shred(st, host, r, isNS(host) ? 'ns' : 'tde'); continue; }
     // track each overflow episode so close passes on a stretched orbit report what they took
-    if (f > 1 && !st.ep) st.ep = { m: st.m, t: simTime };
+    if (!st.ep) st.fMin = Math.min(st.fMin == null ? f : st.fMin, f);
+    if (f > 1 && !st.ep) { st.ep = { m: st.m, t: simTime, detached: st.fMin < 0.85 }; st.fMin = null; }
     else if (f < 0.97 && st.ep) {
-      const lost = st.ep.m - st.m; st.ep = null;
+      const lost = st.ep.m - st.m; st.ep0detached = st.ep.detached; st.ep = null;
       // only a stretched orbit makes discrete passes; a near-circular one just flickers in and out of overflow
       const rvx = st.vx - host.vx, rvy = st.vy - host.vy, GM = G * (host.m + st.m);
       const En = 0.5 * (rvx * rvx + rvy * rvy) - GM / r, hz = (st.x - host.x) * rvy - (st.y - host.y) * rvx;
-      const ecc = Math.sqrt(Math.max(0, 1 + 2 * En * hz * hz / (GM * GM)));
-      if (lost > 0.0005 && ecc > 0.3) { st.passes++; toast(`Partial disruption · pass ${st.passes}`, [`The ${st.type.name.toLowerCase()} lost ${lost.toFixed(3)} M☉ at its closest approach and survived`, `${fmtM(st.m)} M☉ left · the hole flares as that gas falls in`]); }
+      const ecc = (st.rMax - st.rMin) / Math.max(st.rMax + st.rMin, 1e-9);
+      if (lost > 0.0005 && ecc > 0.2 && st.ep0detached) { st.passes++; toast(`Partial disruption · pass ${st.passes}`, [`The ${st.type.lc} lost ${lost.toFixed(3)} M☉ at its closest approach and survived`, `${fmtM(st.m)} M☉ left · the hole flares as that gas falls in`]); }
     }
+    // a donor much heavier than its accretor can't transfer stably: the orbit shrinks, overflow grows, and it runs away
+    if (f > 1.02 && st.m > 1.5 * host.m && (st.type.kind === 'ms' || st.type.kind === 'giant') && !st.sn) { commonEnvelope(st, host, r); continue; }
     if (f > 1 && simDt > 0) {
-      const rate = Math.min(0.04, 0.05 * st.m * (f - 1));
+      const rate = Math.min(Math.max(0.04, 0.03 * st.m), 0.12 * st.m * (f - 1));
       // fewer, heavier particles as the disk fills up: same mass flow, bounded particle count
       const target = 160 * clamp(1 - gN / gasCap, 0.04, 1);
       const pm = Math.max(0.00004, rate / target);
@@ -873,9 +892,67 @@ function stellarProcesses(simDt) {
       updateRadius(st);
       if (st.type.kind === 'giant' && st.m <= st.core * 1.01) { exposeCore(st); continue; }
       if (st.type.kind === 'ms' && st.m < 0.075 && st.type.id !== 'BD') { becomeBrownDwarf(st); continue; }
-      if (!st.noted) { st.noted = true; toast('Mass transfer', [`${st.type.name} is overflowing its Roche lobe onto the ${fmtM(host.m)} M☉ ${isNS(host) ? 'neutron star' : 'hole'}`]); }
+      if (!st.noted) { st.noted = true; toast('Mass transfer', [`${st.type.name} is overflowing its Roche lobe onto the ${fmtM(host.m)} M☉ ${isNS(host) ? 'neutron star' : isWD(host) ? 'white dwarf' : 'hole'}`]); }
     }
   }
+}
+/* Common envelope. The accretor ends up inside the donor's envelope and spirals in, its lost orbital energy
+   unbinding the envelope (Webbink's energy formalism, alpha = 1, lambda = 0.5). If the donor has a dense core and
+   the orbit stays wider than the core, the envelope is thrown off and the core is left in a much tighter orbit;
+   otherwise the two merge. Real post-envelope binaries are millions of km wide; binaries here are compressed,
+   so the new orbit is drawn with a floor that keeps the pair from touching. */
+function commonEnvelope(st, host, r) {
+  const md = st.m, ma = host.m, core = st.core || 0, menv = md - core, hostName = host.kind === 'bh' ? 'black hole' : isNS(host) ? 'neutron star' : 'white dwarf';
+  const from = st.type.lc;
+  const ratio = core > 0 ? core * ma / (md * (ma + 2 * menv * (r / Math.max(st.R, 1)) / 0.5)) : 0;
+  const M = md + ma, cx = (st.x * md + host.x * ma) / M, cy = (st.y * md + host.y * ma) / M;
+  const cvx = (st.vx * md + host.vx * ma) / M, cvy = (st.vy * md + host.vy * ma) / M;
+  const shell = (mass, x0, y0, R0) => { // the envelope leaves slowly, a few hundred km/s once it's clear
+    if (host.kind === 'bh' && bodies.includes(host)) R0 = Math.max(R0, 8 * rsOf(host.m));
+    const vHost = bodies.includes(host) ? Math.hypot(host.vx - cvx, host.vy - cvy) : 0;
+    const N = Math.min(900, MAXG - gN);
+    for (let k = 0; k < N; k++) {
+      const a = Math.random() * Math.PI * 2, rr = R0 * (0.7 + 0.5 * Math.random()), x = x0 + Math.cos(a) * rr, y = y0 + Math.sin(a) * rr;
+      const vInf = (0.002 + 0.006 * Math.random()) * C, ve = escapeSpeed(x, y, st), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve) + vHost, 0.85 * C);
+      if (addGas(x, y, cvx + Math.cos(a) * sp, cvy + Math.sin(a) * sp, mass / Math.max(N, 1))) gf[gN - 1] = 3;
+    }
+  };
+  flashes.push({ x: cx, y: cy, t0: wallNow, dur: 7000, kind: 'sn', R: st.R, power: 0.45, st: simTime });
+  if (ratio < 0.01) { // no core to stop the spiral, or too little orbital energy: they merge
+    if (host.kind === 'bh') {
+      const eaten = 0.5 * md; host.m += eaten; host.fedTotal = (host.fedTotal || 0) + eaten; totalFed += eaten;
+      host.x = cx; host.y = cy; host.vx = cvx; host.vy = cvy;
+      bodies = bodies.filter(o => o !== st); if (followId === st.id) followId = host.id;
+      shell(md - eaten, cx, cy, st.R);
+      toast('Swallowed from the inside', [`The ${fmtM(ma)} M☉ black hole was engulfed by the ${fmtM(md)} M☉ ${from} it was feeding on, and sank to its center`,
+        `It ate ${fmtM(eaten)} M☉ from the inside; the rest of the star was blown away`], 'w');
+    } else if (isNS(host)) {
+      st.m = M; st.m0 = M; st.x = cx; st.y = cy; st.vx = cvx; st.vy = cvy;
+      bodies = bodies.filter(o => o !== host); if (followId === host.id) followId = st.id;
+      toast('Thorne–Żytkow object', [`The neutron star was engulfed by the ${from} it was feeding on and sank to its center`, 'A star with a neutron star where its core should be (Thorne & Żytkow, 1977)'], 'w');
+    } else {
+      st.m = M; st.m0 = M; st.x = cx; st.y = cy; st.vx = cvx; st.vy = cvy; if (st.core) st.core += ma;
+      bodies = bodies.filter(o => o !== host); if (followId === host.id) followId = st.id;
+      toast('Merged', [`The white dwarf was engulfed by the ${from} it was feeding on and sank into its core`]);
+    }
+    return;
+  }
+  // envelope ejected: the bare core is left in a tight orbit
+  const t = core < 0.5 ? TYPE.HeWD : core < 2.5 ? TYPE.sdB : TYPE.WR;
+  const oldR = st.R;
+  retype(st, t); st.m = core; st.m0 = core; st.mBirth = Math.max(st.mBirth, core);
+  if (t === TYPE.WR) st.R = st.R0 = 2.4; // a stripped core is compact
+  const touch = host.kind === 'bh' ? 1.5 * host.kP * rsOf(host.m) : host.R;
+  const aTrue = ratio * r, aDraw = Math.max(aTrue, 3.5 * (st.R + touch));
+  const Mn = core + ma, ang = Math.atan2(st.y - host.y, st.x - host.x);
+  host.x = cx; host.y = cy; host.vx = cvx; host.vy = cvy;
+  orbitAround(host, st, aDraw, ang);
+  const sx = (st.x - host.x) * core / Mn, sy = (st.y - host.y) * core / Mn; // put the pair's center of mass back where it was
+  host.x -= sx; host.y -= sy; st.x -= sx; st.y -= sy;
+  shell(menv, cx, cy, oldR);
+  toast('Common envelope', [`The ${hostName} was engulfed by the ${fmtM(md)} M☉ ${from} and spiralled in, throwing off ${fmtM(menv)} M☉ of envelope`,
+    `Left behind: its ${fmtM(core)} M☉ core, now a ${t.lc}, in an orbit about ${Math.round(1 / ratio)}× tighter`,
+    host.kind === 'bh' ? 'Pairs like this (Cygnus X-3) may later become black-hole binaries that merge' : isNS(host) ? 'This is how double neutron stars are thought to start' : 'This is how double white dwarfs are thought to form'], 'w');
 }
 /* Core-collapse supernova. The sequence is stylized in time (about 5 s on screen):
    the iron core falls in, bounces at nuclear density, the shock stalls, neutrinos revive it,
@@ -911,7 +988,7 @@ function escapeSpeed(x, y, skip, extra, ex, ey, extraHole) {
   return Math.sqrt(2 * phi);
 }
 function explode(st) {
-  const name = st.type.name.toLowerCase(), mode = st.sn ? st.sn.mode : 'cc';
+  const name = st.type.lc, mode = st.sn ? st.sn.mode : 'cc';
   const toBH = mode === 'dc' || (mode === 'cc' && (st.type.id === 'WR' ? st.m >= 15 : st.mBirth >= 20));
   const mRem = mode === 'pi' || mode === 'ia' ? 0 : mode === 'dc' ? 0.9 * st.m : toBH ? clamp(0.3 * st.m, 5, 15) : 1.25 + 0.2 * Math.random();
   const ej = Math.max(0, st.m - mRem);
@@ -979,7 +1056,7 @@ function explode(st) {
   const o = partnerOf(rem);
   if (o) {
     const r = Math.hypot(o.x - rem.x, o.y - rem.y), E = 0.5 * ((o.vx - rem.vx) ** 2 + (o.vy - rem.vy) ** 2) - G * (o.m + rem.m) / r;
-    lines.push(E > 0 ? `It lost so much mass that its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.name.toLowerCase()}, is no longer bound to it` : `Its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.name.toLowerCase()}, is still bound to it`);
+    lines.push(E > 0 ? `It lost so much mass that its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.lc}, is no longer bound to it` : `Its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.lc}, is still bound to it`);
   } else lines.push(toBH ? 'Most of the core fell back, so it collapsed past the neutron-star limit' : `Born with a kick of ${Math.round(kick / C * 299792.458)} km/s`);
   toast('Supernova', lines, 'w');
 }
@@ -998,7 +1075,7 @@ function retype(st, t, keepMass) {
   st.noted = false; st.emitAcc = 0; st.ep = null; st.f = 0;
 }
 function exposeCore(st) {
-  const from = st.type.name.toLowerCase(), wr = st.type.id === 'BSG';
+  const from = st.type.lc, wr = st.type.id === 'BSG';
   retype(st, wr ? TYPE.WR : TYPE.HeWD);
   toast('Stripped to the core', wr
     ? [`The ${from}'s envelope is gone`, `Its ${fmtM(st.m)} M☉ helium core is left as a Wolf–Rayet star, still orbiting`]
@@ -1021,7 +1098,7 @@ function emitL1(st, host, rL, pm) {
   const sp = Math.hypot(vx - host.vx, vy - host.vy);
   vx += (Math.random() - 0.5) * 0.03 * sp + nx * 0.03 * sp; vy += (Math.random() - 0.5) * 0.03 * sp + ny * 0.03 * sp;
   if (gN >= gasCap) return false;
-  return addGas(x, y, vx, vy, pm);
+  return addGas(x, y, vx, vy, pm, st.id);
 }
 function shred(st, host, r, kind) {
   const N = Math.min(kind === 'tde' ? 800 : 600, MAXG - gN);
@@ -1044,7 +1121,27 @@ function shred(st, host, r, kind) {
   }
 }
 
-const mspQueue = [], windQueue = [];
+const mspQueue = [], windQueue = [], novaQueue = [];
+// Novae: real ones blow off ~1e-5 Msun; here the layer is scaled up (0.01 Msun) so eruptions come every few seconds.
+// Each one throws off most of the layer and the white dwarf keeps a little, creeping toward 1.44 Msun.
+const NOVA_LAYER = 0.01, NOVA_KEEP = 0.2;
+function nova(wd) {
+  wd.novaPending = false;
+  const layer = wd.layer || 0; if (layer <= 0 || !bodies.includes(wd)) return;
+  const out = layer * (1 - NOVA_KEEP), N = Math.min(160, MAXG - gN);
+  wd.m -= out; wd.layer = 0; wd.novae = (wd.novae || 0) + 1;
+  for (let k = 0; k < N; k++) {
+    const a = Math.random() * Math.PI * 2, rr = wd.R * (1.2 + 0.4 * Math.random());
+    const x = wd.x + Math.cos(a) * rr, y = wd.y + Math.sin(a) * rr;
+    const vInf = (0.003 + 0.008 * Math.random()) * C, ve = escapeSpeed(x, y, null), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
+    if (addGas(x, y, wd.vx + Math.cos(a) * sp, wd.vy + Math.sin(a) * sp, out / Math.max(N, 1))) gf[gN - 1] = 3;
+  }
+  flashes.push({ x: wd.x, y: wd.y, t0: wallNow, dur: 4500, kind: 'sn', R: 6, power: 0.35, st: simTime });
+  if (wd.novae <= 3 || wd.novae % 5 === 0)
+    toast(`Nova${wd.novae > 1 ? ' #' + wd.novae : ''}`, [`Hydrogen piled up on the white dwarf's surface and ignited in a thermonuclear flash`,
+      `Most of it blew off; the white dwarf kept a little and is now ${fmtM(wd.m)} of 1.44 M☉`]);
+  if (wd.m >= M_CH && !wd.sn) { wd.sn = { t0: wallNow, mode: 'ia' }; toast('Over the Chandrasekhar limit', ['Feeding pushed the white dwarf past 1.44 M☉', 'Carbon is about to ignite']); }
+}
 // gas mass m landing on accretor b; (px, py, rvx, rvy) = position and velocity relative to b
 function accrete(b, m, px, py, rvx, rvy) {
   if (b.kind === 'bh') { // accreted angular momentum spins the hole up (or down, for retrograde gas)
@@ -1053,6 +1150,9 @@ function accrete(b, m, px, py, rvx, rvy) {
     cp = Math.min(0.998, cp + m / b.m * 3.67 * Math.sqrt(Math.max(0, 1 - cp)));
     b.chi = cp * sg;
     b.fedFrame += m;
+  } else if (isWD(b)) { // hydrogen piles up on the surface until it ignites as a nova
+    b.layer = (b.layer || 0) + m; b.fedFrame = (b.fedFrame || 0) + m;
+    if (b.layer >= NOVA_LAYER && !b.novaPending) { b.novaPending = true; novaQueue.push(b); }
   } else { // recycling: ~0.1 Msun of accreted gas spins a neutron star up to millisecond periods
     b.spinHz = Math.min(716, b.spinHz + m / b.m * 4000);
     if (!b.msp && b.spinHz >= 100) { b.msp = true; mspQueue.push(b); }
@@ -1075,11 +1175,11 @@ function stepGas(simDt) {
     let t2 = Infinity, near = null;
     for (const b of bh) { const dx = b.x - x, dy = b.y - y, r2 = dx * dx + dy * dy; const t = r2 * Math.sqrt(r2) / (G * b.m); if (t < t2) { t2 = t; near = b; } }
     const need = Math.ceil(simDt / (0.03 * Math.sqrt(t2)));
-    if (need > 240) { // so deep in that its orbit is shorter than this frame can resolve: it is going in, so let it land now
+    if (need > 240 && near.id !== gsrc[i]) { // so deep in that its orbit is shorter than this frame can resolve: it is going in, so let it land now
       accrete(near, gm[i], x - near.x, y - near.y, vx - near.vx, vy - near.vy);
       removeGas(i); i--; continue;
     }
-    const n = Math.max(1, need), dt = simDt / n;
+    const n = clamp(need, 1, 240), dt = simDt / n;
     let dead = false, hb = null, hrp = 1, rh = 1;
     for (let s = 0; s < n && !dead; s++) {
       let ax = 0, ay = 0, bestA = -1, far = true;
@@ -1088,7 +1188,7 @@ function stepGas(simDt) {
         const rvx = vx - b.vx, rvy = vy - b.vy;
         const isHole = b.kind === 'bh';
         const rp = isHole ? rpFor(b, -dx, -dy, rvx, rvy) : rs;
-        if (isHole ? r < Math.max(1.05 * b.kPlus * rs, 2.2 * rp) : r < 1.2 * b.R) {
+        if (b.id !== gsrc[i] && (isHole ? r < Math.max(1.05 * b.kPlus * rs, 2.2 * rp) : r < 1.2 * b.R)) {
           accrete(b, gm[i], -dx, -dy, rvx, rvy); dead = true; break;
         }
         if (r < 30000) far = false;
@@ -1104,7 +1204,7 @@ function stepGas(simDt) {
       if (gf[i] === 0) { // first time this gas reaches the inner disk: some of it is blown back out
         const ex = x - hb.x, ey = y - hb.y, er = Math.hypot(ex, ey);
         if (er < 15 * hrp) {
-          const fOut = hb.kind === 'bh' ? 0.15 + 0.5 * clamp(hb.feedRate * 160, 0, 1) : 0.4;
+          const fOut = hb.kind === 'bh' ? 0.15 + 0.5 * clamp(hb.feedRate * 160, 0, 1) : isWD(hb) ? 0.1 : 0.4;
           if (Math.random() < fOut) {
             const sp = (0.3 + 0.15 * Math.random()) * C;
             vx += ex / er * sp; vy += ey / er * sp; gf[i] = 2;
@@ -2014,7 +2114,7 @@ function orbitText(b) {
   const o = partnerOf(b); if (!o) return 'alone';
   const r = Math.hypot(o.x - b.x, o.y - b.y), GM = G * (o.m + b.m);
   const E = 0.5 * ((o.vx - b.vx) ** 2 + (o.vy - b.vy) ** 2) - GM / r;
-  const who = o.kind === 'bh' ? `${fmtM(o.m)} M☉ hole` : o.type.name.toLowerCase();
+  const who = o.kind === 'bh' ? `${fmtM(o.m)} M☉ hole` : o.type.lc;
   if (E >= 0) return `passing a ${who} · ${fmtKm(r * KM_PER_UNIT)} km`;
   const a = -GM / (2 * E), P = 2 * Math.PI * Math.sqrt(a * a * a / GM) * SIM2REAL;
   return `${who} · ${fmtKm(r * KM_PER_UNIT)} km · ${fmtSec(P)}`;
@@ -2046,7 +2146,8 @@ function inspectRows(b) {
   ];
   if (b.type.kind === 'giant') rows.push(['Envelope left', () => `${Math.max(0, b.m - b.core).toFixed(4)} M☉ over a ${fmtM(b.core)} M☉ core`]);
   if (b.passes) rows.push(['Close passes survived', () => String(b.passes)]);
-  if (b.type.kind === 'wd') rows.push(['Chandrasekhar limit', () => `${fmtM(b.m)} of 1.44 M☉`]);
+  if (b.type.kind === 'wd') rows.push(['Chandrasekhar limit', () => `${fmtM(b.m)} of 1.44 M☉`],
+    ['Fed so far', () => `${(b.fedTotal || 0).toFixed(4)} M☉`], ['Novae', () => String(b.novae || 0)]);
   rows.push(['Nearest partner', () => orbitText(b)]);
   return rows;
 }
@@ -2282,7 +2383,7 @@ function frameBody(now) {
     for (const b of bodies) if (isNS(b)) b.beamPh += (1.5 + 3.2 * Math.log10(1 + b.spinHz)) * wallDt;
     // advance bodies and gas together in short chunks so fast-moving accretors (neutron stars) never outrun their own gas
     const want = wallDt * SPEEDS[speedIdx] * slow;
-    const chunk = gN > 0 && bodies.some(isNS) ? 0.004 : 0.02;
+    const chunk = gN > 0 && bodies.some(b => isNS(b) || isWD(b)) ? 0.004 : 0.02;
     const K = clamp(Math.ceil(want / chunk), 1, 40);
     let simDt = 0;
     frameSim = 0;
@@ -2299,6 +2400,7 @@ function frameBody(now) {
     }
     for (const b of bodies.slice()) if (b.sn && snP(b) >= SN_BREAK) explode(b);
     while (windQueue.length) { const h = windQueue.shift(); toast('Disk wind', [`Gas near the ${h.kind === 'bh' ? fmtM(h.m) + ' M☉ hole' : 'neutron star'} glows so hard its own light blows part of it away`, 'The faint spray heading outward is stolen gas that will never be eaten'], 'w'); }
+    while (novaQueue.length) nova(novaQueue.shift());
     while (mspQueue.length) { const ns = mspQueue.shift(); toast('Millisecond pulsar', [`Accretion spun the neutron star up to ${Math.round(ns.spinHz)} turns per second (period ${(1000 / ns.spinHz).toFixed(1)} ms)`, 'This is how most millisecond pulsars are thought to form: “recycled” by a companion'], 'w'); }
     for (const ns of bodies.filter(isNS)) if (ns.m > 2.3) { // accretion-induced collapse
       const bhn = makeBH(ns.x, ns.y, ns.vx, ns.vy, ns.m, Math.min(0.7, ns.spinHz / 1000));
