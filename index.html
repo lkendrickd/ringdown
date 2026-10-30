@@ -124,6 +124,34 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .gizmo:active{cursor:grabbing}
 .gizmo canvas{display:block;width:100%;height:100%}
+.inspect{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 58px);right:max(16px,env(safe-area-inset-right,0px));
+  width:min(290px,calc(100% - 32px));background:var(--glass-hi);border:1px solid var(--line);border-radius:14px;padding:12px 14px 13px;
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:flex;flex-direction:column;gap:9px;-webkit-user-select:text;user-select:text}
+.ins-head{display:flex;align-items:center;gap:9px;min-width:0}
+.ins-head h2{margin:0;font:600 17px/1.1 var(--f-ui);letter-spacing:.03em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ins-x{width:28px;height:28px;flex:none;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--dim);cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center}
+.ins-x:hover{color:var(--ink);background:rgba(255,255,255,.09)}
+.ins-x svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.ins-mass{display:flex;flex-direction:column;gap:2px}
+.ins-mass .lbl{font-size:11px}
+.ins-mass .big{font:500 27px/1.05 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.ins-mass .big small{font-size:14px;color:var(--dim);margin-left:4px}
+.ins-rate{font:500 12.5px/1.3 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--dim)}
+.ins-rate.down{color:#ff9a72}
+.ins-rate.up{color:var(--wave)}
+.ins-status{font-size:14px;line-height:1.3;color:var(--ink);padding:6px 9px;border-radius:8px;background:rgba(255,255,255,.04);border-left:2px solid var(--faint)}
+.ins-status.hot{border-left-color:#ff9a72}
+.ins-status.feed{border-left-color:var(--wave)}
+.ins-act{height:34px;border-radius:9px;border:1px solid rgba(255,154,114,.5);background:rgba(255,154,114,.12);color:#ffc2a6;
+  font:600 13.5px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.ins-act:hover:not(:disabled){background:rgba(255,154,114,.22)}
+.ins-act:disabled{cursor:default;opacity:.55}
+.ins-note{margin:-3px 0 0;font-size:12.5px;line-height:1.35;color:var(--dim)}
+.ins-rows{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px}
+.ins-rows dt{color:var(--dim);white-space:nowrap}
+.ins-rows dd{margin:0;text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:12px;min-width:0;overflow-wrap:anywhere}
+@media (max-width:560px){.inspect{z-index:5}}
 .follow-x{height:26px;padding:0 9px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--ink);
   font:600 11.5px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
 .follow-x:hover{background:rgba(255,255,255,.09)}
@@ -212,6 +240,8 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     <li>A white dwarf that spirals into a neutron star gets torn into a disk. The neutron star feeds and spins up (about 0.1 M☉ takes it to millisecond periods), the usual story for millisecond pulsars; the fastest known spins 716 times a second. A neutron star that eats past about 2.3 M☉ collapses into a hole. A neutron star sinking into a giant makes a Thorne–Żytkow object.</li>
     <li>A black hole rarely eats a star whole. Gas spills off through the Roche lobe and the star keeps going. A giant stays big until its envelope is gone, then its helium core is left orbiting, as a white dwarf for a red giant or a Wolf–Rayet star for a blue supergiant. A small star can be whittled down to a brown dwarf. On a stretched orbit, each close pass takes a little (like ASASSN-14ko, which flares every 115 days).</li>
     <li>Not all the stolen gas gets eaten. Near the hole, part of it is blown back out by its own light, 15–65% here and more when the hole is feeding hard, as in ultraluminous X-ray sources. The purple band on the scope tracks how fast gas is falling in.</li>
+    <li>Stars above about 8 M☉ can go supernova from the inspector. The iron core collapses, bounces at nuclear density, and the shock stalls until neutrinos reheat it; then it blows the envelope off at thousands of km/s. Stars born above about 20 M☉ leave a black hole here, the rest a neutron star with a kick of a few hundred km/s. Collisions can build stars no galaxy makes on its own: from about 140 to 260 M☉ the star ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ it collapses straight into an intermediate-mass black hole. A real star like that would live a couple of million years first; here it ends at once. In reality the collapse takes a fraction of a second and the shock needs hours to reach a supergiant's surface; here the sequence takes about 5 seconds. Because stars here are drawn far smaller than real ones, ejecta is launched fast enough to escape their exaggerated surface gravity and then coasts away at a realistic 5,000–20,000 km/s. In a tight binary it is launched faster still, to keep the real ratio of ejecta speed to orbital speed (about 50 to 1 in nature), since binaries here are compressed to about 1,000 km.</li>
+    <li>Click any object to inspect it. Masses and rates are live; rates are per second of simulation time, and orbital periods are given in real seconds.</li>
     <li>Not to scale: ordinary stars are drawn thousands of times smaller than life (a white dwarf is really Earth-sized, about 500× a neutron star, but here only 1.6×), and mass transfer runs fast enough to watch.</li>
   </ul>
 </aside>
@@ -220,6 +250,8 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
   <div class="ctx" id="ctx"></div>
   <div class="tools" id="tools" role="radiogroup" aria-label="Object to place"></div>
 </nav>
+
+<aside class="inspect" id="inspect" hidden aria-label="Selected object"></aside>
 
 <div class="gizmo" id="gizmo" tabindex="0" role="group" aria-label="View dial"><canvas id="gizmoCv"></canvas></div>
 
@@ -310,7 +342,7 @@ function makeBH(x, y, vx, vy, m, chi = 0) {
 function makeStar(tid, x, y, vx, vy, m) {
   const t = TYPE[tid], mm = m || t.m;
   const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:t.R, R0:t.R, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false,
-    core: t.core ? t.core * mm / t.m : 0, ep: null, passes: 0 };
+    core: t.core ? t.core * mm / t.m : 0, ep: null, passes: 0, mBirth: mm };
   if (t.kind === 'ns') { s.spinHz = 1 + 3 * Math.random(); s.beamPh = Math.random() * 6.28; s.msp = false; }
   return s;
 }
@@ -711,7 +743,7 @@ function mergeNS(a, b) {
   }
 }
 function swallow(bh, st) {
-  bh.m += st.m; totalFed += st.m; bh.fedFrame += st.m;
+  bh.m += st.m; totalFed += st.m; bh.fedFrame += st.m; bh.fedTotal = (bh.fedTotal || 0) + st.m;
   bodies = bodies.filter(o => o !== st);
   toast('Swallowed whole', [`${st.type.name} crossed the horizon of the ${fmtM(bh.m - st.m)} M☉ hole intact`]);
 }
@@ -729,8 +761,14 @@ function mergeStars(a, b) {
   big.vx = (a.vx * a.m + b.vx * b.m) / M; big.vy = (a.vy * a.m + b.vy * b.m) / M;
   big.x = (a.x * a.m + b.x * b.m) / M; big.y = (a.y * a.m + b.y * b.m) / M;
   big.R = big.R * Math.pow(M / big.m, 0.5); big.R0 = big.R; big.m = M; big.m0 = M;
+  big.mBirth = Math.max(big.mBirth || 0, M); if (big.core) big.core = Math.max(big.core, 0.36 * M);
   bodies = bodies.filter(o => o !== small);
-  toast('Stellar collision', [`${small.type.name} merged into the ${big.type.name}`]);
+  if (big.sn) big.sn.mode = snMode(big); // still gaining mass while it collapses
+  if (M >= 140 && !big.sn && (big.type.kind === 'ms' || big.type.kind === 'giant')) {
+    startSupernova(big);
+    toast('Too massive to survive', [`Collisions built a ${fmtM(M)} M☉ star, far past the ~150 M☉ that stars can hold together`,
+      big.sn.mode === 'pi' ? 'It is heading for a pair-instability supernova' : 'It is heading for direct collapse into a black hole'], 'w');
+  } else toast('Stellar collision', [`${small.type.name} merged into the ${big.type.name} · now ${fmtM(M)} M☉`]);
 }
 
 function updateRadius(s) {
@@ -780,6 +818,99 @@ function stellarProcesses(simDt) {
       if (!st.noted) { st.noted = true; toast('Mass transfer', [`${st.type.name} is overflowing its Roche lobe onto the ${fmtM(host.m)} M☉ ${isNS(host) ? 'neutron star' : 'hole'}`]); }
     }
   }
+}
+/* Core-collapse supernova. The sequence is stylized in time (about 5 s on screen):
+   the iron core falls in, bounces at nuclear density, the shock stalls, neutrinos revive it,
+   it reaches the surface and the envelope is blown off. What's left is a neutron star, or a black hole
+   for the heaviest stars. Only stars above ~8 Msun can do this. */
+const SN_DUR = 5200, SN_BREAK = 0.8;
+function canSupernova(b) {
+  if (b.kind !== 'star' || b.sn) return false;
+  if (b.type.id === 'WR') return true;
+  return (b.type.kind === 'ms' || b.type.kind === 'giant') && b.m >= 8;
+}
+function snBlocker(b) {
+  if (b.kind !== 'star') return '';
+  if (b.type.kind === 'wd') return 'A white dwarf has no fuel left to collapse. It can only explode if it gains enough mass to pass 1.44 M☉.';
+  if (b.type.kind === 'bd') return 'A brown dwarf never fused hydrogen, so it never builds an iron core.';
+  if (isNS(b)) return '';
+  return `Too light to collapse. Below about 8 M☉ a star sheds its outer layers gently and ends as a white dwarf.`;
+}
+// How a star ends depends on its mass: core collapse (8–140 Msun), pair-instability (140–260 Msun:
+// the star blows itself apart and leaves nothing), or direct collapse to a black hole (above ~260 Msun).
+function snMode(b) { return b.m >= 260 ? 'dc' : b.m >= 140 ? 'pi' : 'cc'; }
+function startSupernova(b) { if (canSupernova(b)) b.sn = { t0: wallNow, mode: snMode(b) }; }
+// speed needed to climb out of everything's gravity from (x, y), with `extra` added as a point mass at (ex, ey)
+function escapeSpeed(x, y, skip, extra, ex, ey, extraHole) {
+  let phi = 0;
+  for (const o of bodies) {
+    if (o === skip) continue;
+    const r = Math.hypot(o.x - x, o.y - y) || 1e-6;
+    phi += G * o.m / (o.kind === 'bh' ? Math.max(r - rsOf(o.m), 0.3 * rsOf(o.m)) : Math.max(r, o.R || 1));
+  }
+  if (extra) { const d = Math.hypot(ex - x, ey - y), rs = rsOf(extra); phi += G * extra / (extraHole ? Math.max(d - rs, 0.3 * rs) : Math.max(d, 1)); }
+  return Math.sqrt(2 * phi);
+}
+function explode(st) {
+  const name = st.type.name.toLowerCase(), mode = st.sn ? st.sn.mode : 'cc';
+  const toBH = mode === 'dc' || (mode === 'cc' && st.mBirth >= 20 && st.type.id !== 'WR');
+  const mRem = mode === 'pi' ? 0 : mode === 'dc' ? 0.9 * st.m : toBH ? clamp(0.3 * st.m, 5, 15) : 1.25 + 0.2 * Math.random();
+  const ej = Math.max(0, st.m - mRem);
+  // ejecta. Stars here are drawn far smaller than real ones, so gravity at their surface is far too strong;
+  // launch fast enough to escape and still coast away at a realistic speed (about 5,000-20,000 km/s).
+  const N = Math.min(mode === 'pi' ? 1000 : mode === 'dc' ? 250 : 700, MAXG - gN);
+  // In a real binary the ejecta move ~50x faster than the orbit. Binaries here are compressed to ~1,000 km, so
+  // orbits run near 0.2c; keep the ejecta several times faster than the orbit or the partner sweeps most of it up.
+  const pt = partnerOf(st), vOrb = pt ? Math.sqrt(G * (st.m + pt.m) / Math.max(Math.hypot(pt.x - st.x, pt.y - st.y), 1)) : 0;
+  let vmean = 0;
+  for (let k = 0; k < N; k++) {
+    const a = Math.random() * Math.PI * 2, rr = Math.max(st.R * (0.5 + 0.5 * Math.sqrt(Math.random())), toBH ? 4 * rsOf(mRem) : 0);
+    const x = st.x + Math.cos(a) * rr, y = st.y + Math.sin(a) * rr;
+    const vReal = (mode === 'dc' ? 0.005 + 0.01 * Math.random() : 0.017 + 0.05 * Math.random()) * C;
+    const vInf = Math.min(Math.max(vReal, (mode === 'dc' ? 1.2 : 2.5 + 1.5 * Math.random()) * vOrb), 0.7 * C);
+    const ve = escapeSpeed(x, y, st, mRem, st.x, st.y, toBH), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
+    if (addGas(x, y, st.vx + Math.cos(a) * sp, st.vy + Math.sin(a) * sp, ej / Math.max(N, 1))) gf[gN - 1] = 2;
+    vmean += vReal;
+  }
+  vmean = N ? vmean / N : 0;
+  if (mode === 'pi') { // nothing survives
+    bodies = bodies.filter(o => o !== st);
+    if (followId === st.id) followId = null;
+    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 14000, scale: Math.max(1, st.R / 5), kind: 'sn' });
+    toast('Pair-instability supernova', [
+      `The ${fmtM(st.m)} M☉ star blew itself completely apart. No neutron star, no black hole: nothing is left`,
+      `Its core got so hot that light turned into electron–positron pairs, the core lost pressure and collapsed, and the oxygen in it ignited all at once`,
+      `${fmtM(ej)} M☉ thrown out at about ${Math.round(vmean / C * 299792.458).toLocaleString('en-US')} km/s`,
+    ], 'w');
+    return;
+  }
+  // natal kick: neutron stars are born moving at a few hundred km/s
+  const kick = (toBH ? 50 : 300 + 200 * Math.random()) / 299792.458 * C, ka = Math.random() * Math.PI * 2;
+  const vx = st.vx + Math.cos(ka) * kick, vy = st.vy + Math.sin(ka) * kick;
+  const rem = toBH ? makeBH(st.x, st.y, vx, vy, mRem, (Math.random() < 0.5 ? -1 : 1) * 0.2) : makeStar('NS', st.x, st.y, vx, vy, mRem);
+  if (!toBH) rem.spinHz = 20 + 30 * Math.random();
+  bodies = bodies.filter(o => o !== st); bodies.push(rem);
+  if (followId === st.id) { followId = rem.id; followPos = [rem.x, rem.y]; }
+  if (mode === 'dc') {
+    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 6000, scale: Math.max(0.3, st.R / 30), kind: 'sn' });
+    toast('Direct collapse', [
+      `The ${fmtM(st.m)} M☉ star fell straight into a ${fmtM(mRem)} M☉ black hole without exploding`,
+      `Too massive for the shock to win, so there is only a faint outburst as it vanishes. Astronomers have watched a star do roughly this (N6946-BH1)`,
+      `A hole this size is an intermediate-mass black hole, a missing link between stellar and supermassive holes`,
+    ], 'w');
+    return;
+  }
+  flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 11000, scale: Math.max(0.5, st.R / 10), kind: 'sn' });
+  const lines = [
+    `The ${name}'s core collapsed into a ${toBH ? fmtM(mRem) + ' M☉ black hole' : fmtM(mRem) + ' M☉ neutron star'}`,
+    `${fmtM(ej)} M☉ of outer layers blown off at about ${Math.round(vmean / C * 299792.458).toLocaleString('en-US')} km/s`,
+  ];
+  const o = partnerOf(rem);
+  if (o) {
+    const r = Math.hypot(o.x - rem.x, o.y - rem.y), E = 0.5 * ((o.vx - rem.vx) ** 2 + (o.vy - rem.vy) ** 2) - G * (o.m + rem.m) / r;
+    lines.push(E > 0 ? `It lost so much mass that its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.name.toLowerCase()}, is no longer bound to it` : `Its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.name.toLowerCase()}, is still bound to it`);
+  } else lines.push(toBH ? 'Most of the core fell back, so it collapsed past the neutron-star limit' : `Born with a kick of ${Math.round(kick / C * 299792.458)} km/s`);
+  toast('Supernova', lines, 'w');
 }
 function retype(st, t, keepMass) {
   st.type = t; st.m0 = st.m; st.R = st.R0 = t.R; st.core = 0;
@@ -846,7 +977,7 @@ function accrete(b, m, px, py, rvx, rvy) {
     if (!b.msp && b.spinHz >= 100) { b.msp = true; mspQueue.push(b); }
     b.fedFrame = (b.fedFrame || 0) + m;
   }
-  b.m += m; totalFed += m;
+  b.m += m; totalFed += m; b.fedTotal = (b.fedTotal || 0) + m;
 }
 const VISC = 0.12, INFLOW = 0.02, TORQUE = 0.007, LOG80 = Math.log(80), VMAX = 0.9 * C;
 function stepGas(simDt) {
@@ -896,7 +1027,7 @@ function stepGas(simDt) {
           if (Math.random() < fOut) {
             const sp = (0.3 + 0.15 * Math.random()) * C;
             vx += ex / er * sp; vy += ey / er * sp; gf[i] = 2;
-            totalWind += gm[i];
+            totalWind += gm[i]; hb.windM = (hb.windM || 0) + gm[i];
             if (!hb.windNoted) { hb.windNoted = true; windQueue.push(hb); }
           } else gf[i] = 1;
         }
@@ -905,7 +1036,7 @@ function stepGas(simDt) {
       const px = x - hb.x, py = y - hb.y, r = Math.hypot(px, py), d = Math.max(r - hrp, 0.3 * hrp);
       let rvx = vx - hb.vx, rvy = vy - hb.vy;
       const eps = 0.5 * (rvx * rvx + rvy * rvy) - G * hb.m / d;
-      if (eps < 0) {
+      if (eps < 0 && gf[i] !== 2) {
         // disk viscosity: damp radial sloshing (circularizes the stream) and shed angular momentum so orbits shrink
         const vc = Math.sqrt(G * hb.m * r) / d, om = vc / r, rx = px / r, ry = py / r;
         const vr = rvx * rx + rvy * ry, tvx = rvx - vr * rx, tvy = rvy - vr * ry;
@@ -1212,12 +1343,12 @@ function drawScene() {
   // kilonovae
   sctx.globalCompositeOperation = 'lighter';
   for (let i = flashes.length - 1; i >= 0; i--) {
-    const f = flashes[i], a = (wallNow - f.t0) / f.dur;
+    const f = flashes[i], a = Math.max(0, (wallNow - f.t0) / f.dur);
     if (a > 1) { flashes.splice(i, 1); continue; }
     const X = toSX(f.x, f.y) * s, Y = toSY(f.x, f.y) * s;
     const R = Math.max((4 + 90 * Math.pow(a, 0.55)) * f.scale * zoom, 6) * s;
     const k = clamp((a - 0.12) / 0.55, 0, 1);
-    const col = [180 + 75 * k, 205 - 110 * k, 255 - 210 * k].map(Math.round).join(',');
+    const col = (f.kind === 'sn' ? [255, 250 - 70 * k, 240 - 170 * k] : [180 + 75 * k, 205 - 110 * k, 255 - 210 * k]).map(Math.round).join(',');
     const al = Math.pow(1 - a, 1.6) * 0.9;
     const g = sctx.createRadialGradient(X, Y, 0, X, Y, R);
     g.addColorStop(0, `rgba(${col},${al})`); g.addColorStop(0.45, `rgba(${col},${al * 0.45})`); g.addColorStop(1, `rgba(${col},0)`);
@@ -1272,6 +1403,7 @@ function drawScene() {
   for (const b of bodies) {
     if (b.kind !== 'star') continue;
     const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, R = Math.max(b.R * zoom, 1.6) * s;
+    if (b.sn) { drawCollapse(b, X, Y, R, (wallNow - b.sn.t0) / SN_DUR); continue; }
     const e = clamp((b.f - 0.8) / 0.6, 0, 1) * 0.55;
     if (e > 0.01) {
       const ang = Math.atan2(toSY(b.hx, b.hy) * s - Y, toSX(b.hx, b.hy) * s - X);
@@ -1281,6 +1413,65 @@ function drawScene() {
   }
 }
 
+// cutaway of a collapsing star: the envelope turns translucent so the core is visible
+function drawCollapse(b, X, Y, R, p) {
+  const s = RS, coreMax = Math.max(R * 0.32, 5 * s), mode = b.sn.mode;
+  if (mode === 'pi' || mode === 'dc') {
+    const glowAt = (r, a, col) => {
+      const g = sctx.createRadialGradient(X, Y, 0, X, Y, r);
+      g.addColorStop(0, `rgba(${col},${a})`); g.addColorStop(0.5, `rgba(${col},${a * 0.4})`); g.addColorStop(1, `rgba(${col},0)`);
+      sctx.fillStyle = g; sctx.fillRect(X - r, Y - r, 2 * r, 2 * r);
+    };
+    if (mode === 'dc') { // the star darkens and shrinks as it falls into its own hole
+      const q = clamp(p / SN_BREAK, 0, 1), Rn = R * (1 - 0.85 * q * q);
+      sctx.globalAlpha = 1 - 0.8 * q; sctx.drawImage(starCore[b.type.id], X - Rn, Y - Rn, 2 * Rn, 2 * Rn); sctx.globalAlpha = 1;
+      sctx.fillStyle = `rgba(0,0,0,${0.3 + 0.7 * q})`; sctx.beginPath(); sctx.arc(X, Y, Math.max(coreMax * 0.2, Rn * q * 0.9), 0, Math.PI * 2); sctx.fill();
+      return;
+    }
+    // pair instability: the core softens and contracts, then the oxygen ignites all at once
+    sctx.globalAlpha = 0.6; sctx.drawImage(starCore[b.type.id], X - R, Y - R, 2 * R, 2 * R); sctx.globalAlpha = 1;
+    sctx.globalCompositeOperation = 'lighter';
+    if (p < 0.4) { const q = p / 0.4; glowAt(coreMax * (1 - 0.5 * q), 0.6 + 0.3 * q, '255,170,210'); }
+    else { const q = clamp((p - 0.4) / (SN_BREAK - 0.4), 0, 1); glowAt(coreMax * 0.5 + (R * 1.1 - coreMax * 0.5) * Math.pow(q, 0.8), 0.7 + 0.3 * q, '255,246,225'); }
+    sctx.globalCompositeOperation = 'source-over';
+    return;
+  }
+  sctx.globalAlpha = p < 0.35 ? 1 - 0.45 * (p / 0.35) : 0.55;
+  sctx.drawImage(starCore[b.type.id], X - R, Y - R, 2 * R, 2 * R);
+  sctx.globalAlpha = 1;
+  sctx.globalCompositeOperation = 'lighter';
+  const glow = (r, a, col) => {
+    const g = sctx.createRadialGradient(X, Y, 0, X, Y, r);
+    g.addColorStop(0, `rgba(${col},${a})`); g.addColorStop(0.5, `rgba(${col},${a * 0.4})`); g.addColorStop(1, `rgba(${col},0)`);
+    sctx.fillStyle = g; sctx.fillRect(X - r, Y - r, 2 * r, 2 * r);
+  };
+  const ring = (r, w, a, col) => { sctx.strokeStyle = `rgba(${col},${a})`; sctx.lineWidth = Math.max(1, w); sctx.beginPath(); sctx.arc(X, Y, r, 0, Math.PI * 2); sctx.stroke(); };
+  if (p < 0.35) { // the iron core falls in; the layers just above it chase it down
+    const q = p / 0.35, cr = coreMax * (1 - 0.9 * q * q);
+    glow(cr * 1.6, 0.9, '255,214,150');
+    sctx.fillStyle = 'rgba(255,240,210,0.9)'; sctx.beginPath(); sctx.arc(X, Y, Math.max(cr * 0.55, 1.5 * s), 0, Math.PI * 2); sctx.fill();
+    for (let k = 0; k < 28; k++) {
+      const u = ((p * 9 + k / 28) % 1), ang = k * 2.39996, rr = cr + (R * 0.62 - cr) * (1 - u) ;
+      sctx.fillStyle = `rgba(255,190,130,${0.25 + 0.6 * u})`;
+      sctx.beginPath(); sctx.arc(X + Math.cos(ang) * rr, Y + Math.sin(ang) * rr, Math.max(1, 1.4 * s), 0, Math.PI * 2); sctx.fill();
+    }
+  } else if (p < 0.40) { // bounce: the core hits nuclear density and rebounds
+    const q = (p - 0.35) / 0.05;
+    glow(coreMax * (0.4 + 1.6 * q), 1 - 0.5 * q, '255,255,255');
+    ring(coreMax * (0.08 + 0.6 * q), 3 * s, 0.95, '255,250,235');
+  } else if (p < 0.55) { // the shock stalls; neutrinos from the newborn neutron star heat the gas behind it
+    const jit = Math.sin(wallNow * 0.05) * 0.04 + Math.sin(wallNow * 0.031) * 0.03;
+    glow(coreMax * 0.66, 0.35, '170,200,255');
+    sctx.fillStyle = 'rgba(225,240,255,1)'; sctx.beginPath(); sctx.arc(X, Y, Math.max(2 * s, coreMax * 0.07), 0, Math.PI * 2); sctx.fill();
+    ring(coreMax * (0.68 + jit), 2.5 * s, 0.85, '255,236,200');
+  } else { // revived, the shock races out to the surface
+    const q = (p - 0.55) / (SN_BREAK - 0.55), r = coreMax * 0.68 + (R - coreMax * 0.68) * Math.pow(q, 1.4);
+    glow(r, 0.25 + 0.35 * q, '255,226,170');
+    sctx.fillStyle = 'rgba(225,240,255,1)'; sctx.beginPath(); sctx.arc(X, Y, Math.max(2 * s, coreMax * 0.07), 0, Math.PI * 2); sctx.fill();
+    ring(r, (2.5 + 3 * q) * s, 0.9, '255,244,220');
+  }
+  sctx.globalCompositeOperation = 'source-over';
+}
 const bhU = new Float32Array(64), bhU2 = new Float32Array(64), bhU3 = new Float32Array(64), bhU4 = new Float32Array(64);
 // Exact Kerr shadow (Bardeen 1973): trace the rim of spherical photon orbits as seen from inclination i,
 // then store it as a short Fourier series r(θ) about its centre. Cached per (spin, angle).
@@ -1488,7 +1679,17 @@ function drawOverlay() {
       }
     }
   }
-  if (opt.follow && followId != null) {
+  for (const b of bodies) {
+    if (!b.sn) continue;
+    const p = (wallNow - b.sn.t0) / SN_DUR, X = toSX(b.x, b.y), Y = toSY(b.x, b.y), R = Math.max(b.R * zoom, 1.6);
+    const mode = b.sn.mode;
+    const cap = mode === 'dc' ? (p < 0.35 ? 'Core collapsing' : 'No bounce · falling into its own black hole')
+      : mode === 'pi' ? (p < 0.2 ? 'Light turning into electron–positron pairs' : p < 0.4 ? 'Core loses pressure and contracts' : 'Oxygen ignites all at once')
+      : p < 0.35 ? 'Iron core collapsing' : p < 0.40 ? 'Core bounces' : p < 0.55 ? 'Shock stalls · neutrinos reheat it' : 'Shock heading for the surface';
+    c.font = `600 12px "Saira Condensed", sans-serif`; c.textAlign = 'center'; c.fillStyle = 'rgba(255,214,190,0.95)';
+    c.fillText(cap.toUpperCase(), X, Y - R - 12);
+  }
+  if (followId != null) {
     const b = bodies.find(o => o.id === followId);
     if (b) {
       const X = toSX(b.x, b.y), Y = toSY(b.x, b.y);
@@ -1640,7 +1841,7 @@ function renderMoveCtx(force) {
   }
   moveKey = key;
   const ctx = $('ctx');
-  const help = coarse ? 'Drag: pan · Pinch: zoom & twist · Tap an object: follow' : 'Drag: pan · Right-drag: tilt & rotate · Scroll: zoom · Click an object: follow';
+  const help = coarse ? 'Drag: pan · Pinch: zoom & twist · Tap an object: inspect' : 'Drag: pan · Right-drag: tilt & rotate · Scroll: zoom · Click an object: inspect';
   let head, btn = '';
   if (!opt.follow) { head = '<b>Free camera</b>'; btn = '<button class="follow-x" type="button" data-act="recenter">Recenter</button>'; }
   else if (followId != null) { head = `<b>Following</b><span class="tgt">${label}</span>`; btn = '<button class="follow-x" type="button" data-act="auto">Auto</button>'; }
@@ -1649,6 +1850,105 @@ function renderMoveCtx(force) {
   const b = ctx.querySelector('[data-act]');
   if (b) b.addEventListener('click', () => { if (b.dataset.act === 'auto') followId = null; opt.follow = true; syncToggles(); renderMoveCtx(true); });
   requestAnimationFrame(() => document.documentElement.style.setProperty('--dock-h', $('dock').offsetHeight + 'px'));
+}
+const insEl = $('inspect');
+let insKey = '', insRefs = null;
+function kindName(b) { return b.kind === 'bh' ? 'Black hole' : b.type.name; }
+function swatchHTML(b) {
+  if (b.kind === 'bh') return '<span class="sw bh"></span>';
+  if (isNS(b)) return '<span class="sw ns"></span>';
+  return `<span class="sw" style="background:rgb(${b.type.col});color:rgba(${b.type.col},.55)"></span>`;
+}
+function fmtSec(t) { return t < 1 ? `${(t * 1000).toFixed(t < 0.01 ? 2 : 0)} ms` : t < 120 ? `${t.toFixed(t < 10 ? 2 : 1)} s` : `${(t / 60).toFixed(1)} min`; }
+function fmtMass(m) { return m >= 10 ? m.toFixed(4) : m.toFixed(5); }
+function partnerOf(b) {
+  let best = null, ba = 0;
+  for (const o of bodies) { if (o === b) continue; const a = o.m / ((o.x - b.x) ** 2 + (o.y - b.y) ** 2 + 1e-6); if (a > ba) { ba = a; best = o; } }
+  return best;
+}
+function orbitText(b) {
+  const o = partnerOf(b); if (!o) return 'alone';
+  const r = Math.hypot(o.x - b.x, o.y - b.y), GM = G * (o.m + b.m);
+  const E = 0.5 * ((o.vx - b.vx) ** 2 + (o.vy - b.vy) ** 2) - GM / r;
+  const who = o.kind === 'bh' ? `${fmtM(o.m)} M☉ hole` : o.type.name.toLowerCase();
+  if (E >= 0) return `passing a ${who} · ${fmtKm(r * KM_PER_UNIT)} km`;
+  const a = -GM / (2 * E), P = 2 * Math.PI * Math.sqrt(a * a * a / GM) * SIM2REAL;
+  return `${who} · ${fmtKm(r * KM_PER_UNIT)} km · ${fmtSec(P)}`;
+}
+// rows: [label, value function] for each kind of body
+function inspectRows(b) {
+  if (b.kind === 'bh') return [
+    ['Spin χ', () => `${fmtChi(b.chi)} ${b.chi > 0 ? '↺' : b.chi < 0 ? '↻' : ''}`],
+    ['Horizon radius', () => `${fmtKm(b.kPlus * rsOf(b.m) * KM_PER_UNIT)} km`],
+    ['Innermost stable orbit', () => `${fmtKm(3 * b.kP * rsOf(b.m) * KM_PER_UNIT)} km`],
+    ['Eaten so far', () => `${(b.fedTotal || 0).toFixed(4)} M☉`],
+    ['Blown out by its disk', () => `${(b.windM || 0).toFixed(4)} M☉`],
+    ['Jet', () => { const j = jetPower(b); return j < 0.03 ? 'off' : `${Math.round(j * 100)}% power`; }],
+    ['Nearest partner', () => orbitText(b)],
+  ];
+  if (isNS(b)) return [
+    ['Spin', () => b.spinHz >= 100 ? `${Math.round(b.spinHz)}/s · ${(1000 / b.spinHz).toFixed(2)} ms` : `${b.spinHz.toFixed(1)}/s`],
+    ['Radius', () => '12 km'],
+    ['Collapse limit', () => `${fmtM(b.m)} of ~2.3 M☉ (${Math.round(b.m / 2.3 * 100)}%)`],
+    ['Eaten so far', () => `${(b.fedTotal || 0).toFixed(4)} M☉`],
+    ['Blown out by its disk', () => `${(b.windM || 0).toFixed(4)} M☉`],
+    ['Nearest partner', () => orbitText(b)],
+  ];
+  const rows = [
+    ['Surface temperature', () => `${b.type.T.toLocaleString('en-US')} K`],
+    ['Roche lobe filled', () => b.f > 0 ? `${Math.round(b.f * 100)}%` : '—'],
+    ['Lost so far', () => { const l = Math.max(0, b.mBirth - b.m); return `${l.toFixed(4)} M☉ (${(l / b.mBirth * 100).toFixed(1)}%)`; }],
+  ];
+  if (b.type.kind === 'giant') rows.push(['Envelope left', () => `${Math.max(0, b.m - b.core).toFixed(4)} M☉ over a ${fmtM(b.core)} M☉ core`]);
+  if (b.passes) rows.push(['Close passes survived', () => String(b.passes)]);
+  if (b.type.kind === 'wd') rows.push(['Chandrasekhar limit', () => `${fmtM(b.m)} of 1.44 M☉`]);
+  rows.push(['Nearest partner', () => orbitText(b)]);
+  return rows;
+}
+function statusOf(b) {
+  if (b.sn) return [b.sn.mode === 'pi' ? 'Pair-instability supernova under way' : b.sn.mode === 'dc' ? 'Collapsing straight into a black hole' : 'Core collapse under way', 'hot'];
+  if (b.kind === 'bh' || isNS(b)) {
+    if (b.ring && b.kind === 'bh') return ['Ringing down after a merger', 'feed'];
+    return (b.feedRate || 0) > 1e-4 ? ['Feeding on infalling gas', 'feed'] : ['Quiet', ''];
+  }
+  if (b.f > 1) return [b.passes || b.ep ? `Close pass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)` : `Losing mass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)`, 'hot'];
+  if (b.f > 0.85) return [`Close to overflowing (Roche lobe ${Math.round(b.f * 100)}% full)`, ''];
+  if (b.m < b.mBirth * 0.999) return ['Stripped, now stable', ''];
+  return ['Stable', ''];
+}
+function updateInspect() {
+  const b = followId != null ? bodies.find(o => o.id === followId) : null;
+  if (!b) { if (!insEl.hidden) { insEl.hidden = true; insKey = ''; } return; }
+  const key = `${b.id}|${b.kind === 'bh' ? 'bh' : b.type.id}|${b.passes || 0}|${b.sn ? 1 : 0}`;
+  if (key !== insKey) {
+    insKey = key;
+    const rows = inspectRows(b);
+    insEl.innerHTML = `<div class="ins-head">${swatchHTML(b)}<h2></h2><button class="ins-x" type="button" aria-label="Close and go back to auto focus"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div class="ins-mass"><span class="lbl">Mass</span><span class="big"><span class="mv"></span><small>M☉</small></span><span class="ins-rate"></span></div>
+      <div class="ins-status"></div>
+      ${b.kind === 'star' && !isNS(b) ? (canSupernova(b) || b.sn
+        ? `<button class="ins-act" type="button"${b.sn ? ' disabled' : ''}>${b.sn ? 'Collapsing…' : 'Go supernova'}</button>`
+        : `<button class="ins-act" type="button" disabled>Go supernova</button><p class="ins-note">${snBlocker(b)}</p>`) : ''}
+      <dl class="ins-rows">${rows.map(r => `<dt>${r[0]}</dt><dd></dd>`).join('')}</dl>`;
+    insEl.querySelector('h2').textContent = kindName(b);
+    const act = insEl.querySelector('.ins-act');
+    if (act && !act.disabled) act.addEventListener('click', () => { startSupernova(b); updateInspect(); });
+    insEl.querySelector('.ins-x').addEventListener('click', () => { followId = null; opt.follow = true; syncToggles(); renderMoveCtx(true); updateInspect(); });
+    insRefs = { mv: insEl.querySelector('.mv'), rate: insEl.querySelector('.ins-rate'), st: insEl.querySelector('.ins-status'), dd: [...insEl.querySelectorAll('dd')], rows };
+    insEl.hidden = false;
+  }
+  insRefs.mv.textContent = fmtMass(b.m);
+  const r = b.mRate || 0, mag = Math.abs(r);
+  if (mag < 2e-6) { insRefs.rate.textContent = 'steady'; insRefs.rate.className = 'ins-rate'; }
+  else {
+    const digits = mag >= 0.01 ? 4 : mag >= 0.001 ? 5 : 6;
+    insRefs.rate.textContent = `${r < 0 ? '▼ −' : '▲ +'}${mag.toFixed(digits)} M☉ per sim second`;
+    insRefs.rate.className = 'ins-rate ' + (r < 0 ? 'down' : 'up');
+  }
+  const [txt, cls] = statusOf(b);
+  if (insRefs.st.textContent !== txt) insRefs.st.textContent = txt;
+  insRefs.st.className = 'ins-status' + (cls ? ' ' + cls : '');
+  insRefs.rows.forEach((row, i) => { const v = row[1](); if (insRefs.dd[i].textContent !== v) insRefs.dd[i].textContent = v; });
 }
 function undoPlace() {
   while (placed.length) {
@@ -1760,7 +2060,7 @@ ui.addEventListener('wheel', e => {
   if (!opt.follow) { const o = scrOff(e.clientX - vw / 2, e.clientY - vh / 2); camX = w[0] - o[0]; camY = w[1] - o[1]; }
 }, { passive:false });
 addEventListener('keydown', e => {
-  if (e.key === 'Escape') { setTool('move'); return; }
+  if (e.key === 'Escape') { if (tool === 'move' && followId != null) { followId = null; opt.follow = true; syncToggles(); renderMoveCtx(true); } else setTool('move'); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !(e.target.closest && e.target.closest('input,select'))) { e.preventDefault(); undoPlace(); return; }
   if (e.target.closest && e.target.closest('input,select,button,.gizmo')) return;
   if (e.code === 'Space') { e.preventDefault(); paused = !paused; syncPlay(); }
@@ -1846,6 +2146,13 @@ function frameBody(now) {
       stepGas(d); stellarProcesses(d); simDt += d;
     }
     frameSim = simDt;
+    // smoothed rate of mass change for the inspector (per second of sim time)
+    for (const b of bodies) {
+      if (b.mPrev == null || simDt <= 0) { b.mPrev = b.m; b.mRate = b.mRate || 0; continue; }
+      const inst = (b.m - b.mPrev) / simDt; b.mPrev = b.m;
+      b.mRate = (b.mRate || 0) + (inst - (b.mRate || 0)) * Math.min(1, wallDt * 2.5);
+    }
+    for (const b of bodies.slice()) if (b.sn && (wallNow - b.sn.t0) / SN_DUR >= SN_BREAK) explode(b);
     while (windQueue.length) { const h = windQueue.shift(); toast('Disk wind', [`Gas near the ${h.kind === 'bh' ? fmtM(h.m) + ' M☉ hole' : 'neutron star'} glows so hard its own light blows part of it away`, 'The faint spray heading outward is stolen gas that will never be eaten'], 'w'); }
     while (mspQueue.length) { const ns = mspQueue.shift(); toast('Millisecond pulsar', [`Accretion spun the neutron star up to ${Math.round(ns.spinHz)} turns per second (period ${(1000 / ns.spinHz).toFixed(1)} ms)`, 'This is how most millisecond pulsars are thought to form: “recycled” by a companion'], 'w'); }
     for (const ns of bodies.filter(isNS)) if (ns.m > 2.3) { // accretion-induced collapse
@@ -1881,6 +2188,7 @@ function frameBody(now) {
   }
   drawScene(); composite(); drawOverlay(); drawScope();
   renderMoveCtx(false);
+  updateInspect();
   // frame-time governor: shrink the gas budget on slow devices, grow it back when there is headroom
   workMs += (performance.now() - tWork - workMs) * 0.1;
   if (workMs > 20) gasCap = Math.max(900, gasCap * 0.985);
