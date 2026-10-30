@@ -1,0 +1,1830 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ringdown</title>
+<meta name="description" content="Interactive black hole simulator: merge black holes and hear the ringdown, spin them up, feed them stars, and smash neutron stars into kilonovae.">
+<meta property="og:title" content="Ringdown">
+<meta property="og:description" content="Merge black holes, hear the gravitational-wave chirp, and watch them feed on stars.">
+<meta name="theme-color" content="#04050b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2304050b'/%3E%3Ccircle cx='32' cy='32' r='19' fill='none' stroke='%23ffb36a' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%23000'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@1,6..96,600&family=IBM+Plex+Mono:wght@400;500&family=Saira+Condensed:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed simulation; instrument overlays float at the edges — brand + controls on top, strain scope top-left, settings top-right, object dock at the bottom. */
+:root{
+  --void:#04050b;
+  --ink:#ece6da;
+  --dim:#8f93a8;
+  --faint:#5c6075;
+  --glass:rgba(11,13,23,.76);
+  --glass-hi:rgba(24,27,43,.92);
+  --line:rgba(196,202,232,.14);
+  --accent:#ffb36a;
+  --wave:#7fd3e6;
+  --f-display:"Bodoni Moda","Bodoni 72",Didot,Georgia,serif;
+  --f-ui:"Saira Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{background:var(--void);color:var(--ink);font-family:var(--f-ui);overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
+#ui{touch-action:none;cursor:crosshair}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.bar{position:fixed;top:0;left:0;right:0;z-index:6;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding-top:calc(env(safe-area-inset-top,0px) + 10px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.bar>*{pointer-events:auto}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{margin:0;font-family:var(--f-display);font-style:italic;font-weight:600;font-size:30px;line-height:1;letter-spacing:.005em;color:var(--ink);text-shadow:0 0 24px rgba(255,179,106,.25)}
+.brand .tag{font-size:12px;text-transform:uppercase;letter-spacing:.2em;color:var(--dim);white-space:nowrap}
+.ctrls{display:flex;gap:6px;align-items:center}
+.btn,.sel select{height:36px;border-radius:9px;border:1px solid var(--line);background:var(--glass);color:var(--ink);
+  font:500 14px/1 var(--f-ui);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.btn{min-width:36px;padding:0 11px;display:inline-flex;align-items:center;justify-content:center}
+.btn.icon{padding:0}
+.btn:hover,.sel select:hover{background:var(--glass-hi)}
+.btn[aria-pressed="true"]{border-color:rgba(255,179,106,.5);color:var(--accent)}
+.btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sel select{appearance:none;-webkit-appearance:none;padding:0 30px 0 12px;max-width:260px;text-overflow:ellipsis;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238f93a8' stroke-width='1.6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+.sel select option{background:#12141f;color:var(--ink);text-transform:none}
+:focus-visible{outline:2px solid var(--wave);outline-offset:2px}
+
+.scope{position:fixed;z-index:4;top:calc(env(safe-area-inset-top,0px) + 58px);left:max(16px,env(safe-area-inset-left,0px));
+  width:min(360px,calc(100% - 32px));background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:7px 11px 9px;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);pointer-events:none;display:flex;flex-direction:column;gap:5px}
+.scope-head{display:flex;align-items:center;gap:8px;min-width:0}
+.lbl{font-size:12px;text-transform:uppercase;letter-spacing:.18em;color:var(--dim);white-space:nowrap}
+.lbl i{font-family:var(--f-display);font-style:italic;text-transform:none;letter-spacing:0;font-size:15px;color:var(--wave)}
+#fgw{margin-left:auto;font-size:11.5px;color:var(--wave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.slow{font:600 10.5px/1 var(--f-ui);letter-spacing:.16em;text-transform:uppercase;color:#1a1208;background:var(--accent);padding:3px 6px 2px;border-radius:4px;white-space:nowrap}
+.listen{pointer-events:auto;flex:none;height:26px;padding:0 9px 0 7px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--dim);
+  display:inline-flex;align-items:center;gap:5px;font:600 11px/1 var(--f-ui);letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
+.listen svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.listen[aria-pressed="true"]{color:#1a1208;background:var(--wave);border-color:var(--wave)}
+#scope{display:block;width:100%;height:62px}
+#readouts{font-size:11px;color:var(--dim);display:flex;flex-wrap:wrap;gap:2px 12px}
+#readouts b{font-weight:500;color:var(--ink)}
+.legend{display:flex;gap:12px;font-size:10.5px;color:var(--faint);letter-spacing:.04em}
+.legend span::before{content:"";display:inline-block;width:12px;height:2px;margin-right:5px;vertical-align:middle;background:var(--wave)}
+.legend span.f::before{background:var(--accent);opacity:.8}
+
+.panel{position:fixed;z-index:7;top:calc(env(safe-area-inset-top,0px) + 58px);right:max(16px,env(safe-area-inset-right,0px));
+  width:min(340px,calc(100% - 32px));max-height:calc(100% - 210px);overflow-y:auto;background:var(--glass-hi);border:1px solid var(--line);
+  border-radius:14px;padding:14px 16px 16px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:flex;flex-direction:column;gap:12px;-webkit-user-select:text;user-select:text}
+.panel h2{margin:0;font:600 12px/1 var(--f-ui);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.rowr{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;font-size:15px}
+.rowr input[type=range]{grid-column:1 / -1;width:100%;accent-color:var(--accent)}
+.rowr output{font-size:12px;color:var(--wave)}
+.rowr small{grid-column:1 / -1;font-size:12.5px;color:var(--dim);line-height:1.3;margin-top:-2px}
+.tog{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:15px;cursor:pointer}
+.tog small{display:block;font-size:12.5px;color:var(--dim);letter-spacing:.01em;line-height:1.3}
+.tog input{width:20px;height:20px;accent-color:var(--accent);flex:none}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.notes{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;line-height:1.38;color:#c3c1bb}
+.notes li::marker{color:var(--faint)}
+
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;flex-direction:column;align-items:center;gap:7px;pointer-events:none;
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.ctx{pointer-events:auto;display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;justify-content:center;max-width:100%;
+  background:var(--glass);border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:14.5px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.ctx b{font-weight:600;letter-spacing:.03em}
+.ctx .dim{color:var(--dim);font-size:12px}
+.ctx .hint{color:var(--faint);font-size:12.5px;letter-spacing:.06em;text-transform:uppercase}
+.ctx .grp{display:flex;align-items:center;gap:8px}
+.ctx input[type=range]{width:min(150px,32vw);accent-color:var(--accent)}
+.ctx output{font-size:12.5px;color:var(--accent);min-width:60px}
+.tools{pointer-events:auto;display:flex;gap:4px;overflow-x:auto;max-width:100%;padding:5px;background:var(--glass);border:1px solid var(--line);
+  border-radius:13px;scrollbar-width:none;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.tools::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;display:flex;align-items:center;gap:7px;height:38px;padding:0 12px 0 9px;border-radius:9px;border:1px solid transparent;
+  background:transparent;color:var(--dim);font:500 14.5px/1 var(--f-ui);letter-spacing:.03em;cursor:pointer;white-space:nowrap}
+.chip:hover{color:var(--ink);background:rgba(255,255,255,.04)}
+.chip[aria-checked="true"]{color:var(--ink);background:rgba(255,179,106,.11);border-color:rgba(255,179,106,.45)}
+.sw{width:14px;height:14px;border-radius:50%;flex:none;box-shadow:0 0 10px currentColor}
+.sw.bh{background:#000;box-shadow:0 0 0 1.5px var(--accent),0 0 9px rgba(255,179,106,.6)}
+.sw.ns{width:9px;height:9px;margin:0 2.5px;background:#dff0ff;box-shadow:0 0 0 2px rgba(127,211,230,.35),0 0 12px #9fd8ff}
+.chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+.gizmo{position:fixed;z-index:4;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(var(--dock-h,120px) + 12px);
+  width:72px;height:72px;border-radius:50%;background:var(--glass);border:1px solid var(--line);cursor:grab;touch-action:none;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.gizmo:active{cursor:grabbing}
+.gizmo canvas{display:block;width:100%;height:100%}
+.follow-x{height:26px;padding:0 9px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--ink);
+  font:600 11.5px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.follow-x:hover{background:rgba(255,255,255,.09)}
+.ctx .tgt{color:var(--accent)}
+.toasts{position:fixed;z-index:8;left:50%;transform:translateX(-50%);bottom:calc(var(--dock-h,120px) + 10px);width:min(440px,calc(100% - 32px));
+  display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--glass-hi);border:1px solid var(--line);border-radius:12px;padding:10px 13px 11px;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  animation:tin .35s ease-out both}
+.toast.out{animation:tout .5s ease-in both}
+.toast h3{margin:0 0 5px;font:600 11.5px/1 var(--f-ui);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.toast h3.w{color:var(--wave)}
+.toast ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink)}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes tout{to{opacity:0;transform:translateY(6px)}}
+@media (prefers-reduced-motion: reduce){.toast,.toast.out{animation:none}}
+
+@media (max-width:560px){
+  .brand .tag{display:none}
+  .brand{overflow:hidden}
+  .brand h1{font-size:21px}
+  .bar{gap:8px}
+  .sel select{max-width:31vw;font-size:13px;padding:0 24px 0 9px;background-position:right 8px center}
+  .btn{padding:0 8px}
+  .ctx .hint{display:none}
+  #readouts{font-size:10.5px}
+  .listen span{display:none}
+  .listen{padding:0 6px}
+}
+</style>
+
+</head>
+<body>
+<canvas id="view" class="full"></canvas>
+<canvas id="ui" class="full" aria-label="Black hole simulation. Tap or click to place the selected object; drag to throw it."></canvas>
+
+<header class="bar">
+  <div class="brand"><h1>Ringdown</h1><span class="tag">black hole bench</span></div>
+  <div class="ctrls">
+    <label class="sel"><span class="sr">Scenario</span><select id="preset"></select></label>
+    <button class="btn icon" id="play" aria-label="Pause"></button>
+    <button class="btn" id="speed" aria-label="Simulation speed">1×</button>
+    <button class="btn icon" id="gear" aria-label="Settings" aria-expanded="false" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+  </div>
+</header>
+
+<section class="scope" aria-label="Gravitational-wave strain">
+  <div class="scope-head">
+    <span class="lbl">Strain <i>h(t)</i></span><span class="slow" id="slow" hidden>slow-mo</span>
+    <span id="fgw" class="mono">no source</span>
+    <button class="listen" id="sound" aria-pressed="false" aria-label="Listen to the gravitational waves">
+      <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg><span>Listen</span>
+    </button>
+  </div>
+  <canvas id="scope"></canvas>
+  <div class="legend mono"><span>strain</span><span class="f">frequency (log, 10 Hz–5 kHz)</span></div>
+  <div id="readouts" class="mono"></div>
+</section>
+
+<aside class="panel" id="panel" hidden aria-label="Settings">
+  <h2>Physics</h2>
+  <div class="rowr"><label for="gw">Gravitational-wave emission</label><output id="gwOut" class="mono">1× real</output>
+    <input id="gw" type="range" min="0" max="20" step="0.5" value="1"></div>
+  <label class="tog"><span>Slow-mo near merger<small>Eases time down for the plunge and ringdown</small></span><input id="t-slow" type="checkbox" checked></label>
+  <h2>View</h2>
+  <div class="rowr"><label for="tilt">Viewing angle</label><output id="tiltOut" class="mono">0° face-on</output>
+    <input id="tilt" type="range" min="0" max="80" step="1" value="0">
+    <small>Tilt the orbital plane to see Doppler beaming, D-shaped shadows on spinning holes, and the jets. You can also drag the view dial (bottom right), or right-drag or Shift-drag the scene, to tilt and rotate.</small></div>
+  <label class="tog"><span>Gravitational lensing</span><input id="t-lens" type="checkbox" checked></label>
+  <label class="tog"><span>Gravitational waves<small>Space ripples, hugely exaggerated</small></span><input id="t-waves" type="checkbox" checked></label>
+  <label class="tog"><span>Jets</span><input id="t-jets" type="checkbox" checked></label>
+  <label class="tog"><span>Orbit trails</span><input id="t-trails" type="checkbox" checked></label>
+  <label class="tog"><span>Labels</span><input id="t-labels" type="checkbox" checked></label>
+  <label class="tog"><span>Follow focus<small>The heaviest object, or its barycenter with a partner of at least 30% its mass. Click any object to follow it instead.</small></span><input id="t-follow" type="checkbox" checked></label>
+  <div class="btns"><button class="btn" id="fit">Recenter</button><button class="btn" id="clear">Clear all</button></div>
+  <h2>Receipts</h2>
+  <ul class="notes">
+    <li>G and c are scaled together, so 1 grid unit is 11.8 km. Horizon sizes, orbital speeds, inspiral timing and GW frequencies line up with real values; on-screen time runs about 23× slower than real.</li>
+    <li>Inspiral comes from Peters’ quadrupole energy loss, for any pair of black holes or neutron stars. Remnant spin uses the Rezzolla et al. fit for aligned spins, radiated energy follows the remnant’s ISCO binding energy, and the ringdown uses the Berti fits for the l = m = 2 mode. 36 + 29 M☉ gives about 62 M☉, roughly GW150914.</li>
+    <li>Spin (χ) moves the innermost stable orbit using the Bardeen–Press–Teukolsky formula, drags nearby gas with a gravitomagnetic force, and gets spun up by accreted gas toward the 0.998 Thorne limit. Aligned spins merge later and radiate more.</li>
+    <li>Each hole’s shadow is the exact Kerr outline (Bardeen 1973) for its spin and your viewing angle. It is nearly round at moderate spin and only flattens noticeably on the approaching side as spin nears 1 and the view goes edge-on. The disk is brighter and bluer on the side moving toward you (beaming ∝ δ³). Lensing is still a flat point-lens approximation.</li>
+    <li>Jet power scales with feeding rate × spin² (Blandford–Znajek), with beaming for β = 0.92. Jets are drawn schematically.</li>
+    <li>Neutron stars are the one thing at true size: 12 km radius, 1 grid unit. Two of them merging make a kilonova; above about 2.3 M☉ the remnant collapses to a hole (in reality, after a short-lived hypermassive phase). A real kilonova fades over days; here it takes about 9 seconds.</li>
+    <li>Listen plays the GW frequency one octave up. The real 36 + 29 chirp lasts about 0.2 s; here it is stretched out.</li>
+    <li>A white dwarf that spirals into a neutron star gets torn into a disk. The neutron star feeds and spins up (about 0.1 M☉ takes it to millisecond periods), the usual story for millisecond pulsars; the fastest known spins 716 times a second. A neutron star that eats past about 2.3 M☉ collapses into a hole. A neutron star sinking into a giant makes a Thorne–Żytkow object.</li>
+    <li>Not to scale: ordinary stars are drawn thousands of times smaller than life (a white dwarf is really Earth-sized, about 500× a neutron star, but here only 1.6×), and mass transfer runs fast enough to watch.</li>
+  </ul>
+</aside>
+
+<nav class="dock" id="dock" aria-label="Objects">
+  <div class="ctx" id="ctx"></div>
+  <div class="tools" id="tools" role="radiogroup" aria-label="Object to place"></div>
+</nav>
+
+<div class="gizmo" id="gizmo" tabindex="0" role="group" aria-label="View dial"><canvas id="gizmoCv"></canvas></div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ================= constants ================= */
+const G = 1.5e5;                 // world^3 / (Msun s^2)
+const KR = 0.25;                 // Schwarzschild radius per Msun (world units)
+const C = Math.sqrt(2 * G / KR); // ~1095 world/s
+const G4C5 = G ** 4 / C ** 5;
+const KM_PER_UNIT = 2.9532 / KR; // 11.8 km
+const TSUN_SIM = G / (C * C * C);
+const TSUN_REAL = 4.925491e-6;
+const SIM2REAL = TSUN_REAL / TSUN_SIM; // real s per sim s
+const ISCO_K = Math.sqrt(27 * KR * KR * KR / G);
+const rsOf = m => KR * m;
+const MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
+
+const STAR_TYPES = [
+  { id:'NS',  name:'Neutron star',     short:'Neutron star', m:1.4, R:1.0, T:1e6, col:[200,230,255], kind:'ns' },
+  { id:'M',   name:'M dwarf',          short:'M dwarf',   m:0.3, R:2.0, T:3200,  col:[255,132,88],  kind:'ms' },
+  { id:'K',   name:'K dwarf',          short:'K dwarf',   m:0.7, R:2.8, T:4400,  col:[255,188,118], kind:'ms' },
+  { id:'G',   name:'G dwarf (Sun-like)', short:'G · Sun-like', m:1.0, R:3.4, T:5800, col:[255,230,165], kind:'ms' },
+  { id:'F',   name:'F star',           short:'F star',    m:1.4, R:4.0, T:6700,  col:[255,246,226], kind:'ms' },
+  { id:'A',   name:'A star',           short:'A star',    m:2.0, R:5.0, T:8800,  col:[224,233,255], kind:'ms' },
+  { id:'B',   name:'B star',           short:'B star',    m:6.0, R:7.0, T:18000, col:[168,196,255], kind:'ms' },
+  { id:'O',   name:'O star',           short:'O star',    m:20,  R:10,  T:38000, col:[138,172,255], kind:'ms' },
+  { id:'RG',  name:'Red giant',        short:'Red giant', m:1.2, R:22,  T:3900,  col:[255,116,72],  kind:'giant' },
+  { id:'BSG', name:'Blue supergiant',  short:'Blue supergiant', m:25, R:30, T:22000, col:[122,164,255], kind:'giant' },
+  { id:'WD',  name:'White dwarf',      short:'White dwarf', m:0.8, R:1.6, T:20000, col:[236,242,255], kind:'wd' },
+];
+const TYPE = Object.fromEntries(STAR_TYPES.map(t => [t.id, t]));
+
+/* ================= state ================= */
+let bodies = [];
+let nextId = 1;
+let simTime = 0;
+let paused = false;
+const SPEEDS = [0.25, 0.5, 1, 2, 4];
+let speedIdx = 2;
+let slow = 1, slowHoldUntil = -1;
+let gwBoost = 1;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const opt = { slow:true, lens:true, waves:!reduceMotion, jets:true, trails:true, labels:true, follow:true };
+let tool = 'move';
+let bhMass = 30, bhSpin = 0;
+let camX = 0, camY = 0, zoom = 1;
+let tiltDeg = 0, cosI = 1, sinI = 0, yaw = 0, cY = 1, sY = 0;
+let followId = null, followPos = null; // null = automatic focus
+const placed = [];                     // ids of objects the viewer placed, for undo
+let totalFed = 0;
+let gwSrc = null;
+let currentPreset = 'kerr';
+let wallNow = 0;
+const flashes = [];
+
+const MAXG = 5000;
+let gasCap = 3200;       // soft budget for streamed gas; the frame-time governor moves it
+const gx = new Float64Array(MAXG), gy = new Float64Array(MAXG), gvx = new Float64Array(MAXG), gvy = new Float64Array(MAXG);
+const gm = new Float64Array(MAXG), gage = new Float64Array(MAXG); const gb = new Uint8Array(MAXG);
+let gN = 0;
+
+/* Kerr helpers: a > 0 prograde. Radii in units of M = GM/c^2 = r_s/2 */
+function riscoM(a) {
+  const z1 = 1 + Math.cbrt(1 - a * a) * (Math.cbrt(1 + a) + Math.cbrt(1 - a));
+  const z2 = Math.sqrt(3 * a * a + z1 * z1);
+  return 3 + z2 - Math.sign(a) * Math.sqrt(Math.max(0, (3 - z1) * (3 + z1 + 2 * z2)));
+}
+const eIsco = a => Math.sqrt(1 - 2 / (3 * riscoM(a)));
+function updateKerr(b) {
+  const a = Math.min(Math.abs(b.chi), 0.998);
+  if (b._a === a) return;
+  b._a = a; b.kP = riscoM(a) / 6; b.kR = riscoM(-a) / 6; b.kPlus = (1 + Math.sqrt(1 - a * a)) / 2;
+}
+
+function makeBH(x, y, vx, vy, m, chi = 0) {
+  const b = { kind:'bh', id:nextId++, x, y, vx, vy, ax:0, ay:0, m, chi, ring:null, trail:[], fedFrame:0, feedRate:0, grbT:-1e9, _a:-1, kP:1, kR:1, kPlus:1 };
+  updateKerr(b); return b;
+}
+function makeStar(tid, x, y, vx, vy, m) {
+  const t = TYPE[tid], mm = m || t.m;
+  const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:t.R, R0:t.R, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false };
+  if (t.kind === 'ns') { s.spinHz = 1 + 3 * Math.random(); s.beamPh = Math.random() * 6.28; s.msp = false; }
+  return s;
+}
+const isNS = b => b.kind === 'star' && b.type.kind === 'ns';
+const isWD = b => b.kind === 'star' && b.type.kind === 'wd';
+// compact objects radiate gravitational waves strongly enough to inspiral; holes and neutron stars can also accrete gas
+const isCompact = b => b.kind === 'bh' || isNS(b) || isWD(b);
+const isAccretor = b => b.kind === 'bh' || isNS(b);
+function addGas(x, y, vx, vy, m) {
+  if (gN >= MAXG) return false;
+  gx[gN] = x; gy[gN] = y; gvx[gN] = vx; gvy[gN] = vy; gm[gN] = m; gage[gN] = 0; gb[gN] = 9; gN++;
+  return true;
+}
+function removeGas(i) {
+  gN--;
+  gx[i] = gx[gN]; gy[i] = gy[gN]; gvx[i] = gvx[gN]; gvy[i] = gvy[gN]; gm[i] = gm[gN]; gage[i] = gage[gN]; gb[i] = gb[gN];
+}
+const bhList = () => bodies.filter(b => b.kind === 'bh');
+
+/* ================= helpers ================= */
+function rocheFrac(q) { const q13 = Math.cbrt(q), q23 = q13 * q13; return 0.49 * q23 / (0.6 * q23 + Math.log(1 + q13)); }
+function fmtM(m) { return m >= 10 ? m.toFixed(1) : m.toFixed(2); }
+function fmtKm(km) { return km >= 1000 ? Math.round(km).toLocaleString('en-US') : Math.round(km).toString(); }
+function fmtHz(f) { return f >= 1000 ? (f / 1000).toFixed(1) + ' kHz' : (f < 10 ? f.toFixed(1) : Math.round(f)) + ' Hz'; }
+function fmtChi(c) { return (c >= 0 ? '+' : '−') + Math.abs(c).toFixed(2); }
+function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+function dominantBH(x, y, exclude) {
+  let best = null, bestA = 0;
+  for (const b of bodies) {
+    if (b.kind !== 'bh' || b === exclude) continue;
+    const dx = b.x - x, dy = b.y - y, rs = rsOf(b.m);
+    const a = b.m / (dx * dx + dy * dy + rs * rs);
+    if (a > bestA) { bestA = a; best = b; }
+  }
+  return best;
+}
+function dominantAccretor(x, y, exclude) {
+  let best = null, bestA = 0;
+  for (const b of bodies) {
+    if (!isAccretor(b) || b === exclude) continue;
+    const dx = b.x - x, dy = b.y - y, e = b.kind === 'bh' ? rsOf(b.m) : b.R;
+    const a = b.m / (dx * dx + dy * dy + e * e);
+    if (a > bestA) { bestA = a; best = b; }
+  }
+  return best;
+}
+function dominantAny(x, y) {
+  let best = null, bestA = 0;
+  for (const b of bodies) {
+    const dx = b.x - x, dy = b.y - y;
+    const a = b.m / (dx * dx + dy * dy + 1);
+    if (a > bestA) { bestA = a; best = b; }
+  }
+  return best;
+}
+// Pseudo-Newtonian radius for a body orbiting a hole: ISCO = 3 * rp, prograde or retrograde depending on its orbit sense.
+function rpFor(bh, px, py, rvx, rvy) {
+  const Lz = px * rvy - py * rvx;            // Lz < 0 is counter-clockwise on screen
+  const pro = bh.chi === 0 || ((Lz < 0) === (bh.chi > 0));
+  return (pro ? bh.kP : bh.kR) * rsOf(bh.m);
+}
+function setCircular(host, body) {
+  const dx = body.x - host.x, dy = body.y - host.y, r = Math.hypot(dx, dy) || 1;
+  const M = host.m + body.m;
+  let v;
+  if (host.kind === 'bh' && body.kind === 'star') {
+    const rp = (host.chi >= 0 ? host.kP : host.kR) * rsOf(host.m), d = Math.max(r - rp, 0.3 * rp);
+    v = Math.sqrt(G * host.m * r) / d * Math.sqrt(M / host.m);
+  } else v = Math.sqrt(G * M / r);
+  const tx = dy / r, ty = -dx / r; // counter-clockwise on screen
+  const hvx = host.vx, hvy = host.vy;
+  body.vx = hvx + tx * v * host.m / M; body.vy = hvy + ty * v * host.m / M;
+  host.vx = hvx - tx * v * body.m / M; host.vy = hvy - ty * v * body.m / M;
+}
+function orbitAround(host, body, r, ang) {
+  body.x = host.x + r * Math.cos(ang); body.y = host.y + r * Math.sin(ang);
+  setCircular(host, body);
+}
+function addPair(b1, b2, a, ang = 0) {
+  const M = b1.m + b2.m, v = Math.sqrt(G * M / a);
+  const ux = Math.cos(ang), uy = Math.sin(ang), tx = uy, ty = -ux;
+  b1.x = -ux * a * b2.m / M; b1.y = -uy * a * b2.m / M; b1.vx = -tx * v * b2.m / M; b1.vy = -ty * v * b2.m / M;
+  b2.x = ux * a * b1.m / M; b2.y = uy * a * b1.m / M; b2.vx = tx * v * b1.m / M; b2.vy = ty * v * b1.m / M;
+  bodies.push(b1, b2);
+}
+
+/* ================= presets ================= */
+const PRESETS = {
+  kerr:     { name:'Spinning hole, tilted view', extent:100, tilt:64, build() {
+      const bh = makeBH(0, 0, 0, 0, 18, 0.92); const st = makeStar('RG', 0, 0, 0, 0);
+      bodies.push(bh, st); orbitAround(bh, st, 22 / (1.06 * rocheFrac(1.2 / 18)), 0); } },
+  gw150914: { name:'Binary merger · 36 + 29', extent:150, build() { addPair(makeBH(0,0,0,0,36), makeBH(0,0,0,0,29), 100); } },
+  aligned:  { name:'Aligned spins · 30 + 30, χ 0.9', extent:150, tilt:35, build() { addPair(makeBH(0,0,0,0,30,0.9), makeBH(0,0,0,0,30,0.9), 100); } },
+  ratio:    { name:'Lopsided merger · 40 + 8', extent:110, build() { addPair(makeBH(0,0,0,0,40), makeBH(0,0,0,0,8), 72); } },
+  bns:      { name:'Neutron star merger · GW170817-like', extent:20, build() { addPair(makeStar('NS',0,0,0,0,1.46), makeStar('NS',0,0,0,0,1.27), 11); } },
+  wdns:     { name:'White dwarf meets neutron star', extent:12, build() { addPair(makeStar('NS',0,0,0,0,1.4), makeStar('WD',0,0,0,0,0.8), 7.2); } },
+  nsbh:     { name:'Neutron star vs. spinning hole', extent:26, tilt:40, build() {
+      const bh = makeBH(0, 0, 0, 0, 6, 0.8); const ns = makeStar('NS', 0, 0, 0, 0); bodies.push(bh, ns); orbitAround(bh, ns, 14, 0); } },
+  feeding:  { name:'Red giant feeding a hole', extent:170, build() {
+      const bh = makeBH(0, 0, 0, 0, 12); const st = makeStar('RG', 0, 0, 0, 0);
+      bodies.push(bh, st); orbitAround(bh, st, 22 / (1.05 * rocheFrac(1.2 / 12)), 0); } },
+  bsg:      { name:'Blue supergiant + hole', extent:130, build() {
+      const bh = makeBH(0, 0, 0, 0, 15, 0.5); const st = makeStar('BSG', 0, 0, 0, 0);
+      bodies.push(bh, st); orbitAround(bh, st, 30 / (1.04 * rocheFrac(25 / 15)), Math.PI); } },
+  tde:      { name:'Tidal disruption', extent:300, build() {
+      const M = 20, bh = makeBH(0, 0, 0, 0, M); const st = makeStar('RG', 0, 0, 0, 0);
+      const rs = rsOf(M), rt = st.R / rocheFrac(st.m / M), rp = 0.45 * rt, r0 = 430;
+      const v0 = Math.sqrt(2 * G * M / (r0 - rs)), vp = Math.sqrt(2 * G * M / (rp - rs));
+      const vt = rp * vp / r0, vr = -Math.sqrt(Math.max(0, v0 * v0 - vt * vt));
+      const th = Math.PI * 1.15, rx = Math.cos(th), ry = Math.sin(th);
+      st.x = r0 * rx; st.y = r0 * ry; st.vx = rx * vr + ry * vt; st.vy = ry * vr - rx * vt;
+      bodies.push(bh, st);
+      const k = makeStar('K', 0, 0, 0, 0); bodies.push(k); orbitAround(bh, k, 170, 0.6); } },
+  zoo:      { name:'Stellar zoo', extent:330, build() {
+      const bh = makeBH(0, 0, 0, 0, 25); bodies.push(bh);
+      const plan = [['WD',40],['M',62],['K',88],['G',118],['F',152],['A',192],['B',245],['RG',320]];
+      plan.forEach(([t, r], i) => { const s = makeStar(t, 0, 0, 0, 0); bodies.push(s); orbitAround(bh, s, r, i * 2.39996); }); } },
+  chaos:    { name:'Three-body chaos', extent:150, build() {
+      const m = 25, R = 62, s = R * Math.sqrt(3), w = Math.sqrt(G * 3 * m / (s * s * s));
+      for (let k = 0; k < 3; k++) {
+        const a = -Math.PI / 2 + k * 2 * Math.PI / 3, x = R * Math.cos(a), y = R * Math.sin(a);
+        const v = w * R * (0.86 + (Math.random() - 0.5) * 0.06);
+        bodies.push(makeBH(x, y, (y / R) * v, (-x / R) * v, m * (0.92 + Math.random() * 0.16), (Math.random() - 0.5) * 1.2));
+      } } },
+  empty:    { name:'Empty space', extent:200, build() {} },
+};
+
+function loadPreset(id) {
+  currentPreset = id;
+  if (typeof toastsEl !== 'undefined') toastsEl.replaceChildren();
+  bodies = []; gN = 0; gwSrc = null; slow = 1; slowHoldUntil = -1; totalFed = 0; simTime = 0; flashes.length = 0;
+  scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0);
+  setTilt(PRESETS[id].tilt || 0); setYaw(0);
+  followId = null; followPos = null; placed.length = 0;
+  PRESETS[id].build();
+  fitView(PRESETS[id].extent);
+  opt.follow = true; syncToggles();
+  computeAccel();
+}
+// What the camera centers on. Automatic: the heaviest object, or the barycenter of it and any bound partner
+// with at least 30% of its mass (a true binary). Otherwise the object the viewer clicked.
+function autoGroup() {
+  if (!bodies.length) return [];
+  let P = bodies[0]; for (const b of bodies) if (b.m > P.m) P = b;
+  const g = [P];
+  for (const b of bodies) {
+    if (b === P || b.m < 0.3 * P.m) continue;
+    const r = Math.hypot(b.x - P.x, b.y - P.y) || 1e-6, v2 = (b.vx - P.vx) ** 2 + (b.vy - P.vy) ** 2;
+    if (0.5 * v2 - G * (P.m + b.m) / r < 0) g.push(b);
+  }
+  return g;
+}
+function focusGroup() {
+  if (followId != null) { const b = bodies.find(o => o.id === followId); if (b) return [b]; }
+  return autoGroup();
+}
+function com() {
+  let M = 0, x = 0, y = 0, vx = 0, vy = 0;
+  for (const b of focusGroup()) { M += b.m; x += b.m * b.x; y += b.m * b.y; vx += b.m * b.vx; vy += b.m * b.vy; }
+  return M ? { x: x / M, y: y / M, vx: vx / M, vy: vy / M } : { x: camX, y: camY, vx: 0, vy: 0 };
+}
+function describe(b) { return b.kind === 'bh' ? `${fmtM(b.m)} M☉ black hole` : b.type.name; }
+function focusLabel() {
+  const g = focusGroup(); if (!g.length) return 'nothing yet';
+  if (g.length === 1) return describe(g[0]);
+  if (g.length === 2) return `${fmtM(g[0].m)} + ${fmtM(g[1].m)} M☉ barycenter`;
+  return `barycenter of ${g.length} objects`;
+}
+function fitView(extent) {
+  const c = com(); camX = c.x; camY = c.y;
+  const usable = Math.max(200, Math.min(vw, vh - 250));
+  zoom = clamp(usable / (2 * extent), 0.03, 30);
+}
+function fitBodies() {
+  const c = com(); let r = 8;
+  for (const b of bodies) r = Math.max(r, Math.hypot(b.x - c.x, b.y - c.y) + (b.R || rsOf(b.m) * 3) * 2);
+  fitView(Math.min(r * 1.1, 4000));
+  opt.follow = true; syncToggles();
+}
+function setTilt(deg) {
+  deg = clamp(deg, 0, 80);
+  tiltDeg = deg; cosI = Math.cos(deg * Math.PI / 180); sinI = Math.sin(deg * Math.PI / 180);
+  const r = Math.round(deg);
+  const el = document.getElementById('tilt'); if (el) el.value = r;
+  const out = document.getElementById('tiltOut'); if (out) out.textContent = r === 0 ? '0° face-on' : r + '°';
+  if (typeof drawGizmo === 'function') drawGizmo();
+}
+function setYaw(rad) {
+  const T = Math.PI * 2; yaw = ((rad % T) + T) % T; cY = Math.cos(yaw); sY = Math.sin(yaw);
+  if (typeof drawGizmo === 'function') drawGizmo();
+}
+
+/* ================= physics ================= */
+function gwDrag(a, b, r) {
+  if (gwBoost <= 0) return;
+  const rr = Math.max(r, 0.5);
+  const P = gwBoost * 6.4 * G4C5 * a.m * a.m * b.m * b.m * (a.m + b.m) / (rr ** 5);
+  const rvx = a.vx - b.vx, rvy = a.vy - b.vy, rv = Math.hypot(rvx, rvy);
+  if (rv > 1e-3) {
+    const F = P / rv, ex = rvx / rv, ey = rvy / rv;
+    a.ax -= F / a.m * ex; a.ay -= F / a.m * ey; b.ax += F / b.m * ex; b.ay += F / b.m * ey;
+  }
+}
+function computeAccel() {
+  const n = bodies.length;
+  for (const b of bodies) { b.ax = 0; b.ay = 0; }
+  for (let i = 0; i < n; i++) {
+    const a = bodies[i];
+    for (let j = i + 1; j < n; j++) {
+      const b = bodies[j];
+      const dx = b.x - a.x, dy = b.y - a.y, r2 = dx * dx + dy * dy;
+      const r = Math.sqrt(r2) || 1e-6, ux = dx / r, uy = dy / r;
+      if (a.kind === 'bh' && b.kind === 'bh') {
+        const f = G / (r2 + 0.25);
+        a.ax += f * b.m * ux; a.ay += f * b.m * uy; b.ax -= f * a.m * ux; b.ay -= f * a.m * uy;
+        gwDrag(a, b, r);
+      } else if (a.kind === 'bh' || b.kind === 'bh') {
+        const bh = a.kind === 'bh' ? a : b, st = a.kind === 'bh' ? b : a, sg = a.kind === 'bh' ? 1 : -1;
+        const rp = rpFor(bh, st.x - bh.x, st.y - bh.y, st.vx - bh.vx, st.vy - bh.vy);
+        const d = Math.max(r - rp, 0.25 * rp);
+        const fs = G * bh.m / (d * d);
+        st.ax -= sg * fs * ux; st.ay -= sg * fs * uy;
+        const fb = G * st.m / (r2 + st.R * st.R * 0.25);
+        bh.ax += sg * fb * ux; bh.ay += sg * fb * uy;
+        if (isCompact(st)) gwDrag(a, b, r);
+      } else {
+        const e = (a.R + b.R) * 0.5, f = G / (r2 + e * e);
+        a.ax += f * b.m * ux; a.ay += f * b.m * uy; b.ax -= f * a.m * ux; b.ay -= f * a.m * uy;
+        if (isCompact(a) && isCompact(b)) gwDrag(a, b, r);
+      }
+    }
+  }
+}
+
+function orbitSign(a, b) { // +1 when the pair circles counter-clockwise on screen (same sense as positive spin)
+  const dx = b.x - a.x, dy = b.y - a.y, rvx = b.vx - a.vx, rvy = b.vy - a.vy;
+  return (dx * rvy - dy * rvx) < 0 ? 1 : -1;
+}
+function mergeDist(a, b) {
+  if (a.kind === 'bh' && b.kind === 'bh') {
+    const sL = orbitSign(a, b), M = a.m + b.m, chiEff = (a.m * a.chi + b.m * b.chi) * sL / M;
+    return 1.7 * (rsOf(a.m) + rsOf(b.m)) * (1 - 0.25 * chiEff);
+  }
+  if (a.kind === 'bh' || b.kind === 'bh') {
+    const bh = a.kind === 'bh' ? a : b, st = a.kind === 'bh' ? b : a;
+    return Math.max(1.3 * bh.kPlus * rsOf(bh.m), isNS(st) ? st.R / rocheFrac(st.m / bh.m) : 0);
+  }
+  return 1.3 * (a.R + b.R);
+}
+
+function stepBodies(simDt) {
+  const n = bodies.length;
+  if (!n) { simTime += simDt; return simDt; }
+  let tmin = Infinity;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const a = bodies[i], b = bodies[j];
+    const r = Math.hypot(b.x - a.x, b.y - a.y);
+    if (a.kind !== 'bh' && b.kind !== 'bh' && !(isNS(a) && isNS(b)) && r > (a.R + b.R) * 8) continue;
+    let rr = r;
+    if ((a.kind === 'bh') !== (b.kind === 'bh')) { const bh = a.kind === 'bh' ? a : b, rs = rsOf(bh.m) * bh.kP; rr = Math.max(r - 0.8 * rs, 0.4 * rs); }
+    const t1 = Math.sqrt(rr * rr * rr / (G * (a.m + b.m)));
+    const rv = Math.hypot(b.vx - a.vx, b.vy - a.vy);
+    const t2 = rv > 0 ? 2 * rr / rv : Infinity;
+    tmin = Math.min(tmin, t1, t2);
+  }
+  const dtMax = isFinite(tmin) ? 0.02 * tmin : simDt;
+  const CAP = 240;
+  if (simDt / dtMax > CAP) simDt = dtMax * CAP; // dilate time instead of losing accuracy
+  const ns = Math.max(1, Math.ceil(simDt / dtMax));
+  const dt = simDt / ns;
+  computeAccel();
+  for (let k = 0; k < ns; k++) {
+    for (const b of bodies) { b.vx += 0.5 * dt * b.ax; b.vy += 0.5 * dt * b.ay; b.x += dt * b.vx; b.y += dt * b.vy; }
+    computeAccel();
+    for (const b of bodies) { b.vx += 0.5 * dt * b.ax; b.vy += 0.5 * dt * b.ay; }
+    simTime += dt;
+    let guard = 0;
+    while (collisions() && guard++ < 6) computeAccel();
+  }
+  return simDt;
+}
+
+function collisions() {
+  const n = bodies.length;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const a = bodies[i], b = bodies[j];
+    const r = Math.hypot(b.x - a.x, b.y - a.y);
+    if (a.kind === 'bh' && b.kind === 'bh') {
+      if (r < mergeDist(a, b)) { mergeBH(a, b); return true; }
+    } else if (a.kind === 'bh' || b.kind === 'bh') {
+      const bh = a.kind === 'bh' ? a : b, st = a.kind === 'bh' ? b : a, rs = rsOf(bh.m);
+      const rp = rpFor(bh, st.x - bh.x, st.y - bh.y, st.vx - bh.vx, st.vy - bh.vy);
+      if (isNS(st)) {
+        const rT = st.R / rocheFrac(st.m / bh.m);
+        if (r < rT && rT > 2.2 * rp) { shred(st, bh, r, 'nsbh'); return true; }
+      }
+      if (r < Math.max(1.3 * bh.kPlus * rs, 1.5 * rp) + st.R * 0.2) { swallow(bh, st); return true; }
+    } else if (isNS(a) && isNS(b)) {
+      if (r < 1.3 * (a.R + b.R)) { mergeNS(a, b); return true; }
+    } else if (r < 0.6 * (a.R + b.R)) { mergeStars(a, b); return true; }
+  }
+  return false;
+}
+
+function ringFor(mf, chiAbs) {
+  // Berti, Cardoso & Will fits for the l = m = 2, n = 0 quasi-normal mode
+  const c = Math.min(chiAbs, 0.998);
+  const omg = 1.5251 - 1.1568 * Math.pow(1 - c, 0.1292);
+  const Q = 0.7 + 1.4187 * Math.pow(1 - c, -0.4990);
+  const tauG = 2 * Q / omg;
+  return { wSim: omg / (TSUN_SIM * mf), tauSim: tauG * TSUN_SIM * mf, fReal: omg / (2 * Math.PI * TSUN_REAL * mf), tauReal: tauG * TSUN_REAL * mf };
+}
+function pairWave(a, b) {
+  const M = a.m + b.m, dx = b.x - a.x, dy = b.y - a.y, r2 = dx * dx + dy * dy || 1;
+  const rvx = b.vx - a.vx, rvy = b.vy - a.vy, mu = a.m * b.m / M;
+  const v2 = (rvx * rvx + rvy * rvy) / (C * C);
+  return { phi: Math.atan2(dy, dx), om: (dx * rvy - dy * rvx) / r2, A: mu * v2, vis: clamp(v2 / 0.12, 0, 1.6) };
+}
+function startRing(rem, w, chiAbs) {
+  const q = ringFor(rem.m, chiAbs), sgn = w.om >= 0 ? 1 : -1;
+  rem.ring = { t0: simTime, A0: 0.24, w: sgn * q.wSim, tau: q.tauSim, phi0: 2 * w.phi };
+  gwSrc = { mode:'ring', tm: simTime, phi: w.phi, om: w.om, A: w.A, Ar: 1.35 * w.A, vis: w.vis, visR: 1.35 * w.vis,
+    wq: sgn * q.wSim, tau: q.tauSim, remId: rem.id, cx: rem.x, cy: rem.y, fReal: q.fReal, tauReal: q.tauReal };
+  slowHoldUntil = simTime + 7 * q.tauSim;
+  markScope = true;
+  return q;
+}
+
+function mergeBH(a, b) {
+  const M = a.m + b.m, eta = a.m * b.m / (M * M);
+  const sL = orbitSign(a, b);
+  const big = a.m >= b.m ? a : b, sml = big === a ? b : a, q = sml.m / big.m;
+  const c1 = big.chi * sL, c2 = sml.chi * sL;
+  const ct = (c1 + c2 * q * q) / (1 + q * q);
+  // Rezzolla et al. (2008) remnant spin for aligned spins, relative to the orbit
+  let chiA = ct - 0.129 * ct * ct * eta - 0.384 * ct * eta * eta - 2.686 * ct * eta + 2 * Math.sqrt(3) * eta - 3.454 * eta * eta + 2.353 * eta ** 3;
+  chiA = clamp(chiA, -0.998, 0.998);
+  const frac = 0.46 * (4 * eta) ** 2 * (1 - eIsco(chiA));
+  const mf = M * (1 - frac);
+  const w = pairWave(a, b);
+  const kickKms = 1.2e4 * eta * eta * Math.sqrt(Math.max(0, 1 - 4 * eta)) * (1 - 0.93 * eta);
+  const kick = kickKms / 299792.458 * C;
+  const ls = Math.hypot(sml.vx, sml.vy) || 1;
+  const x = (a.x * a.m + b.x * b.m) / M, y = (a.y * a.m + b.y * b.m) / M;
+  const vx = (a.vx * a.m + b.vx * b.m) / M - kick * sml.vx / ls, vy = (a.vy * a.m + b.vy * b.m) / M - kick * sml.vy / ls;
+  const rem = makeBH(x, y, vx, vy, mf, chiA * sL);
+  rem.feedRate = Math.max(a.feedRate, b.feedRate);
+  bodies = bodies.filter(o => o !== a && o !== b);
+  bodies.push(rem);
+  const qn = startRing(rem, w, Math.abs(chiA));
+  const spinNote = (Math.abs(a.chi) > 0.02 || Math.abs(b.chi) > 0.02) ? ` (from ${fmtChi(c1)} and ${fmtChi(c2)} relative to the orbit)` : '';
+  toast('Black holes merged', [
+    `${fmtM(a.m)} + ${fmtM(b.m)} → ${fmtM(mf)} M☉, spin ${chiA.toFixed(2)}${spinNote}`,
+    `${fmtM(M - mf)} M☉ (${(frac * 100).toFixed(1)}%) radiated as gravitational waves`,
+    `Ringdown ${fmtHz(qn.fReal)}, e-folds in ${(qn.tauReal * 1000).toFixed(1)} ms of real time`,
+  ], 'w');
+}
+function addKilonova(x, y, scale, ej, vx, vy) {
+  flashes.push({ x, y, t0: wallNow, dur: 9000, scale });
+  const N = Math.min(240, MAXG - gN);
+  for (let k = 0; k < N; k++) {
+    // launched from ~70 km out at 0.25-0.45 c, fast enough to escape
+    const a = Math.random() * Math.PI * 2, s = (0.25 + 0.2 * Math.random()) * C, r0 = 6;
+    addGas(x + Math.cos(a) * r0, y + Math.sin(a) * r0, vx + Math.cos(a) * s, vy + Math.sin(a) * s, ej / Math.max(N, 1));
+  }
+}
+function mergeNS(a, b) {
+  const M = a.m + b.m, sL = orbitSign(a, b);
+  const ej = 0.03 + 0.03 * Math.random(), erad = 0.015 * M, mf = M - ej - erad;
+  const w = pairWave(a, b);
+  const x = (a.x * a.m + b.x * b.m) / M, y = (a.y * a.m + b.y * b.m) / M;
+  const vx = (a.vx * a.m + b.vx * b.m) / M, vy = (a.vy * a.m + b.vy * b.m) / M;
+  bodies = bodies.filter(o => o !== a && o !== b);
+  addKilonova(x, y, 0.28, ej, vx, vy);
+  if (mf > 2.3) {
+    const rem = makeBH(x, y, vx, vy, mf, 0.68 * sL);
+    rem.grbT = wallNow;
+    bodies.push(rem);
+    const qn = startRing(rem, w, 0.68);
+    toast('Neutron stars merged · kilonova', [
+      `${fmtM(a.m)} + ${fmtM(b.m)} M☉ → ${fmtM(mf)} M☉ black hole`,
+      `About ${ej.toFixed(2)} M☉ of r-process ejecta (gold, platinum, uranium)`,
+      `Short gamma-ray burst jet; ringdown ${fmtHz(qn.fReal)}, above LIGO's sweet spot`,
+    ], 'w');
+  } else {
+    const rem = makeStar('NS', x, y, vx, vy, mf); rem.R = 1.1; rem.R0 = 1.1;
+    bodies.push(rem);
+    gwSrc = null; markScope = true;
+    toast('Neutron stars merged · kilonova', [`${fmtM(a.m)} + ${fmtM(b.m)} M☉ → ${fmtM(mf)} M☉ neutron star (light enough to survive)`, `About ${ej.toFixed(2)} M☉ of r-process ejecta`], 'w');
+  }
+}
+function swallow(bh, st) {
+  bh.m += st.m; totalFed += st.m; bh.fedFrame += st.m;
+  bodies = bodies.filter(o => o !== st);
+  toast('Swallowed whole', [`${st.type.name} crossed the horizon of the ${fmtM(bh.m - st.m)} M☉ hole intact`]);
+}
+function mergeStars(a, b) {
+  if (isNS(a) || isNS(b)) {
+    const ns = isNS(a) ? a : b, st = ns === a ? b : a, M = a.m + b.m;
+    if (st.type.kind === 'giant') { // the real Thorne–Żytkow case: a neutron star sinks into a giant's envelope
+      st.vx = (a.vx * a.m + b.vx * b.m) / M; st.vy = (a.vy * a.m + b.vy * b.m) / M; st.m = M; st.m0 = M;
+      bodies = bodies.filter(o => o !== ns);
+      toast('Thorne–Żytkow object', [`The neutron star sank into the ${st.type.name}'s core`, 'A giant with a neutron star where its core should be (Thorne & Żytkow, 1977)']);
+    } else shred(st, ns, Math.hypot(st.x - ns.x, st.y - ns.y), 'ns');
+    return;
+  }
+  const big = a.m >= b.m ? a : b, small = big === a ? b : a, M = a.m + b.m;
+  big.vx = (a.vx * a.m + b.vx * b.m) / M; big.vy = (a.vy * a.m + b.vy * b.m) / M;
+  big.x = (a.x * a.m + b.x * b.m) / M; big.y = (a.y * a.m + b.y * b.m) / M;
+  big.R = big.R * Math.pow(M / big.m, 0.5); big.R0 = big.R; big.m = M; big.m0 = M;
+  bodies = bodies.filter(o => o !== small);
+  toast('Stellar collision', [`${small.type.name} merged into the ${big.type.name}`]);
+}
+
+function updateRadius(s) {
+  const x = s.m / s.m0;
+  if (s.type.kind === 'ms') s.R = s.R0 * Math.pow(x, 0.8);
+  else if (s.type.kind === 'giant') s.R = s.R0 * Math.min(1.6, Math.pow(x, -0.15));
+  else s.R = s.R0 * Math.min(1.8, Math.pow(x, -1 / 3));
+  s.R = Math.max(s.R, 0.5);
+}
+
+function stellarProcesses(simDt) {
+  for (const st of bodies.slice()) {
+    if (st.kind !== 'star' || isNS(st)) continue;
+    const host = dominantAccretor(st.x, st.y);
+    if (!host) { st.f = 0; continue; }
+    const dx = host.x - st.x, dy = host.y - st.y, r = Math.hypot(dx, dy);
+    st.hx = host.x; st.hy = host.y;
+    const rL = rocheFrac(st.m / host.m) * r;
+    const f = st.R / rL; st.f = f;
+    // white dwarf mass transfer onto a neutron star is unstable above ~0.2 Msun: it gets torn apart
+    if (isWD(st) && isNS(host) && f > 1) { shred(st, host, r, 'ns'); continue; }
+    if (f > 1.6 || st.m < 0.12 * st.m0) { shred(st, host, r, isNS(host) ? 'ns' : 'tde'); continue; }
+    if (f > 1 && simDt > 0) {
+      const rate = Math.min(0.04, 0.05 * st.m * (f - 1));
+      // fewer, heavier particles as the disk fills up: same mass flow, bounded particle count
+      const target = 160 * clamp(1 - gN / gasCap, 0.04, 1);
+      const pm = Math.max(0.00004, rate / target);
+      st.emitAcc += rate * simDt / pm;
+      while (st.emitAcc >= 1 && st.m > pm * 2) { if (!emitL1(st, host, rL, pm)) { st.emitAcc = 0; break; } st.m -= pm; st.emitAcc -= 1; }
+      updateRadius(st);
+      if (!st.noted) { st.noted = true; toast('Mass transfer', [`${st.type.name} is overflowing its Roche lobe onto the ${fmtM(host.m)} M☉ ${isNS(host) ? 'neutron star' : 'hole'}`]); }
+    }
+  }
+}
+function emitL1(st, host, rL, pm) {
+  const dx = host.x - st.x, dy = host.y - st.y, r = Math.hypot(dx, dy) || 1, nx = dx / r, ny = dy / r;
+  const l = Math.min(rL, st.R) * 0.95 + (Math.random() - 0.5) * 0.12 * st.R;
+  const j = (Math.random() - 0.5) * 0.22 * st.R;
+  const x = st.x + nx * l - ny * j, y = st.y + ny * l + nx * j;
+  const rx = st.x - host.x, ry = st.y - host.y, rvx = st.vx - host.vx, rvy = st.vy - host.vy;
+  const om = (rx * rvy - ry * rvx) / (r * r);
+  const px = x - host.x, py = y - host.y;
+  let vx = host.vx - om * py, vy = host.vy + om * px;
+  const sp = Math.hypot(vx - host.vx, vy - host.vy);
+  vx += (Math.random() - 0.5) * 0.03 * sp + nx * 0.03 * sp; vy += (Math.random() - 0.5) * 0.03 * sp + ny * 0.03 * sp;
+  if (gN >= gasCap) return false;
+  return addGas(x, y, vx, vy, pm);
+}
+function shred(st, host, r, kind) {
+  const N = Math.min(kind === 'tde' ? 800 : 600, MAXG - gN);
+  const rx = st.x - host.x, ry = st.y - host.y;
+  const om = (rx * (st.vy - host.vy) - ry * (st.vx - host.vx)) / (r * r || 1);
+  for (let k = 0; k < N; k++) {
+    const a = Math.random() * Math.PI * 2, rr = st.R * Math.sqrt(Math.random());
+    const ox = Math.cos(a) * rr, oy = Math.sin(a) * rr;
+    addGas(st.x + ox, st.y + oy, st.vx - om * oy, st.vy + om * ox, st.m / Math.max(N, 1));
+  }
+  bodies = bodies.filter(o => o !== st);
+  if (kind === 'ns') {
+    toast(`${st.type.name} shredded by a neutron star`, [`Torn apart ${fmtKm(r * KM_PER_UNIT)} km from the ${fmtM(host.m)} M☉ neutron star`, 'Its debris forms a disk; the neutron star feeds on it and spins up'], 'w');
+  } else if (kind === 'nsbh') {
+    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 9000, scale: 0.3 });
+    host.grbT = wallNow;
+    toast('Neutron star torn apart', [`Disrupted ${fmtKm(r * KM_PER_UNIT)} km from a ${fmtM(host.m)} M☉ hole spinning at ${fmtChi(host.chi)}`, 'Its debris feeds the hole, launches a jet and lights a kilonova'], 'w');
+  } else {
+    toast('Tidal disruption', [`${st.type.name} torn apart ${fmtKm(r * KM_PER_UNIT)} km from a ${fmtM(host.m)} M☉ hole`, 'Half the debris is bound and falls back; the rest escapes']);
+  }
+}
+
+const mspQueue = [];
+// gas mass m landing on accretor b; (px, py, rvx, rvy) = position and velocity relative to b
+function accrete(b, m, px, py, rvx, rvy) {
+  if (b.kind === 'bh') { // accreted angular momentum spins the hole up (or down, for retrograde gas)
+    const sg = (px * rvy - py * rvx) < 0 ? 1 : -1;
+    let cp = b.chi * sg;
+    cp = Math.min(0.998, cp + m / b.m * 3.67 * Math.sqrt(Math.max(0, 1 - cp)));
+    b.chi = cp * sg;
+    b.fedFrame += m;
+  } else { // recycling: ~0.1 Msun of accreted gas spins a neutron star up to millisecond periods
+    b.spinHz = Math.min(716, b.spinHz + m / b.m * 4000);
+    if (!b.msp && b.spinHz >= 100) { b.msp = true; mspQueue.push(b); }
+  }
+  b.m += m; totalFed += m;
+}
+const VISC = 0.12, INFLOW = 0.02, TORQUE = 0.007, LOG80 = Math.log(80), VMAX = 0.9 * C;
+function stepGas(simDt) {
+  if (!gN || simDt <= 0) return;
+  const bh = bodies.filter(isAccretor);
+  if (!bh.length) {
+    for (let i = 0; i < gN; i++) { gx[i] += gvx[i] * simDt; gy[i] += gvy[i] * simDt; gage[i] += simDt; if (gage[i] > 300) { removeGas(i); i--; } }
+    return;
+  }
+  const GG = G * G, C3 = C * C * C;
+  for (let i = 0; i < gN; i++) {
+    let x = gx[i], y = gy[i], vx = gvx[i], vy = gvy[i];
+    // each particle takes only the substeps its own orbit needs: inner disk fine-grained, outer stream coarse
+    let t2 = Infinity, near = null;
+    for (const b of bh) { const dx = b.x - x, dy = b.y - y, r2 = dx * dx + dy * dy; const t = r2 * Math.sqrt(r2) / (G * b.m); if (t < t2) { t2 = t; near = b; } }
+    const need = Math.ceil(simDt / (0.03 * Math.sqrt(t2)));
+    if (need > 240) { // so deep in that its orbit is shorter than this frame can resolve: it is going in, so let it land now
+      accrete(near, gm[i], x - near.x, y - near.y, vx - near.vx, vy - near.vy);
+      removeGas(i); i--; continue;
+    }
+    const n = Math.max(1, need), dt = simDt / n;
+    let dead = false, hb = null, hrp = 1, rh = 1;
+    for (let s = 0; s < n && !dead; s++) {
+      let ax = 0, ay = 0, bestA = -1, far = true;
+      for (const b of bh) {
+        const dx = b.x - x, dy = b.y - y, r = Math.sqrt(dx * dx + dy * dy) + 1e-9, rs = KR * b.m;
+        const rvx = vx - b.vx, rvy = vy - b.vy;
+        const isHole = b.kind === 'bh';
+        const rp = isHole ? rpFor(b, -dx, -dy, rvx, rvy) : rs;
+        if (isHole ? r < Math.max(1.05 * b.kPlus * rs, 2.2 * rp) : r < 1.2 * b.R) {
+          accrete(b, gm[i], -dx, -dy, rvx, rvy); dead = true; break;
+        }
+        if (r < 30000) far = false;
+        const d = Math.max(r - rp, 0.3 * rp), a = G * b.m / (d * d);
+        ax += a * dx / r; ay += a * dy / r;
+        if (isHole && b.chi !== 0) { // frame dragging: gravitomagnetic push toward co-rotation
+          const rr = Math.max(r, 2 * rp), wfd = 2 * b.chi * GG * b.m * b.m / (C3 * rr * rr * rr);
+          ax -= wfd * rvy; ay += wfd * rvx;
+        }
+        if (a > bestA) { bestA = a; hb = b; hrp = rp; }
+      }
+      if (dead || far) { dead = true; break; }
+      vx += ax * dt; vy += ay * dt;
+      const px = x - hb.x, py = y - hb.y, r = Math.hypot(px, py), d = Math.max(r - hrp, 0.3 * hrp);
+      let rvx = vx - hb.vx, rvy = vy - hb.vy;
+      const eps = 0.5 * (rvx * rvx + rvy * rvy) - G * hb.m / d;
+      if (eps < 0) {
+        // disk viscosity: damp radial sloshing (circularizes the stream) and shed angular momentum so orbits shrink
+        const vc = Math.sqrt(G * hb.m * r) / d, om = vc / r, rx = px / r, ry = py / r;
+        const vr = rvx * rx + rvy * ry, tvx = rvx - vr * rx, tvy = rvy - vr * ry;
+        const kd = 1 - Math.exp(-VISC * om * dt), kt = TORQUE * om * dt;
+        const nvr = vr + (-INFLOW * vc - vr) * kd;
+        rvx = tvx * (1 - kt) + nvr * rx; rvy = tvy * (1 - kt) + nvr * ry;
+        vx = rvx + hb.vx; vy = rvy + hb.vy;
+      }
+      { // nothing outruns light: cap speed relative to the hole at 0.9 c
+        const ux = vx - hb.vx, uy = vy - hb.vy, sp = Math.hypot(ux, uy);
+        if (sp > VMAX) { const k = VMAX / sp; vx = hb.vx + ux * k; vy = hb.vy + uy * k; }
+      }
+      x += vx * dt; y += vy * dt; rh = r;
+    }
+    gage[i] += simDt;
+    if (dead || gage[i] > 400) { removeGas(i); i--; continue; }
+    gx[i] = x; gy[i] = y; gvx[i] = vx; gvy[i] = vy;
+    gb[i] = clamp(Math.round((1 - Math.log(Math.max(rh / (2.6 * hrp), 1)) / LOG80) * 23), 0, 23);
+  }
+}
+
+/* ================= gravitational-wave source + scope ================= */
+const SCOPE_N = 540;
+const scopeBuf = new Float32Array(SCOPE_N), scopeMark = new Uint8Array(SCOPE_N), freqBuf = new Float32Array(SCOPE_N);
+let scopeHead = 0, scopeMax = 0.5, markScope = false;
+let fgwText = 'no source', audioF = 0, audioEnv = 0;
+
+function closestPair() {
+  const cs = bodies.filter(isCompact); let best = null, bs = 0;
+  for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+    const a = cs[i], b = cs[j], r = Math.hypot(b.x - a.x, b.y - a.y);
+    const s = a.m * b.m / r;
+    if (s > bs) { bs = s; best = [a, b, r]; }
+  }
+  return best;
+}
+function updateGW() {
+  const pair = closestPair();
+  let h = 0, f = 0, env = 0;
+  const ringT = gwSrc && gwSrc.mode === 'ring' ? simTime - gwSrc.tm : Infinity;
+  const ringStrain = ringT < 12 * (gwSrc ? gwSrc.tau : 0);
+  if (gwSrc && gwSrc.mode === 'ring' && (ringStrain || !pair)) {
+    const rem = bodies.find(b => b.id === gwSrc.remId);
+    if (rem) { gwSrc.cx = rem.x; gwSrc.cy = rem.y; }
+    if (ringStrain) {
+      env = gwSrc.Ar * Math.exp(-ringT / gwSrc.tau);
+      h = env * Math.cos(2 * gwSrc.phi + gwSrc.wq * ringT);
+      f = gwSrc.fReal;
+      fgwText = `ringdown ${fmtHz(gwSrc.fReal)} · τ ${(gwSrc.tauReal * 1000).toFixed(gwSrc.tauReal < 0.001 ? 2 : 1)} ms`;
+    } else {
+      fgwText = `remnant · ringdown ${fmtHz(gwSrc.fReal)}`;
+      if (ringT * C * zoom > Math.hypot(vw, vh) * 1.5) gwSrc = null;
+    }
+  } else if (pair) {
+    const [a, b, r] = pair, w = pairWave(a, b), M = a.m + b.m;
+    gwSrc = { mode:'binary', cx:(a.x * a.m + b.x * b.m) / M, cy:(a.y * a.m + b.y * b.m) / M, phi:w.phi, om:w.om, A:w.A, vis:w.vis, sep:r };
+    env = w.A; h = w.A * Math.cos(2 * w.phi);
+    f = Math.abs(w.om) / Math.PI / SIM2REAL;
+    fgwText = `f_GW ${fmtHz(f)} · ${fmtKm(r * KM_PER_UNIT)} km apart`;
+  } else {
+    gwSrc = null; fgwText = bodies.length ? 'no binary' : 'no source';
+  }
+  audioF = f; audioEnv = env;
+  if (!paused) {
+    scopeBuf[scopeHead] = h; freqBuf[scopeHead] = f; scopeMark[scopeHead] = markScope ? 1 : 0; markScope = false;
+    scopeHead = (scopeHead + 1) % SCOPE_N;
+  }
+}
+
+/* ================= sound ================= */
+let au = null, soundOn = false;
+function initAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+  const ctx = new AC();
+  const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = 'sine'; o2.type = 'triangle';
+  const g = ctx.createGain(), g2 = ctx.createGain(); g.gain.value = 0; g2.gain.value = 0.18;
+  const comp = ctx.createDynamicsCompressor();
+  o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(comp); comp.connect(ctx.destination);
+  o1.start(); o2.start();
+  au = { ctx, o1, o2, g }; return true;
+}
+function updateAudio() {
+  if (!au) return;
+  const t = au.ctx.currentTime;
+  const on = soundOn && !paused && audioF > 0;
+  const fr = clamp(audioF * 2, 40, 3000);
+  au.o1.frequency.setTargetAtTime(fr, t, 0.03); au.o2.frequency.setTargetAtTime(fr * 2, t, 0.03);
+  const amp = on ? clamp(audioEnv / scopeMax, 0, 1) : 0;
+  au.g.gain.setTargetAtTime(amp * 0.22, t, 0.04);
+}
+
+/* ================= rendering setup ================= */
+let view = document.getElementById('view');
+const ui = document.getElementById('ui'), octx = ui.getContext('2d');
+const scopeCv = document.getElementById('scope'), scx = scopeCv.getContext('2d');
+const scene = document.createElement('canvas'), sctx = scene.getContext('2d');
+let gl = null, vctx = null, prog = null, U = {}, tex = null;
+let vw = innerWidth, vh = innerHeight, RS = 1, OD = 1;
+
+const VS = `#version 300 es
+in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
+const FS = `#version 300 es
+precision highp float;
+uniform sampler2D uTex;
+uniform vec2 uRes;
+uniform int uN;
+uniform vec4 uBH[16];   // x, y, r_s (px), ringdown amplitude
+uniform vec4 uBH2[16];  // ringdown phase, feeding glow, spin (+ = counter-clockwise on screen), 0
+uniform vec4 uBH3[16];  // exact Kerr shadow (Bardeen) as a Fourier series about its centre, units of M: c0..c3
+uniform vec4 uBH4[16];  // c4, centre shift toward the approaching side (M), 0, 0
+uniform float uLens;
+uniform vec2 uIncl;     // sin i, cos i
+uniform vec4 uGWa;      // cx, cy, c (px/s), on
+uniform vec4 uGWb;      // t since ref, phiRef, omega orbit, merged
+uniform vec4 uGWc;      // omega ring, tau, amp inspiral px, amp ring px
+uniform float uGWr0;
+out vec4 o;
+void main(){
+  vec2 p = gl_FragCoord.xy;
+  vec2 src = p;
+  vec3 add = vec3(0.0);
+  if (uGWa.w > 0.5) {
+    vec2 d0 = p - uGWa.xy;
+    vec2 d = vec2(d0.x, d0.y / max(uIncl.y, 0.2));
+    float r = length(d) + 0.001;
+    float th = atan(-d.y, d.x);
+    float tr = uGWb.x - r / uGWa.z;
+    float h; float A;
+    if (uGWb.w > 0.5 && tr > 0.0) { h = exp(-tr / uGWc.y) * cos(2.0*th - 2.0*uGWb.y - uGWc.x*tr); A = uGWc.w; }
+    else { h = cos(2.0*th - 2.0*(uGWb.y + uGWb.z*tr)); A = uGWc.z; }
+    float fall = uGWr0 / (r + uGWr0) * smoothstep(0.0, uGWr0 * 0.8, r);
+    src += (d0 / (length(d0) + 0.001)) * h * A * fall;
+    add += vec3(0.16, 0.42, 0.52) * max(h, 0.0) * fall * min(A / 5.0, 1.0) * 0.16;
+  }
+  float shadow = 0.0; vec3 ring = vec3(0.0);
+  for (int i = 0; i < 16; i++) {
+    if (i >= uN) break;
+    vec4 b = uBH[i]; vec4 b2 = uBH2[i];
+    vec2 d = p - b.xy; float r2 = max(dot(d, d), 1e-3); float r = sqrt(r2);
+    float th = atan(-d.y, d.x);
+    float rs = b.z;
+    float chi = b2.z; float a = abs(chi); float s = chi >= 0.0 ? 1.0 : -1.0;
+    float deform = 1.0 + b.w * cos(2.0*th - b2.x);
+    // exact Kerr shadow outline for this spin and viewing angle, rebuilt from its Fourier coefficients
+    vec4 c = uBH3[i]; vec4 c4 = uBH4[i];
+    float Mpx = 0.5 * rs;
+    float xs = -s * d.x;                       // + toward the side moving toward the viewer
+    vec2 q = vec2(xs - c4.y * Mpx, d.y);
+    float tq = atan(abs(q.y), q.x);
+    float R = (c.x + c.y*cos(tq) + c.z*cos(2.0*tq) + c.w*cos(3.0*tq) + c4.x*cos(4.0*tq)) * Mpx * deform;
+    float sd = length(q) - R;
+    float RE = 3.3 * rs;
+    src -= d * (RE * RE / r2) * uLens;
+    float aa = max(0.8, rs * 0.06);
+    shadow = max(shadow, 1.0 - smoothstep(-aa, aa, sd));
+    float beam = max(0.12, 1.0 + 0.85 * uIncl.x * min(1.0, a * 3.0 + b2.y * 0.6) * (xs / max(r, 1.0)));
+    float e = sd / max(0.20 * rs, 1.0);
+    ring += mix(vec3(1.0, 0.80, 0.58), vec3(1.0, 0.93, 0.82), b2.y) * exp(-e * e) * (0.16 + 0.95 * b2.y) * beam;
+    float halo = sd / max(1.6 * rs, 2.0);
+    ring += vec3(1.0, 0.6, 0.3) * exp(-halo * halo) * 0.10 * b2.y * beam;
+  }
+  vec3 col = texture(uTex, src / uRes).rgb + add + ring;
+  col *= (1.0 - shadow);
+  o = vec4(col, 1.0);
+}`;
+
+function initGL() {
+  try { gl = view.getContext('webgl2', { antialias:false, alpha:false, premultipliedAlpha:false }); } catch (e) { gl = null; }
+  if (!gl) return false;
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  try {
+    prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  } catch (e) { console.warn('WebGL2 shader failed, using 2D fallback', e); return false; }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  for (const n of ['uTex','uRes','uN','uBH','uBH2','uBH3','uBH4','uLens','uIncl','uGWa','uGWb','uGWc','uGWr0']) U[n] = gl.getUniformLocation(prog, n);
+  gl.uniform1i(U.uTex, 0);
+  return true;
+}
+if (!initGL()) {
+  if (gl) { const nv = view.cloneNode(); view.replaceWith(nv); view = nv; }
+  gl = null; vctx = view.getContext('2d');
+}
+
+/* sprites */
+function rampColor(t) {
+  const st = [[0,[255,60,22]],[0.25,[255,118,40]],[0.5,[255,196,110]],[0.7,[255,238,212]],[0.85,[214,226,255]],[1,[156,186,255]]];
+  for (let i = 1; i < st.length; i++) if (t <= st[i][0]) {
+    const [t0, c0] = st[i - 1], [t1, c1] = st[i], k = (t - t0) / (t1 - t0);
+    return c0.map((v, j) => Math.round(v + (c1[j] - v) * k));
+  }
+  return st[st.length - 1][1];
+}
+const gasSprites = [];
+for (let i = 0; i < 24; i++) {
+  const t = i / 23, c = rampColor(t), b = 0.32 + 0.68 * t;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 32;
+  const x = cv.getContext('2d'), g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, `rgba(${c},${0.95 * b})`); g.addColorStop(0.3, `rgba(${c},${0.45 * b})`); g.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = g; x.fillRect(0, 0, 32, 32); gasSprites.push(cv);
+}
+const starGlow = {}, starCore = {};
+for (const t of STAR_TYPES) {
+  const c = t.col.join(',');
+  let cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  let x = cv.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, `rgba(${c},0.6)`); g.addColorStop(0.15, `rgba(${c},0.28)`); g.addColorStop(0.45, `rgba(${c},0.07)`); g.addColorStop(1, `rgba(${c},0)`);
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128); starGlow[t.id] = cv;
+  cv = document.createElement('canvas'); cv.width = cv.height = 64; x = cv.getContext('2d');
+  g = x.createRadialGradient(28, 28, 0, 32, 32, 32);
+  const dark = t.col.map(v => Math.round(v * 0.72)).join(',');
+  g.addColorStop(0, 'rgba(255,255,250,1)'); g.addColorStop(0.45, `rgba(${c},1)`); g.addColorStop(1, `rgba(${dark},1)`);
+  x.fillStyle = g; x.beginPath(); x.arc(32, 32, 31.5, 0, Math.PI * 2); x.fill(); starCore[t.id] = cv;
+}
+function makeSkyTile() {
+  const S = 1024, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#04050b'; x.fillRect(0, 0, S, S);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const dust = [[70,50,120],[40,70,110],[110,60,70],[50,40,90]];
+  for (let k = 0; k < 7; k++) {
+    const cx = rnd() * S, cy = rnd() * S, r = 180 + rnd() * 340, c = dust[k % dust.length];
+    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+      const g = x.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, r);
+      g.addColorStop(0, `rgba(${c},0.075)`); g.addColorStop(1, `rgba(${c},0)`);
+      x.fillStyle = g; x.fillRect(cx + ox - r, cy + oy - r, 2 * r, 2 * r);
+    }
+  }
+  const pal = [[255,255,255],[214,226,255],[176,200,255],[255,238,214],[255,206,150],[255,170,120]];
+  for (let k = 0; k < 1700; k++) {
+    const px = rnd() * S, py = rnd() * S, mag = Math.pow(rnd(), 3.2);
+    const c = pal[Math.floor(rnd() * rnd() * pal.length)];
+    const a = 0.18 + 0.82 * mag, rr = 0.45 + mag * 1.3;
+    if (mag > 0.55) {
+      const g = x.createRadialGradient(px, py, 0, px, py, rr * 5);
+      g.addColorStop(0, `rgba(${c},${0.35 * a})`); g.addColorStop(1, `rgba(${c},0)`);
+      x.fillStyle = g; x.fillRect(px - rr * 5, py - rr * 5, rr * 10, rr * 10);
+    }
+    x.fillStyle = `rgba(${c},${a})`; x.beginPath(); x.arc(px, py, rr, 0, Math.PI * 2); x.fill();
+  }
+  return cv;
+}
+const skyPattern = sctx.createPattern(makeSkyTile(), 'repeat');
+
+function resize() {
+  vw = innerWidth; vh = innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  RS = Math.min(dpr, 1.5); if (vw * vh * RS * RS > 2.4e6) RS = Math.sqrt(2.4e6 / (vw * vh));
+  OD = Math.min(dpr, 2);
+  scene.width = view.width = Math.round(vw * RS); scene.height = view.height = Math.round(vh * RS);
+  ui.width = Math.round(vw * OD); ui.height = Math.round(vh * OD);
+  scopeCv.width = Math.round(scopeCv.clientWidth * OD); scopeCv.height = Math.round(62 * OD);
+  if (gl) gl.viewport(0, 0, view.width, view.height);
+  const dk = document.getElementById('dock');
+  document.documentElement.style.setProperty('--dock-h', dk.offsetHeight + 'px');
+}
+
+// Orbital plane seen by a camera that is first turned by `yaw` about the plane's axis, then tilted by i
+// (far side toward the top of the screen). Both coordinates are needed for either screen axis.
+const toSX = (x, y) => ((x - camX) * cY - (y - camY) * sY) * zoom + vw / 2;
+const toSY = (x, y) => ((x - camX) * sY + (y - camY) * cY) * zoom * cosI + vh / 2;
+function scrOff(du, dv) { const u = du / zoom, w = dv / (zoom * cosI); return [u * cY + w * sY, -u * sY + w * cY]; }
+function toW(sx, sy) { const o = scrOff(sx - vw / 2, sy - vh / 2); return [camX + o[0], camY + o[1]]; }
+
+function drawScene() {
+  const W = scene.width, H = scene.height, s = RS;
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+  sctx.globalCompositeOperation = 'source-over'; sctx.globalAlpha = 1;
+  const par = 0.12;
+  const ox = ((-camX * zoom * par * s) % 1024 + 1024) % 1024, oy = ((-camY * zoom * cosI * par * s) % 1024 + 1024) % 1024;
+  if (skyPattern.setTransform) skyPattern.setTransform(new DOMMatrix().translate(W / 2, H / 2).rotate(yaw * 180 / Math.PI).translate(ox - W / 2, oy - H / 2));
+  sctx.fillStyle = skyPattern; sctx.fillRect(0, 0, W, H);
+
+  if (opt.trails) {
+    sctx.lineWidth = Math.max(1, 1.1 * s); sctx.lineJoin = 'round';
+    for (const b of bodies) {
+      const tr = b.trail; if (tr.length < 2) continue;
+      const col = b.kind === 'bh' ? '200,190,255' : b.type.col.join(',');
+      const cut = Math.floor(tr.length * 0.55);
+      for (const [from, to, al] of [[0, cut + 1, 0.12], [cut, tr.length, 0.3]]) {
+        if (to - from < 2) continue;
+        sctx.strokeStyle = `rgba(${col},${al})`; sctx.beginPath();
+        for (let i = from; i < to; i++) { const X = toSX(tr[i][0], tr[i][1]) * s, Y = toSY(tr[i][0], tr[i][1]) * s; i === from ? sctx.moveTo(X, Y) : sctx.lineTo(X, Y); }
+        sctx.stroke();
+      }
+    }
+  }
+
+  // kilonovae
+  sctx.globalCompositeOperation = 'lighter';
+  for (let i = flashes.length - 1; i >= 0; i--) {
+    const f = flashes[i], a = (wallNow - f.t0) / f.dur;
+    if (a > 1) { flashes.splice(i, 1); continue; }
+    const X = toSX(f.x, f.y) * s, Y = toSY(f.x, f.y) * s;
+    const R = Math.max((4 + 90 * Math.pow(a, 0.55)) * f.scale * zoom, 6) * s;
+    const k = clamp((a - 0.12) / 0.55, 0, 1);
+    const col = [180 + 75 * k, 205 - 110 * k, 255 - 210 * k].map(Math.round).join(',');
+    const al = Math.pow(1 - a, 1.6) * 0.9;
+    const g = sctx.createRadialGradient(X, Y, 0, X, Y, R);
+    g.addColorStop(0, `rgba(${col},${al})`); g.addColorStop(0.45, `rgba(${col},${al * 0.45})`); g.addColorStop(1, `rgba(${col},0)`);
+    sctx.fillStyle = g; sctx.fillRect(X - R, Y - R, 2 * R, 2 * R);
+    if (a < 0.06) {
+      const w = (1 - a / 0.06), R2 = R * 0.6;
+      const g2 = sctx.createRadialGradient(X, Y, 0, X, Y, R2);
+      g2.addColorStop(0, `rgba(255,255,255,${w})`); g2.addColorStop(1, 'rgba(255,255,255,0)');
+      sctx.fillStyle = g2; sctx.fillRect(X - R2, Y - R2, 2 * R2, 2 * R2);
+    }
+  }
+
+  // gas (Doppler-beamed when the view is tilted)
+  const gsz = clamp(2.8 * zoom, 2.2, 15) * s, mg = 20 * s, tilted = sinI > 0.01;
+  for (let i = 0; i < gN; i++) {
+    const X = toSX(gx[i], gy[i]) * s, Y = toSY(gx[i], gy[i]) * s;
+    if (X < -mg || Y < -mg || X > W + mg || Y > H + mg) continue;
+    let bucket = gb[i], sz = gsz;
+    if (tilted) {
+      const bl = Math.min((gvx[i] * sY + gvy[i] * cY) * sinI / C, 0.95), b2 = Math.min((gvx[i] * gvx[i] + gvy[i] * gvy[i]) / (C * C), 0.95);
+      const del = Math.sqrt(1 - b2) / (1 - bl);
+      const boost = del * del * del;
+      const sh = Math.round(7 * Math.log(del));
+      bucket = clamp(bucket + (Number.isFinite(sh) ? sh : 0), 0, 23);
+      sctx.globalAlpha = Math.min(1, boost);
+      if (boost > 1) sz = gsz * Math.sqrt(Math.min(boost, 4));
+    }
+    const h = sz / 2;
+    if (h > 0 && h < 400) sctx.drawImage(gasSprites[bucket], X - h, Y - h, sz, sz);
+  }
+  sctx.globalAlpha = 1;
+  // stars: glow
+  for (const b of bodies) {
+    if (b.kind !== 'star') continue;
+    const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, R = Math.max(b.R * zoom, 1.6) * s;
+    const g = R * 5 + (isNS(b) ? 7 : 12) * s;
+    sctx.drawImage(starGlow[b.type.id], X - g, Y - g, 2 * g, 2 * g);
+    if (isNS(b)) { // pulsar beams
+      const ang = b.beamPh, L = Math.max(R * 9, 22 * s);
+      sctx.lineWidth = Math.max(1, 1.2 * s);
+      for (const sg of [1, -1]) {
+        const ex = X + Math.cos(ang) * L * sg, ey = Y + Math.sin(ang) * L * sg * cosI;
+        const lg = sctx.createLinearGradient(X, Y, ex, ey);
+        lg.addColorStop(0, 'rgba(170,215,255,0.55)'); lg.addColorStop(1, 'rgba(170,215,255,0)');
+        sctx.strokeStyle = lg; sctx.beginPath(); sctx.moveTo(X, Y); sctx.lineTo(ex, ey); sctx.stroke();
+      }
+    }
+  }
+  sctx.globalCompositeOperation = 'source-over';
+  for (const b of bodies) {
+    if (b.kind !== 'star') continue;
+    const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, R = Math.max(b.R * zoom, 1.6) * s;
+    const e = clamp((b.f - 0.8) / 0.6, 0, 1) * 0.55;
+    if (e > 0.01) {
+      const ang = Math.atan2(toSY(b.hx, b.hy) * s - Y, toSX(b.hx, b.hy) * s - X);
+      sctx.save(); sctx.translate(X, Y); sctx.rotate(ang); sctx.translate(R * e * 0.35, 0); sctx.scale(1 + e, 1 - e * 0.25);
+      sctx.drawImage(starCore[b.type.id], -R, -R, 2 * R, 2 * R); sctx.restore();
+    } else sctx.drawImage(starCore[b.type.id], X - R, Y - R, 2 * R, 2 * R);
+  }
+}
+
+const bhU = new Float32Array(64), bhU2 = new Float32Array(64), bhU3 = new Float32Array(64), bhU4 = new Float32Array(64);
+// Exact Kerr shadow (Bardeen 1973): trace the rim of spherical photon orbits as seen from inclination i,
+// then store it as a short Fourier series r(θ) about its centre. Cached per (spin, angle).
+const shadowCache = new Map();
+function kerrShadow(chi, incDeg) {
+  const a = Math.min(0.995, Math.round(Math.abs(chi) * 200) / 200);
+  const inc = Math.max(2, Math.round(incDeg));
+  if (a < 0.01) return { shift: 0, c: [Math.sqrt(27), 0, 0, 0, 0] };
+  const key = a + '|' + inc;
+  const hit = shadowCache.get(key); if (hit) return hit;
+  const i = inc * Math.PI / 180, si = Math.sin(i), ci = Math.cos(i), cot2 = (ci / si) ** 2;
+  const r1 = 2 * (1 + Math.cos(2 / 3 * Math.acos(-a))), r2 = 2 * (1 + Math.cos(2 / 3 * Math.acos(a)));
+  const pts = []; let xmin = Infinity, xmax = -Infinity;
+  for (let k = 0; k < 900; k++) {
+    const r = r1 + (r2 - r1) * k / 899;
+    const xi = (r * r * (3 - r) - a * a * (r + 1)) / (a * (r - 1));
+    const eta = r ** 3 * (4 * a * a - r * (r - 3) ** 2) / (a * a * (r - 1) ** 2);
+    const b2 = eta + a * a * ci * ci - xi * xi * cot2;
+    if (b2 < 0) continue;
+    const x = xi / si; pts.push([x, Math.sqrt(b2)]); xmin = Math.min(xmin, x); xmax = Math.max(xmax, x);
+  }
+  let res;
+  if (pts.length < 8) res = { shift: 0, c: [Math.sqrt(27), 0, 0, 0, 0] };
+  else {
+    const cx = (xmin + xmax) / 2;
+    const pol = pts.map(([x, y]) => [Math.atan2(y, x - cx), Math.hypot(x - cx, y)]).sort((p, q) => p[0] - q[0]);
+    pol.unshift([0, pol[0][1]]); pol.push([Math.PI, pol[pol.length - 1][1]]);
+    const NG = 181, c = [0, 0, 0, 0, 0]; let j = 0;
+    for (let g = 0; g < NG; g++) {
+      const th = Math.PI * g / (NG - 1);
+      while (j < pol.length - 2 && pol[j + 1][0] < th) j++;
+      const [t0, v0] = pol[j], [t1, v1] = pol[j + 1];
+      const rv = t1 > t0 ? v0 + (v1 - v0) * (th - t0) / (t1 - t0) : v0;
+      const w = (g === 0 || g === NG - 1) ? 0.5 : 1;
+      for (let n = 0; n < 5; n++) c[n] += w * rv * Math.cos(n * th);
+    }
+    const dth = Math.PI / (NG - 1);
+    c[0] *= dth / Math.PI; for (let n = 1; n < 5; n++) c[n] *= 2 * dth / Math.PI;
+    res = { shift: cx, c };
+  }
+  shadowCache.set(key, res);
+  return res;
+}
+function composite() {
+  const W = view.width, H = view.height, s = RS;
+  const bh = bhList().slice(0, 16);
+  if (gl) {
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, scene);
+    bhU.fill(0); bhU2.fill(0); bhU3.fill(0); bhU4.fill(0);
+    bh.forEach((b, i) => {
+      bhU[i * 4] = toSX(b.x, b.y) * s; bhU[i * 4 + 1] = H - toSY(b.x, b.y) * s; bhU[i * 4 + 2] = rsOf(b.m) * zoom * s;
+      let amp = 0, ph = 0;
+      if (b.ring) { const t = simTime - b.ring.t0; amp = b.ring.A0 * Math.exp(-t / b.ring.tau); ph = b.ring.phi0 + b.ring.w * t; }
+      bhU[i * 4 + 3] = amp; bhU2[i * 4] = ph + 2 * yaw; bhU2[i * 4 + 1] = clamp(b.feedRate * 160, 0, 1); bhU2[i * 4 + 2] = b.chi;
+      const sh = kerrShadow(b.chi, tiltDeg);
+      bhU3.set(sh.c.slice(0, 4), i * 4); bhU4[i * 4] = sh.c[4]; bhU4[i * 4 + 1] = sh.shift;
+    });
+    gl.uniform2f(U.uRes, W, H);
+    gl.uniform1i(U.uN, bh.length);
+    gl.uniform4fv(U.uBH, bhU); gl.uniform4fv(U.uBH2, bhU2); gl.uniform4fv(U.uBH3, bhU3); gl.uniform4fv(U.uBH4, bhU4);
+    gl.uniform1f(U.uLens, opt.lens ? 1 : 0);
+    gl.uniform2f(U.uIncl, sinI, cosI);
+    if (opt.waves && gwSrc) {
+      const cpx = C * zoom * s, gain = 5 * s;
+      const cx = toSX(gwSrc.cx, gwSrc.cy) * s, cy = H - toSY(gwSrc.cx, gwSrc.cy) * s;
+      if (gwSrc.mode === 'binary') {
+        gl.uniform4f(U.uGWa, cx, cy, cpx, 1);
+        gl.uniform4f(U.uGWb, 0, gwSrc.phi + yaw, gwSrc.om, 0);
+        gl.uniform4f(U.uGWc, 0, 1, gwSrc.vis * gain, 0);
+        gl.uniform1f(U.uGWr0, Math.max(gwSrc.sep * zoom * s, 40 * s));
+      } else {
+        const rem = bodies.find(b => b.id === gwSrc.remId);
+        gl.uniform4f(U.uGWa, cx, cy, cpx, 1);
+        gl.uniform4f(U.uGWb, simTime - gwSrc.tm, gwSrc.phi + yaw, gwSrc.om, 1);
+        gl.uniform4f(U.uGWc, gwSrc.wq, gwSrc.tau, gwSrc.vis * gain, gwSrc.visR * gain);
+        gl.uniform1f(U.uGWr0, Math.max((rem ? rsOf(rem.m) * 6 : 30) * zoom * s, 40 * s));
+      }
+    } else gl.uniform4f(U.uGWa, 0, 0, 1, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  } else {
+    vctx.setTransform(1, 0, 0, 1, 0, 0); vctx.drawImage(scene, 0, 0);
+    for (const b of bh) {
+      const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, R = 2.598 * rsOf(b.m) * zoom * s;
+      vctx.fillStyle = '#000'; vctx.beginPath(); vctx.arc(X, Y, R, 0, Math.PI * 2); vctx.fill();
+      vctx.strokeStyle = 'rgba(255,205,150,0.55)'; vctx.lineWidth = Math.max(1, R * 0.08); vctx.stroke();
+    }
+  }
+}
+
+/* ================= overlay ================= */
+let hover = null, drag = null;
+function jetPower(b) {
+  const feed = clamp(b.feedRate * 160, 0, 1) * (0.1 + 0.9 * b.chi * b.chi);
+  const grb = Math.max(0, 1 - (wallNow - b.grbT) / 2600);
+  return Math.max(feed, grb);
+}
+function drawJets(c) {
+  const beta = 0.92, gam = 1 / Math.sqrt(1 - beta * beta);
+  const dA = 1 / (gam * (1 - beta * cosI)), dR = 1 / (gam * (1 + beta * cosI));
+  c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
+  for (const b of bodies) {
+    if (b.kind !== 'bh') continue;
+    const J = jetPower(b); if (J < 0.03) continue;
+    const X = toSX(b.x, b.y), Y = toSY(b.x, b.y), rsPx = rsOf(b.m) * zoom;
+    const Lp = (14 + 30 * J) * rsPx * sinI;
+    const wid = Math.max(2, rsPx * 0.5);
+    const bA = Math.min(1, J * dA ** 3 / 10), bR = Math.min(1, J * dR ** 3 / 10);
+    for (const [dir, br] of [[-1, bA], [1, bR]]) { // the approaching jet points up the screen
+      if (br < 0.01 || Lp < 3) continue;
+      const y2 = Y + dir * Lp;
+      const lg = c.createLinearGradient(X, Y, X, y2);
+      lg.addColorStop(0, `rgba(205,225,255,${br * 0.85})`); lg.addColorStop(0.55, `rgba(150,180,255,${br * 0.35})`); lg.addColorStop(1, 'rgba(120,150,255,0)');
+      c.strokeStyle = lg; c.lineWidth = wid * 2.2; c.beginPath(); c.moveTo(X, Y); c.lineTo(X, y2); c.stroke();
+      c.lineWidth = wid * 0.7; c.setLineDash([wid * 1.6, wid * 2.6]); c.lineDashOffset = -wallNow * 0.09;
+      c.beginPath(); c.moveTo(X, Y); c.lineTo(X, y2); c.stroke(); c.setLineDash([]);
+    }
+    const coreB = bA * Math.max(0, cosI - 0.25) * 0.8;
+    if (coreB > 0.02) { // jet seen nearly head-on: a beamed core in front of the shadow
+      const R = rsPx * (0.8 + 1.2 * J) + 3;
+      const g = c.createRadialGradient(X, Y, 0, X, Y, R);
+      g.addColorStop(0, `rgba(225,235,255,${coreB})`); g.addColorStop(0.4, `rgba(160,190,255,${coreB * 0.4})`); g.addColorStop(1, 'rgba(140,170,255,0)');
+      c.fillStyle = g; c.fillRect(X - R, Y - R, 2 * R, 2 * R);
+    }
+  }
+  c.globalCompositeOperation = 'source-over'; c.lineCap = 'butt';
+}
+function predictPath(x, y, vx, vy, isBH) {
+  const bh = bhList();
+  const pts = [[x, y]];
+  if (!bh.length) { pts.push([x + vx * 4, y + vy * 4]); return pts; }
+  let t = 0, px = x, py = y, lx = x, ly = y;
+  const acc = (X, Y) => {
+    let ax = 0, ay = 0, dyn = Infinity;
+    for (const b of bh) {
+      const dx = b.x - X, dy = b.y - Y, r = Math.hypot(dx, dy) || 1e-6, rs = rsOf(b.m);
+      if (r < 2.6 * rs * b.kPlus) return null;
+      const d = isBH ? r : Math.max(r - rs, 0.3 * rs), a = G * b.m / (d * d);
+      ax += a * dx / r; ay += a * dy / r;
+      dyn = Math.min(dyn, Math.sqrt(r * r * r / (G * b.m)));
+    }
+    return [ax, ay, dyn];
+  };
+  let a = acc(px, py); if (!a) return pts;
+  const lim = 3 * Math.max(vw, vh) / zoom;
+  for (let k = 0; k < 2000 && t < 10; k++) {
+    const dt = clamp(0.015 * a[2], 0.0002, 0.04);
+    vx += 0.5 * dt * a[0]; vy += 0.5 * dt * a[1]; px += dt * vx; py += dt * vy;
+    a = acc(px, py); if (!a) { pts.push([px, py]); break; }
+    vx += 0.5 * dt * a[0]; vy += 0.5 * dt * a[1]; t += dt;
+    if (Math.hypot(px - lx, (py - ly) * cosI) * zoom > 3) { pts.push([px, py]); lx = px; ly = py; }
+    if (Math.hypot(px - camX, py - camY) > lim / Math.max(cosI, 0.2)) break;
+  }
+  return pts;
+}
+function placementVelocity(wx, wy, dxs, dys) {
+  const dist = Math.hypot(dxs, dys);
+  const host = dominantBH(wx, wy) || dominantAny(wx, wy);
+  if (dist < 12) return { circular: true, host };
+  const k = 2.2 * Math.sqrt(zoom), o = scrOff(dxs, dys);
+  return { circular:false, host, vx: (host ? host.vx : 0) + o[0] * k, vy: (host ? host.vy : 0) + o[1] * k };
+}
+function ghost(c, sx, sy) {
+  const [wx, wy] = toW(sx, sy), isBH = tool === 'bh';
+  const host = dominantBH(wx, wy) || (isBH ? null : dominantAny(wx, wy));
+  if (host) {
+    const r = Math.hypot(wx - host.x, wy - host.y) * zoom;
+    c.setLineDash([3, 5]); c.strokeStyle = 'rgba(255,179,106,0.38)'; c.lineWidth = 1;
+    c.beginPath(); c.ellipse(toSX(host.x, host.y), toSY(host.x, host.y), r, r * cosI, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+  }
+  if (isBH) {
+    const R = Math.max(2.598 * rsOf(bhMass) * zoom, 3);
+    c.fillStyle = 'rgba(0,0,0,0.6)'; c.strokeStyle = 'rgba(255,179,106,0.75)'; c.lineWidth = 1.2;
+    c.beginPath(); c.arc(sx, sy, R, 0, Math.PI * 2); c.fill(); c.stroke();
+    if (Math.abs(bhSpin) > 0.02) { // spin arrow
+      const sg = bhSpin > 0 ? 1 : -1, a0 = -Math.PI * 0.85, a1 = -Math.PI * 0.15, R2 = R + 6;
+      c.beginPath(); c.arc(sx, sy, R2, a0, a1); c.stroke();
+      const ae = sg > 0 ? a0 : a1, ex = sx + R2 * Math.cos(ae), ey = sy + R2 * Math.sin(ae), tdir = sg > 0 ? -1 : 1;
+      const tx = -Math.sin(ae) * tdir, ty = Math.cos(ae) * tdir;
+      c.beginPath(); c.moveTo(ex, ey); c.lineTo(ex - tx * 6 - ty * 4, ey - ty * 6 + tx * 4); c.moveTo(ex, ey); c.lineTo(ex - tx * 6 + ty * 4, ey - ty * 6 - tx * 4); c.stroke();
+    }
+  } else if (TYPE[tool]) {
+    const t = TYPE[tool], R = Math.max(t.R * zoom, 3);
+    c.fillStyle = `rgba(${t.col},0.55)`; c.beginPath(); c.arc(sx, sy, R, 0, Math.PI * 2); c.fill();
+  }
+}
+function drawOverlay() {
+  const c = octx;
+  c.setTransform(OD, 0, 0, OD, 0, 0); c.clearRect(0, 0, vw, vh);
+  if (opt.jets) drawJets(c);
+  if (opt.labels) {
+    c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+    for (const b of bodies) {
+      const X = toSX(b.x, b.y), Y = toSY(b.x, b.y);
+      if (X < -60 || Y < -60 || X > vw + 60 || Y > vh + 60) continue;
+      if (b.kind === 'bh') {
+        const R = 2.598 * rsOf(b.m) * zoom;
+        c.font = `500 11px ${MONO}`; c.fillStyle = 'rgba(236,230,218,0.78)';
+        c.fillText(`${fmtM(b.m)} M☉`, X, Y + R + 15);
+        if (Math.abs(b.chi) > 0.005) { c.font = `400 10px ${MONO}`; c.fillStyle = 'rgba(143,147,168,0.9)'; c.fillText(`χ ${fmtChi(b.chi)} ${b.chi > 0 ? '↺' : '↻'}`, X, Y + R + 28); }
+      } else if (isNS(b) || zoom * b.R > 1.2 || bodies.length < 14) {
+        const R = Math.max(b.R * zoom, 1.6);
+        c.font = `400 10px ${MONO}`; c.fillStyle = `rgba(${b.type.col},0.8)`;
+        c.textAlign = 'left'; c.fillText(isNS(b) ? `NS ${fmtM(b.m)} · ${b.spinHz >= 100 ? (1000 / b.spinHz).toFixed(1) + ' ms' : Math.round(b.spinHz) + '/s'}` : b.type.id, X + R + 6, Y - R - 2); c.textAlign = 'center';
+      }
+    }
+  }
+  if (opt.follow && followId != null) {
+    const b = bodies.find(o => o.id === followId);
+    if (b) {
+      const X = toSX(b.x, b.y), Y = toSY(b.x, b.y);
+      const R = (b.kind === 'bh' ? 2.598 * rsOf(b.m) * zoom : Math.max(b.R * zoom, 1.6)) + 9;
+      c.setLineDash([4, 5]); c.lineDashOffset = -wallNow * 0.01; c.strokeStyle = 'rgba(255,179,106,0.6)'; c.lineWidth = 1.2;
+      c.beginPath(); c.arc(X, Y, R, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+    }
+  }
+  if (drag && drag.mode === 'place') {
+    const dx = drag.ex - drag.sx, dy = drag.ey - drag.sy;
+    if (Math.hypot(dx, dy) < 12) ghost(c, drag.sx, drag.sy);
+    else {
+      const [wx, wy] = toW(drag.sx, drag.sy), isBH = tool === 'bh';
+      const pv = placementVelocity(wx, wy, dx, dy);
+      const pts = predictPath(wx, wy, pv.vx, pv.vy, isBH);
+      c.setLineDash([5, 6]); c.strokeStyle = 'rgba(255,179,106,0.7)'; c.lineWidth = 1.3; c.beginPath();
+      pts.forEach((p, i) => { const X = toSX(p[0], p[1]), Y = toSY(p[0], p[1]); i ? c.lineTo(X, Y) : c.moveTo(X, Y); });
+      c.stroke(); c.setLineDash([]);
+      c.strokeStyle = 'rgba(127,211,230,0.85)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(drag.sx, drag.sy); c.lineTo(drag.ex, drag.ey); c.stroke();
+      const ang = Math.atan2(dy, dx); c.beginPath();
+      c.moveTo(drag.ex, drag.ey); c.lineTo(drag.ex - 9 * Math.cos(ang - 0.45), drag.ey - 9 * Math.sin(ang - 0.45));
+      c.moveTo(drag.ex, drag.ey); c.lineTo(drag.ex - 9 * Math.cos(ang + 0.45), drag.ey - 9 * Math.sin(ang + 0.45)); c.stroke();
+      ghost(c, drag.sx, drag.sy);
+    }
+  } else if (hover && !drag && tool !== 'move') ghost(c, hover.x, hover.y);
+}
+
+function drawScope() {
+  const c = scx, W = scopeCv.width, H = scopeCv.height, d = OD;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W, H);
+  c.strokeStyle = 'rgba(196,202,232,0.10)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2);
+  for (let k = 60; k < SCOPE_N; k += 60) { const x = Math.round(k / (SCOPE_N - 1) * W) + 0.5; c.moveTo(x, 4 * d); c.lineTo(x, H - 4 * d); }
+  c.stroke();
+  let mx = 0; for (let i = 0; i < SCOPE_N; i++) mx = Math.max(mx, Math.abs(scopeBuf[i]));
+  scopeMax = Math.max(0.02, scopeMax + (mx - scopeMax) * (mx > scopeMax ? 0.3 : 0.02));
+  // frequency track, log scale 10 Hz – 5 kHz
+  const fy = f => H - 3 * d - (Math.log10(clamp(f, 10, 5000)) - 1) / 2.7 * (H - 6 * d);
+  c.strokeStyle = 'rgba(255,179,106,0.75)'; c.lineWidth = 1.3 * d; c.beginPath();
+  let pen = false;
+  for (let k = 0; k < SCOPE_N; k++) {
+    const i = (scopeHead + k) % SCOPE_N, f = freqBuf[i];
+    if (f <= 0) { pen = false; continue; }
+    const x = k / (SCOPE_N - 1) * W, y = fy(f);
+    pen ? c.lineTo(x, y) : c.moveTo(x, y); pen = true;
+  }
+  c.stroke();
+  for (let k = 0; k < SCOPE_N; k++) {
+    const i = (scopeHead + k) % SCOPE_N;
+    if (scopeMark[i]) { const x = k / (SCOPE_N - 1) * W; c.fillStyle = 'rgba(255,179,106,0.8)'; c.fillRect(x, 2 * d, 1.5 * d, H - 4 * d);
+      c.font = `600 ${9 * d}px "Saira Condensed", sans-serif`; c.fillText('MERGER', Math.min(x + 4 * d, W - 40 * d), 10 * d); }
+  }
+  const yOf = v => H / 2 - v / scopeMax * H * 0.44;
+  for (const [w, a] of [[4 * d, 0.16], [1.4 * d, 0.95]]) {
+    c.strokeStyle = `rgba(127,211,230,${a})`; c.lineWidth = w; c.lineJoin = 'round'; c.beginPath();
+    for (let k = 0; k < SCOPE_N; k++) { const i = (scopeHead + k) % SCOPE_N, x = k / (SCOPE_N - 1) * W, y = yOf(scopeBuf[i]); k ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.stroke();
+  }
+}
+
+/* ================= UI ================= */
+const $ = id => document.getElementById(id);
+const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>';
+const TOGGLES = ['slow','lens','waves','jets','trails','labels','follow'];
+function syncPlay() { $('play').innerHTML = paused ? ICON_PLAY : ICON_PAUSE; $('play').setAttribute('aria-label', paused ? 'Play' : 'Pause'); }
+function syncToggles() { for (const k of TOGGLES) $('t-' + k).checked = opt[k]; }
+
+const presetSel = $('preset');
+for (const [id, p] of Object.entries(PRESETS)) { const o = document.createElement('option'); o.value = id; o.textContent = p.name; presetSel.appendChild(o); }
+presetSel.addEventListener('change', () => loadPreset(presetSel.value));
+$('play').addEventListener('click', () => { paused = !paused; syncPlay(); });
+$('speed').addEventListener('click', () => { speedIdx = (speedIdx + 1) % SPEEDS.length; $('speed').textContent = SPEEDS[speedIdx] + '×'; });
+$('gear').addEventListener('click', () => {
+  const p = $('panel'); p.hidden = !p.hidden;
+  $('gear').setAttribute('aria-expanded', String(!p.hidden)); $('gear').setAttribute('aria-pressed', String(!p.hidden));
+});
+$('gw').addEventListener('input', e => { gwBoost = +e.target.value; $('gwOut').textContent = gwBoost === 0 ? 'off' : gwBoost === 1 ? '1× real' : gwBoost + '×'; });
+$('tilt').addEventListener('input', e => setTilt(+e.target.value));
+for (const k of TOGGLES) $('t-' + k).addEventListener('change', e => { opt[k] = e.target.checked; renderMoveCtx(true); if (k === 'trails' && !opt.trails) bodies.forEach(b => b.trail.length = 0); });
+$('fit').addEventListener('click', () => { fitBodies(); renderMoveCtx(true); });
+$('clear').addEventListener('click', () => { bodies = []; gN = 0; gwSrc = null; totalFed = 0; flashes.length = 0; scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); });
+$('sound').addEventListener('click', () => {
+  if (!au && !initAudio()) { toast('No audio', ['This browser does not support Web Audio']); return; }
+  if (au.ctx.state === 'suspended') au.ctx.resume();
+  soundOn = !soundOn; $('sound').setAttribute('aria-pressed', String(soundOn));
+});
+
+const TOOLS = [
+  { id:'move', label:'Move', icon:'<svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>' },
+  { id:'bh', label:'Black hole' },
+  ...STAR_TYPES.map(t => ({ id:t.id, label:t.short, col:t.col })),
+];
+const toolsEl = $('tools');
+for (const t of TOOLS) {
+  const b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.dataset.tool = t.id; b.setAttribute('role', 'radio');
+  const sw = t.icon ? t.icon : t.id === 'bh' ? '<span class="sw bh"></span>' : t.id === 'NS' ? '<span class="sw ns"></span>'
+    : `<span class="sw" style="background:rgb(${t.col});color:rgba(${t.col},.55)"></span>`;
+  b.innerHTML = `${sw}<span>${t.label}</span>`;
+  b.addEventListener('click', () => setTool(t.id));
+  toolsEl.appendChild(b);
+}
+function spinText() { return Math.abs(bhSpin) < 0.005 ? 'χ 0 · none' : `χ ${fmtChi(bhSpin)} ${bhSpin > 0 ? '↺' : '↻'}`; }
+function setTool(id) {
+  tool = id;
+  for (const b of toolsEl.children) { const on = b.dataset.tool === id; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; }
+  const ctx = $('ctx');
+  if (id === 'bh') {
+    ctx.innerHTML = `<span class="grp"><label for="bhMass"><b>Mass</b></label><input id="bhMass" type="range" min="3" max="80" step="1" value="${bhMass}"><output id="bhMassOut" class="mono">${bhMass} M☉</output></span>`
+      + `<span class="grp"><label for="bhSpin"><b>Spin</b></label><input id="bhSpin" type="range" min="-0.99" max="0.99" step="0.01" value="${bhSpin}"><output id="bhSpinOut" class="mono">${spinText()}</output></span>`
+      + `<span class="hint">Tap: orbit · Drag: throw</span>`;
+    $('bhMass').addEventListener('input', e => { bhMass = +e.target.value; $('bhMassOut').textContent = bhMass + ' M☉'; });
+    $('bhSpin').addEventListener('input', e => { bhSpin = +e.target.value; if (Math.abs(bhSpin) < 0.03) bhSpin = 0; $('bhSpinOut').textContent = spinText(); });
+  } else if (id === 'move') {
+    renderMoveCtx(true);
+  } else if (id === 'NS') {
+    ctx.innerHTML = `<span class="sw ns"></span><b>Neutron star</b><span class="mono dim">1.4 M☉ · 12 km · true size</span><span class="hint">Pair two up to hear them merge</span>`;
+  } else {
+    const t = TYPE[id];
+    ctx.innerHTML = `<span class="sw" style="background:rgb(${t.col});color:rgba(${t.col},.55)"></span><b>${t.name}</b><span class="mono dim">${t.m} M☉ · ${t.T.toLocaleString('en-US')} K</span><span class="hint">Tap: orbit · Drag: throw</span>`;
+  }
+  if (id !== 'move') {
+    const u = document.createElement('button'); u.className = 'follow-x'; u.type = 'button'; u.textContent = 'Undo';
+    u.title = 'Remove the last object you placed (Ctrl+Z)'; u.addEventListener('click', undoPlace); ctx.appendChild(u);
+  }
+  ui.style.cursor = id === 'move' ? 'grab' : 'crosshair';
+  requestAnimationFrame(() => document.documentElement.style.setProperty('--dock-h', $('dock').offsetHeight + 'px'));
+}
+const coarse = matchMedia('(pointer: coarse)').matches;
+let moveKey = '';
+function renderMoveCtx(force) {
+  if (tool !== 'move') return;
+  const label = focusLabel();
+  const key = `${opt.follow}|${followId}|${focusGroup().map(b => b.id).join(',')}`;
+  if (!force && key === moveKey) { // same focus: just refresh the text (masses change as things feed)
+    const t = $('ctx').querySelector('.tgt'); if (t && t.textContent !== label) t.textContent = label;
+    return;
+  }
+  moveKey = key;
+  const ctx = $('ctx');
+  const help = coarse ? 'Drag: pan · Pinch: zoom & twist · Tap an object: follow' : 'Drag: pan · Right-drag: tilt & rotate · Scroll: zoom · Click an object: follow';
+  let head, btn = '';
+  if (!opt.follow) { head = '<b>Free camera</b>'; btn = '<button class="follow-x" type="button" data-act="recenter">Recenter</button>'; }
+  else if (followId != null) { head = `<b>Following</b><span class="tgt">${label}</span>`; btn = '<button class="follow-x" type="button" data-act="auto">Auto</button>'; }
+  else head = `<b>Auto focus</b><span class="tgt">${label}</span>`;
+  ctx.innerHTML = `${head}${btn}<span class="hint">${help}</span>`;
+  const b = ctx.querySelector('[data-act]');
+  if (b) b.addEventListener('click', () => { if (b.dataset.act === 'auto') followId = null; opt.follow = true; syncToggles(); renderMoveCtx(true); });
+  requestAnimationFrame(() => document.documentElement.style.setProperty('--dock-h', $('dock').offsetHeight + 'px'));
+}
+function undoPlace() {
+  while (placed.length) {
+    const id = placed.pop(), b = bodies.find(o => o.id === id);
+    if (b) { bodies = bodies.filter(o => o !== b); if (followId === id) followId = null; computeAccel(); toast('Removed', [`${describe(b)} taken back out`]); return; }
+  }
+  toast('Nothing to undo', ['Objects you place can be removed here, newest first']);
+}
+toolsEl.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const i = TOOLS.findIndex(t => t.id === tool), n = (i + (e.key === 'ArrowRight' ? 1 : -1) + TOOLS.length) % TOOLS.length;
+  setTool(TOOLS[n].id); toolsEl.children[n].focus(); e.preventDefault();
+});
+
+const toastsEl = $('toasts');
+function toast(title, lines, kind) {
+  const el = document.createElement('div'); el.className = 'toast';
+  el.innerHTML = `<h3${kind === 'w' ? ' class="w"' : ''}></h3><ul class="mono"></ul>`;
+  el.querySelector('h3').textContent = title;
+  const ul = el.querySelector('ul'); for (const l of lines) { const li = document.createElement('li'); li.textContent = l; ul.appendChild(li); }
+  toastsEl.appendChild(el);
+  while (toastsEl.children.length > 3) toastsEl.firstChild.remove();
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 520); }, kind === 'w' ? 11000 : 6500);
+}
+
+/* ================= input ================= */
+const pointers = new Map();
+function commitPlace(sx, sy, ex, ey) {
+  if (bodies.length >= 48) { toast('Too crowded', ['48 objects is the limit; clear some space first']); return; }
+  const [wx, wy] = toW(sx, sy), isBH = tool === 'bh';
+  const body = isBH ? makeBH(wx, wy, 0, 0, bhMass, bhSpin) : makeStar(tool, wx, wy, 0, 0);
+  for (const b of bhList()) if (Math.hypot(b.x - wx, b.y - wy) < 2.8 * rsOf(b.m) + (isBH ? rsOf(body.m) * 2.6 : body.R)) { toast('Too close', ['Drop it outside the horizon']); return; }
+  const pv = placementVelocity(wx, wy, ex - sx, ey - sy);
+  if (pv.circular) { if (pv.host) setCircular(pv.host, body); }
+  else { body.vx = pv.vx; body.vy = pv.vy; }
+  bodies.push(body); placed.push(body.id);
+  computeAccel();
+}
+ui.addEventListener('contextmenu', e => e.preventDefault());
+const ORBIT_K = 0.006; // radians of view per pixel dragged
+function orbitBy(dx, dy) { setYaw(yaw - dx * ORBIT_K); setTilt(tiltDeg + dy * ORBIT_K * 57.3 * 0.9); }
+function pickAt(sx, sy) {
+  let best = null, bd = 1;
+  for (const b of bodies) {
+    const X = toSX(b.x, b.y), Y = toSY(b.x, b.y);
+    const R = b.kind === 'bh' ? 2.598 * rsOf(b.m) * zoom : Math.max(b.R * zoom, 1.6);
+    const d = Math.hypot(X - sx, Y - sy) / Math.max(16, R + 8);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+ui.addEventListener('pointerdown', e => {
+  ui.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    drag = { mode:'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), a0: Math.atan2(b.y - a.y, b.x - a.x), z0: zoom, yaw0: yaw, w: toW(cx, cy) };
+    return;
+  }
+  if (pointers.size > 2) return;
+  const p = { lx: e.clientX, ly: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
+  if (e.button === 2 || e.shiftKey || e.ctrlKey) { drag = { mode:'orbit', ...p }; ui.style.cursor = 'move'; }
+  else if (tool === 'move' || e.button === 1) { drag = { mode:'pan', ...p }; ui.style.cursor = 'grabbing'; }
+  else drag = { mode:'place', sx: e.clientX, sy: e.clientY, ex: e.clientX, ey: e.clientY };
+});
+ui.addEventListener('pointermove', e => {
+  if (e.pointerType === 'mouse') hover = { x: e.clientX, y: e.clientY };
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (!drag) return;
+  if (drag.mode === 'pinch' && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    zoom = clamp(drag.z0 * Math.hypot(a.x - b.x, a.y - b.y) / drag.d0, 0.03, 30);
+    setYaw(drag.yaw0 + Math.atan2(b.y - a.y, b.x - a.x) - drag.a0);  // two-finger twist turns the view
+    if (!opt.follow) { const o = scrOff(cx - vw / 2, cy - vh / 2); camX = drag.w[0] - o[0]; camY = drag.w[1] - o[1]; }
+    return;
+  }
+  if (drag.mode === 'place') { drag.ex = e.clientX; drag.ey = e.clientY; return; }
+  const dx = e.clientX - drag.lx, dy = e.clientY - drag.ly; drag.lx = e.clientX; drag.ly = e.clientY;
+  if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 5) {
+    drag.moved = true;
+    if (drag.mode === 'pan') { opt.follow = false; syncToggles(); }
+  }
+  if (!drag.moved) return;
+  if (drag.mode === 'orbit') orbitBy(dx, dy);
+  else if (drag.mode === 'pan') { const o = scrOff(dx, dy); camX -= o[0]; camY -= o[1]; }
+});
+function endPointer(e) {
+  pointers.delete(e.pointerId);
+  if (!drag) return;
+  if (drag.mode === 'place' && e.type === 'pointerup' && pointers.size === 0) commitPlace(drag.sx, drag.sy, drag.ex, drag.ey);
+  if (drag.mode === 'pan' && !drag.moved && e.type === 'pointerup' && pointers.size === 0) { // a click, not a drag: follow what was clicked
+    const b = pickAt(drag.sx, drag.sy);
+    if (b) { followId = b.id; opt.follow = true; syncToggles(); renderMoveCtx(true); }
+  }
+  if (drag.mode === 'pinch' && pointers.size === 1) { const p = [...pointers.values()][0]; drag = { mode:'pan', lx: p.x, ly: p.y, sx: p.x, sy: p.y, moved: false }; return; }
+  if (pointers.size === 0) { drag = null; ui.style.cursor = tool === 'move' ? 'grab' : 'crosshair'; }
+}
+ui.addEventListener('pointerup', endPointer);
+ui.addEventListener('pointercancel', endPointer);
+ui.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hover = null; });
+ui.addEventListener('wheel', e => {
+  e.preventDefault();
+  const w = toW(e.clientX, e.clientY);
+  zoom = clamp(zoom * Math.exp(-e.deltaY * 0.0015), 0.03, 30);
+  // while following, zoom about the focus; with a free camera, zoom about the cursor
+  if (!opt.follow) { const o = scrOff(e.clientX - vw / 2, e.clientY - vh / 2); camX = w[0] - o[0]; camY = w[1] - o[1]; }
+}, { passive:false });
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') { setTool('move'); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !(e.target.closest && e.target.closest('input,select'))) { e.preventDefault(); undoPlace(); return; }
+  if (e.target.closest && e.target.closest('input,select,button,.gizmo')) return;
+  if (e.code === 'Space') { e.preventDefault(); paused = !paused; syncPlay(); }
+});
+
+/* view dial: drag to rotate (sideways) and tilt (up/down); arrow keys too; double-click resets to face-on */
+const gz = $('gizmo'), gzCv = $('gizmoCv'), gzx = gzCv.getContext('2d');
+function drawGizmo() {
+  const D = Math.min(window.devicePixelRatio || 1, 2), S = 72;
+  if (gzCv.width !== S * D) { gzCv.width = gzCv.height = S * D; }
+  const c = gzx; c.setTransform(D, 0, 0, D, 0, 0); c.clearRect(0, 0, S, S);
+  const cx = S / 2, cy = S / 2, r = 25;
+  // the orbital plane as seen now, with its two axes
+  c.strokeStyle = 'rgba(196,202,232,0.18)'; c.lineWidth = 1;
+  for (const [ux, uy] of [[1, 0], [0, 1]]) {
+    const px = (ux * cY - uy * sY) * r, py = (ux * sY + uy * cY) * r * cosI;
+    c.beginPath(); c.moveTo(cx - px, cy - py); c.lineTo(cx + px, cy + py); c.stroke();
+  }
+  c.strokeStyle = 'rgba(255,179,106,0.85)'; c.lineWidth = 1.5;
+  c.beginPath(); c.ellipse(cx, cy, r, Math.max(r * cosI, 0.6), 0, 0, Math.PI * 2); c.stroke();
+  // marker on the plane's rim shows rotation
+  const mx = cx + cY * r, my = cy + sY * r * cosI;
+  c.fillStyle = '#7fd3e6'; c.beginPath(); c.arc(mx, my, 3.2, 0, Math.PI * 2); c.fill();
+  // spin axis
+  if (sinI > 0.02) { c.strokeStyle = 'rgba(205,225,255,0.5)'; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx, cy - r * sinI * 0.9); c.stroke(); }
+  c.fillStyle = 'rgba(236,230,218,0.9)'; c.font = `500 10px ${MONO}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(`${Math.round(tiltDeg)}°`, cx, cy + (sinI > 0.3 ? 14 : 0));
+  gz.setAttribute('aria-label', `View dial: tilted ${Math.round(tiltDeg)}°, rotated ${Math.round(yaw * 180 / Math.PI)}°. Drag or use arrow keys; double-click resets.`);
+  gz.title = 'Drag to tilt and rotate · double-click to reset';
+}
+let gzDrag = null;
+gz.addEventListener('pointerdown', e => { gz.setPointerCapture(e.pointerId); gzDrag = { x: e.clientX, y: e.clientY }; e.preventDefault(); });
+gz.addEventListener('pointermove', e => {
+  if (!gzDrag) return;
+  orbitBy((e.clientX - gzDrag.x) * 1.4, (e.clientY - gzDrag.y) * 1.4); gzDrag = { x: e.clientX, y: e.clientY };
+});
+const gzEnd = () => { gzDrag = null; };
+gz.addEventListener('pointerup', gzEnd); gz.addEventListener('pointercancel', gzEnd);
+gz.addEventListener('dblclick', () => { setTilt(0); setYaw(0); });
+gz.addEventListener('keydown', e => {
+  const step = 5 * Math.PI / 180;
+  if (e.key === 'ArrowLeft') setYaw(yaw + step); else if (e.key === 'ArrowRight') setYaw(yaw - step);
+  else if (e.key === 'ArrowUp') setTilt(tiltDeg - 5); else if (e.key === 'ArrowDown') setTilt(tiltDeg + 5);
+  else if (e.key === 'Home') { setTilt(0); setYaw(0); }
+  else return;
+  e.preventDefault();
+});
+addEventListener('resize', resize);
+
+/* ================= loop ================= */
+let last = performance.now(), frameN = 0, workMs = 8, frameSim = 0;
+let loopErr = false;
+function frame(now) {
+  try { frameBody(now); }
+  catch (err) { if (!loopErr) { loopErr = true; console.error('Ringdown frame error', err); toast('Something glitched', ['A frame hit an error and was skipped; the simulation keeps running']); } }
+  requestAnimationFrame(frame);
+}
+function frameBody(now) {
+  const wallDt = Math.min(0.05, (now - last) / 1000); last = now; frameN++; wallNow = now;
+  let target = 1;
+  if (opt.slow) {
+    const pair = closestPair();
+    if (pair && pair[2] < 1.35 * mergeDist(pair[0], pair[1])) target = 0.07;
+    if (simTime < slowHoldUntil) target = 0.07;
+  }
+  slow += (target - slow) * Math.min(1, (target < slow ? 4 : 0.9) * wallDt);
+  $('slow').hidden = slow > 0.85;
+  if (!$('slow').hidden) $('slow').textContent = `slow-mo ${slow.toFixed(2)}×`;
+
+  const tWork = performance.now();
+  if (paused) frameSim = 0;
+  if (!paused) {
+    for (const b of bodies) { b.fedFrame = 0; if (b.kind === 'bh') updateKerr(b); }
+    for (const b of bodies) if (isNS(b)) b.beamPh += (1.5 + 3.2 * Math.log10(1 + b.spinHz)) * wallDt;
+    // advance bodies and gas together in short chunks so fast-moving accretors (neutron stars) never outrun their own gas
+    const want = wallDt * SPEEDS[speedIdx] * slow;
+    const chunk = gN > 0 && bodies.some(isNS) ? 0.004 : 0.02;
+    const K = clamp(Math.ceil(want / chunk), 1, 40);
+    let simDt = 0;
+    frameSim = 0;
+    for (let k = 0; k < K; k++) {
+      const d = stepBodies(want / K);
+      stepGas(d); stellarProcesses(d); simDt += d;
+    }
+    frameSim = simDt;
+    while (mspQueue.length) { const ns = mspQueue.shift(); toast('Millisecond pulsar', [`Accretion spun the neutron star up to ${Math.round(ns.spinHz)} turns per second (period ${(1000 / ns.spinHz).toFixed(1)} ms)`, 'This is how most millisecond pulsars are thought to form: “recycled” by a companion'], 'w'); }
+    for (const ns of bodies.filter(isNS)) if (ns.m > 2.3) { // accretion-induced collapse
+      const bhn = makeBH(ns.x, ns.y, ns.vx, ns.vy, ns.m, Math.min(0.7, ns.spinHz / 1000));
+      bodies = bodies.filter(o => o !== ns); bodies.push(bhn);
+      toast('Collapse to a black hole', [`The neutron star grew to ${fmtM(ns.m)} M☉, past the ~2.3 M☉ limit, and collapsed`]);
+    }
+    for (const b of bodies) {
+      if (b.kind === 'bh') {
+        updateKerr(b);
+        if (simDt > 0) b.feedRate += (b.fedFrame / simDt - b.feedRate) * Math.min(1, simDt * 1.5);
+        if (b.ring && simTime - b.ring.t0 > 12 * b.ring.tau) b.ring = null;
+      }
+      if (opt.trails && frameN % 2 === 0) { b.trail.push([b.x, b.y]); if (b.trail.length > 260) b.trail.shift(); }
+    }
+  }
+  updateGW();
+  updateAudio();
+  if (followId != null) { // the followed object merged, was swallowed or was shredded: follow whatever took its place
+    const b = bodies.find(o => o.id === followId);
+    if (b) followPos = [b.x, b.y];
+    else {
+      let best = null, bd = Infinity;
+      if (followPos) for (const o of bodies) { const d = Math.hypot(o.x - followPos[0], o.y - followPos[1]) / Math.sqrt(o.m); if (d < bd) { bd = d; best = o; } }
+      followId = best ? best.id : null; followPos = best ? [best.x, best.y] : null;
+    }
+  }
+  if (opt.follow && bodies.length) {
+    // carry the camera along with the target's own motion, then ease out any remaining offset
+    const c = com(); const k = Math.min(1, 2.5 * wallDt);
+    camX += c.vx * frameSim; camY += c.vy * frameSim;
+    camX += (c.x - camX) * k; camY += (c.y - camY) * k;
+  }
+  drawScene(); composite(); drawOverlay(); drawScope();
+  renderMoveCtx(false);
+  // frame-time governor: shrink the gas budget on slow devices, grow it back when there is headroom
+  workMs += (performance.now() - tWork - workMs) * 0.1;
+  if (workMs > 20) gasCap = Math.max(900, gasCap * 0.985);
+  else if (workMs < 10) gasCap = Math.min(MAXG - 800, gasCap + 8);
+  if (frameN % 8 === 0) {
+    let nb = 0, ns = 0, mb = 0;
+    for (const b of bodies) { if (b.kind === 'bh') { nb++; mb += b.m; } else ns++; }
+    $('fgw').textContent = fgwText;
+    $('readouts').innerHTML = `<span><b>${nb}</b> holes · <b>${ns}</b> stars · <b>${gN}</b> gas</span><span>M<sub>BH</sub> <b>${fmtM(mb)}</b> M☉</span><span>fed <b>${totalFed.toFixed(3)}</b> M☉</span><span>view <b>${fmtKm(vw / zoom * KM_PER_UNIT)}</b> km</span>`;
+  }
+}
+
+resize();
+setTool('move');
+drawGizmo();
+syncPlay(); syncToggles();
+presetSel.value = currentPreset;
+loadPreset(currentPreset);
+requestAnimationFrame(t => { last = t; wallNow = t; frame(t); });
+})();
+</script>
+
+</body>
+</html>
