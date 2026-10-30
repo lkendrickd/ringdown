@@ -82,6 +82,13 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
 .legend span.x::before{background:#b9a3ff;opacity:.8}
 .legend{flex-wrap:wrap;row-gap:2px}
 
+.sharepop{position:fixed;z-index:9;top:calc(env(safe-area-inset-top,0px) + 54px);right:max(16px,env(safe-area-inset-right,0px));
+  width:min(360px,calc(100% - 32px));background:var(--glass-hi);border:1px solid var(--line);border-radius:12px;padding:12px 13px;
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:flex;flex-direction:column;gap:8px;font-size:13.5px;line-height:1.4}
+.sharepop h2{margin:0;font:600 12px/1 var(--f-ui);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.sharepop .row{display:flex;gap:6px}
+.sharepop input{flex:1;min-width:0;height:32px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--ink);padding:0 8px;font:500 12px var(--f-mono)}
+.sharepop p{margin:0;color:var(--dim)}
 .panel{position:fixed;z-index:7;top:calc(env(safe-area-inset-top,0px) + 58px);right:max(16px,env(safe-area-inset-right,0px));
   width:min(340px,calc(100% - 32px));max-height:calc(100% - 210px);overflow-y:auto;background:var(--glass-hi);border:1px solid var(--line);
   border-radius:14px;padding:14px 16px 16px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);display:flex;flex-direction:column;gap:12px;-webkit-user-select:text;user-select:text}
@@ -160,6 +167,23 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
 .ins-act:disabled{cursor:default;opacity:.7}
 .ins-act.no{border:1px dashed var(--faint);background:transparent;color:var(--dim)}
 .ins-note{margin:-3px 0 0;font-size:12.5px;line-height:1.35;color:var(--dim)}
+.ins-acts{display:flex;flex-wrap:wrap;gap:6px}
+.ins-acts .ins-act{flex:1 1 auto;padding:0 10px}
+.ins-act.age{border-color:rgba(127,211,230,.45);background:rgba(127,211,230,.1);color:#bfeaf3}
+.ins-act.age:hover:not(:disabled){background:rgba(127,211,230,.2)}
+.ins-act.cu{border-color:var(--line);background:rgba(255,255,255,.05);color:var(--ink)}
+.ins-act.cu[aria-pressed="true"]{border-color:rgba(255,179,106,.6);color:var(--accent)}
+.ins-edit{border-top:1px solid var(--line);padding-top:8px}
+.ins-edit summary{cursor:pointer;font:600 12px/1 var(--f-ui);letter-spacing:.16em;text-transform:uppercase;color:var(--dim);list-style:none;display:flex;align-items:center;gap:6px}
+.ins-edit summary::-webkit-details-marker{display:none}
+.ins-edit summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.ins-edit[open] summary::before{transform:rotate(45deg)}
+.ins-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-top:9px}
+.ins-form label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--dim)}
+.ins-form input{width:96px;height:30px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--ink);padding:0 8px;font:500 13px var(--f-mono)}
+.ins-form .follow-x{height:30px}
+.ins-del{margin-top:8px;height:30px;padding:0 10px;border-radius:7px;border:1px solid rgba(255,120,110,.45);background:transparent;color:#ff9a8f;font:600 11.5px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.ins-del.arm{background:rgba(255,120,110,.18);color:#ffd2cc}
 .ins-rows{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px}
 .ins-rows dt{color:var(--dim);white-space:nowrap}
 .ins-rows dd{margin:0;text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:12px;min-width:0;overflow-wrap:anywhere}
@@ -205,6 +229,9 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     <label class="sel"><span class="sr">Scenario</span><select id="preset"></select></label>
     <button class="btn icon" id="play" aria-label="Pause"></button>
     <button class="btn" id="speed" aria-label="Simulation speed">1×</button>
+    <button class="btn icon" id="share" aria-label="Share this setup" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
+    </button>
     <button class="btn icon" id="gear" aria-label="Settings" aria-expanded="false" aria-pressed="false">
       <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
     </button>
@@ -257,6 +284,9 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     <li>Stars above about 8 M☉ can go supernova from the inspector. The iron core collapses, bounces at nuclear density, and the shock stalls until neutrinos reheat it; then it blows the envelope off at thousands of km/s. Stars born above about 20 M☉ leave a black hole here, the rest a neutron star with a kick of a few hundred km/s. Collisions can build stars no galaxy makes on its own: from about 140 to 260 M☉ the star ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ it collapses straight into an intermediate-mass black hole. A real star like that would live a couple of million years first; here it ends at once. In reality the collapse takes a fraction of a second and the shock needs hours to reach a supergiant's surface; here the sequence takes about 5 seconds. Because stars here are drawn far smaller than real ones, ejecta is launched fast enough to escape their exaggerated surface gravity and then coasts away at a realistic 5,000–20,000 km/s. In a tight binary it is launched faster still, to keep the real ratio of ejecta speed to orbital speed (about 50 to 1 in nature), since binaries here are compressed to about 1,000 km.</li>
     <li>White dwarfs are held up by electron pressure, which fails at 1.44 M☉ (the Chandrasekhar limit), and they shrink as they gain mass. Two carbon–oxygen white dwarfs that merge below the limit make one smaller, heavier white dwarf; two helium white dwarfs reignite as a helium-burning hot subdwarf, and a helium plus a carbon–oxygen white dwarf swell into an R Coronae Borealis giant. Past the limit, carbon ignites in a runaway and the whole star explodes as a Type Ia supernova, leaving nothing (some may instead collapse quietly into a neutron star; that outcome isn't modeled). A white dwarf that hits an ordinary star sinks into it.</li>
     <li>Star types follow real classes, each with a real example. Red giants are Sun-like stars in old age and end as white dwarfs; red supergiants like Betelgeuse are massive stars in old age and are the most common supernova progenitors. A supernova's class (II-P, II, IIb, IIn, Ib/c) follows from how much hydrogen envelope the star kept.</li>
+    <li>Age it jumps a star to its next life stage, skipping the time in between, which the button notes. The path depends on birth mass: below about 0.8 M☉ stars outlive the universe so far; up to 8 M☉ they become red giants, puff off a planetary nebula and leave a white dwarf (mass from the initial–final mass relation); heavier ones become supergiants and end in supernovae, and the heaviest pass through luminous-blue-variable and Wolf–Rayet stages first.</li>
+    <li>Spaghettification: the hole pulls harder on a star's near side than its far side, stretching it along the line to the hole and squeezing it sideways. Past the tidal limit it is torn into a long thin stream; the near end is deeper in the hole's gravity, so roughly half the debris is bound and falls back while the rest escapes.</li>
+    <li>Sgr A*, the 4.3 million M☉ hole at the center of our galaxy, with five of the S-stars that orbit it on their measured periods and eccentricities (S2: 16 years, swinging to 120 AU at closest approach; S4714: so eccentric it passes within 13 AU). The real orbits are tilted every which way; here they share one plane. This scene runs at true scale with stars at their real sizes, and time is sped up so S2 laps the hole in about half a minute; the readout shows what a screen-second is in real time. S2's orbit really precesses by 12 arcminutes per lap, as general relativity predicts (measured by the GRAVITY team in 2020), too little to see here. Throw a star at the hole to see a galactic-center tidal disruption; time slows down automatically so the debris can be followed.</li>
     <li>Click any object to inspect it. Masses and rates are live; rates are per second of simulation time, and orbital periods are given in real seconds.</li>
     <li>Not to scale: ordinary stars are drawn thousands of times smaller than life (a white dwarf is really Earth-sized, about 500× a neutron star, but here only 1.6×), and mass transfer runs fast enough to watch.</li>
   </ul>
@@ -269,6 +299,11 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
 </nav>
 
 <aside class="inspect" id="inspect" hidden aria-label="Selected object"></aside>
+<div class="sharepop" id="sharepop" hidden role="dialog" aria-label="Share this setup">
+  <h2>Share this setup</h2>
+  <div class="row"><label class="sr" for="shareUrl">Link</label><input id="shareUrl" readonly><button class="follow-x" id="shareCopy" type="button">Copy</button></div>
+  <p id="shareNote"></p>
+</div>
 
 <div class="gizmo" id="gizmo" tabindex="0" role="group" aria-label="View dial"><canvas id="gizmoCv"></canvas></div>
 
@@ -294,28 +329,29 @@ const MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
 // Star types, grouped as the toolbar shows them. R is the drawn radius in sim units: ordered like real stars,
 // but thousands of times smaller than life (except neutron stars, which are true size).
 const STAR_TYPES = [
-  { g:1, id:'NS',  name:'Neutron star',     short:'Neutron star', m:1.4, R:1.0, T:1e6, col:[200,230,255], kind:'ns' },
-  { g:2, id:'BD',  name:'Brown dwarf',      short:'Brown dwarf', m:0.05, R:0.9, T:1800, col:[176,84,60], kind:'bd' },
-  { g:2, id:'M',   name:'M dwarf', eg:'like Proxima Centauri',          short:'M dwarf',   m:0.3, R:2.0, T:3200,  col:[255,132,88],  kind:'ms' },
-  { g:2, id:'K',   name:'K dwarf',          short:'K dwarf',   m:0.7, R:2.8, T:4400,  col:[255,188,118], kind:'ms' },
-  { g:2, id:'G',   name:'G dwarf', eg:'like the Sun', short:'G · Sun-like', m:1.0, R:3.4, T:5800, col:[255,230,165], kind:'ms' },
-  { g:2, id:'F',   name:'F star',           short:'F star',    m:1.4, R:4.0, T:6700,  col:[255,246,226], kind:'ms' },
-  { g:2, id:'A',   name:'A star',           short:'A star',    m:2.0, R:5.0, T:8800,  col:[224,233,255], kind:'ms' },
-  { g:2, id:'B',   name:'B star',           short:'B star',    m:6.0, R:7.0, T:18000, col:[168,196,255], kind:'ms' },
-  { g:2, id:'O',   name:'O star',           short:'O star',    m:20,  R:10,  T:38000, col:[138,172,255], kind:'ms' },
-  { g:3, id:'RG',  name:'Red giant', eg:'like Arcturus',        short:'Red giant', m:1.2, R:22,  T:3900,  col:[255,116,72],  kind:'giant', core:0.35 },
-  { g:3, id:'YSG', name:'Yellow supergiant', eg:'like Polaris', short:'Yellow supergiant', m:6, R:26, T:6000, col:[255,232,160], kind:'giant', core:1.8 },
-  { g:3, id:'RSG', name:'Red supergiant', eg:'like Betelgeuse', short:'Red supergiant', m:18, R:46, T:3500, col:[255,94,58], kind:'giant', core:6 },
-  { g:3, id:'BSG', name:'Blue supergiant', eg:'like Rigel',  short:'Blue supergiant', m:25, R:30, T:22000, col:[122,164,255], kind:'giant', core:9 },
-  { g:3, id:'LBV', name:'Luminous blue variable', eg:'like Eta Carinae', short:'Luminous blue variable', m:90, R:28, T:20000, col:[178,206,255], kind:'giant', core:40 },
-  { g:3, id:'WR',  name:'Wolf–Rayet star', eg:'like WR 104',  short:'Wolf–Rayet', m:12, R:4.2, T:60000, col:[150,186,255], kind:'ms' },
-  { g:4, id:'WD',  name:'White dwarf', eg:'like Sirius B',      short:'White dwarf', m:0.8, R:1.6, T:20000, col:[236,242,255], kind:'wd' },
-  { g:4, id:'HeWD', name:'Helium white dwarf', short:'He white dwarf', m:0.35, R:1.9, T:25000, col:[226,236,255], kind:'wd' },
-  { g:4, id:'sdB', name:'Hot subdwarf',     short:'Hot subdwarf', m:0.5, R:2.4, T:30000, col:[176,200,255], kind:'ms' },
-  { g:4, id:'RCB', name:'R Coronae Borealis star', eg:'like R CrB itself', short:'R CrB star', m:0.9, R:14, T:6500, col:[255,224,168], kind:'giant', core:0.8 },
+  { g:1, id:'NS', Rsun:1.72e-05,  name:'Neutron star',     short:'Neutron star', m:1.4, R:1.0, T:1e6, col:[200,230,255], kind:'ns' },
+  { g:2, id:'BD', Rsun:0.1,  name:'Brown dwarf',      short:'Brown dwarf', m:0.05, R:0.9, T:1800, col:[176,84,60], kind:'bd' },
+  { g:2, id:'M', Rsun:0.3,   name:'M dwarf', eg:'like Proxima Centauri',          short:'M dwarf',   m:0.3, R:2.0, T:3200,  col:[255,132,88],  kind:'ms' },
+  { g:2, id:'K', Rsun:0.75,   name:'K dwarf',          short:'K dwarf',   m:0.7, R:2.8, T:4400,  col:[255,188,118], kind:'ms' },
+  { g:2, id:'G', Rsun:1.0,   name:'G dwarf', eg:'like the Sun', short:'G · Sun-like', m:1.0, R:3.4, T:5800, col:[255,230,165], kind:'ms' },
+  { g:2, id:'F', Rsun:1.3,   name:'F star',           short:'F star',    m:1.4, R:4.0, T:6700,  col:[255,246,226], kind:'ms' },
+  { g:2, id:'A', Rsun:1.8,   name:'A star',           short:'A star',    m:2.0, R:5.0, T:8800,  col:[224,233,255], kind:'ms' },
+  { g:2, id:'B', Rsun:3.5,   name:'B star',           short:'B star',    m:6.0, R:7.0, T:18000, col:[168,196,255], kind:'ms' },
+  { g:2, id:'O', Rsun:10,   name:'O star',           short:'O star',    m:20,  R:10,  T:38000, col:[138,172,255], kind:'ms' },
+  { g:3, id:'RG', Rsun:25,  name:'Red giant', eg:'like Arcturus',        short:'Red giant', m:1.2, R:22,  T:3900,  col:[255,116,72],  kind:'giant', core:0.35 },
+  { g:3, id:'YSG', Rsun:46, name:'Yellow supergiant', eg:'like Polaris', short:'Yellow supergiant', m:6, R:26, T:6000, col:[255,232,160], kind:'giant', core:1.8 },
+  { g:3, id:'RSG', Rsun:760, name:'Red supergiant', eg:'like Betelgeuse', short:'Red supergiant', m:18, R:46, T:3500, col:[255,94,58], kind:'giant', core:6 },
+  { g:3, id:'BSG', Rsun:78, name:'Blue supergiant', eg:'like Rigel',  short:'Blue supergiant', m:25, R:30, T:22000, col:[122,164,255], kind:'giant', core:9 },
+  { g:3, id:'LBV', Rsun:100, name:'Luminous blue variable', eg:'like Eta Carinae', short:'Luminous blue variable', m:90, R:28, T:20000, col:[178,206,255], kind:'giant', core:40 },
+  { g:3, id:'WR', Rsun:1.5,  name:'Wolf–Rayet star', eg:'like WR 104',  short:'Wolf–Rayet', m:12, R:4.2, T:60000, col:[150,186,255], kind:'ms' },
+  { g:4, id:'WD', Rsun:0.011,  name:'White dwarf', eg:'like Sirius B',      short:'White dwarf', m:0.8, R:1.6, T:20000, col:[236,242,255], kind:'wd' },
+  { g:4, id:'HeWD', Rsun:0.02, name:'Helium white dwarf', short:'He white dwarf', m:0.35, R:1.9, T:25000, col:[226,236,255], kind:'wd' },
+  { g:4, id:'sdB', Rsun:0.2, name:'Hot subdwarf',     short:'Hot subdwarf', m:0.5, R:2.4, T:30000, col:[176,200,255], kind:'ms' },
+  { g:4, id:'RCB', Rsun:70, name:'R Coronae Borealis star', eg:'like R CrB itself', short:'R CrB star', m:0.9, R:14, T:6500, col:[255,224,168], kind:'giant', core:0.8 },
 ];
+const RSUN_U = 696000 / KM_PER_UNIT; // one solar radius in sim units
 // lowercase name for use mid-sentence, keeping proper names (Wolf–Rayet, R Coronae Borealis) capitalized
-for (const t of STAR_TYPES) t.lc = /Wolf|Coronae/.test(t.name) ? t.name : t.name.toLowerCase();
+for (const t of STAR_TYPES) t.lc = /Wolf|Coronae/.test(t.name) ? t.name : /^[A-Z] /.test(t.name) ? t.name[0] + t.name.slice(1).toLowerCase() : t.name.toLowerCase();
 const TYPE = Object.fromEntries(STAR_TYPES.map(t => [t.id, t]));
 
 /* ================= state ================= */
@@ -334,6 +370,9 @@ let bhMass = 30, bhSpin = 0;
 let camX = 0, camY = 0, zoom = 1;
 let tiltDeg = 0, cosI = 1, sinI = 0, yaw = 0, cY = 1, sY = 0;
 let followId = null, followPos = null; // null = automatic focus
+let warp = 1;          // sim seconds per screen second at 1x speed (huge for the galactic-center scene)
+let realSizes = false; // stars placed at their true radii (galactic-center scene)
+let tdeSlowUntil = -1e9, tdeSlow = 1 / 40, breakFrame = false, trailEvery = 2;
 let shake = -1e9, shX = 0, shY = 0;   // brief camera shake when something explodes
 const placed = [];                     // ids of objects the viewer placed, for undo
 let totalFed = 0, totalWind = 0;
@@ -367,7 +406,8 @@ function makeBH(x, y, vx, vy, m, chi = 0) {
 }
 function makeStar(tid, x, y, vx, vy, m) {
   const t = TYPE[tid], mm = m || t.m;
-  const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:t.R, R0:t.R, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false,
+  const R0 = realSizes ? t.Rsun * RSUN_U * (t.kind === 'ms' ? Math.pow(mm / t.m, 0.8) : 1) : t.R;
+  const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:R0, R0, real: realSizes, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false,
     core: t.core ? t.core * mm / t.m : 0, ep: null, passes: 0, mBirth: mm };
   if (t.kind === 'ns') { s.spinHz = 1 + 3 * Math.random(); s.beamPh = Math.random() * 6.28; s.msp = false; }
   return s;
@@ -390,7 +430,8 @@ const bhList = () => bodies.filter(b => b.kind === 'bh');
 
 /* ================= helpers ================= */
 function rocheFrac(q) { const q13 = Math.cbrt(q), q23 = q13 * q13; return 0.49 * q23 / (0.6 * q23 + Math.log(1 + q13)); }
-function fmtM(m) { return m >= 10 ? m.toFixed(1) : m.toFixed(2); }
+function fmtM(m) { return m >= 1e5 ? `${(m / 1e6).toFixed(2)} million` : m >= 10 ? m.toFixed(1) : m.toFixed(2); }
+function fmtDist(km) { return km >= 1.5e7 ? `${(km / 1.496e8).toFixed(km < 1.5e9 ? 2 : km < 1.5e10 ? 1 : 0)} AU` : `${fmtKm(km)} km`; }
 function fmtKm(km) { return km >= 1000 ? Math.round(km).toLocaleString('en-US') : Math.round(km).toString(); }
 function fmtHz(f) { return f >= 1000 ? (f / 1000).toFixed(1) + ' kHz' : (f < 10 ? f.toFixed(1) : Math.round(f)) + ' Hz'; }
 function fmtChi(c) { return (c >= 0 ? '+' : '−') + Math.abs(c).toFixed(2); }
@@ -491,6 +532,20 @@ const PRESETS = {
   nova:     { name:'Nova · K dwarf feeding a white dwarf', extent:24, build() {
       const wd = makeStar('WD', 0, 0, 0, 0, 1.0); const st = makeStar('K', 0, 0, 0, 0);
       bodies.push(wd, st); orbitAround(wd, st, 2.8 / (1.03 * rocheFrac(0.7 / 1.0)), 0); } },
+  sgra:     { name:'Sgr A* · the S-stars at the galactic center', extent:1500 * 1.496e8 / KM_PER_UNIT, real:true, trailEvery: 7,
+    // S2's 16.05-year orbit takes about 32 screen seconds
+    warp: 16.05 * 3.156e7 / SIM2REAL / 32,
+    build() {
+      const hole = makeBH(0, 0, 0, 0, 4.3e6, 0.5); hole.label = 'Sgr A*'; bodies.push(hole);
+      // name, type, mass, period (yr), eccentricity: orbits from GRAVITY/Keck fits, all drawn in one plane
+      const S = [['S2','B',14,16.05,0.884],['S38','B',8,19.2,0.818],['S55','A',2.5,12.8,0.72],['S4711','A',2.2,7.6,0.768],['S4714','A',2,12.0,0.985]];
+      S.forEach(([name, t, m, P, e], i) => {
+        const st = makeStar(t, 0, 0, 0, 0, m); st.label = name;
+        const aAU = Math.cbrt(P * P * (4.3e6 + m));
+        keplerPlace(hole, st, aAU, e, i * 1.31 + 0.4, i % 2 ? -1 : 1, (i * 2.1) % (2 * Math.PI));
+        bodies.push(st);
+      }); } },
+  spaghetti: { name:'Spaghettification close-up', extent:300, after() { const st = bodies.find(b => b.kind === 'star'); if (st) toggleCloseUp(st); }, build() { PRESETS.tde.build(); bodies = bodies.filter(b => !(b.kind === 'star' && b.type.id === 'K')); } },
   tde:      { name:'Tidal disruption', extent:300, build() {
       const M = 20, bh = makeBH(0, 0, 0, 0, M); const st = makeStar('RG', 0, 0, 0, 0);
       const rs = rsOf(M), rt = st.R / rocheFrac(st.m / M), rp = 0.45 * rt, r0 = 430;
@@ -502,10 +557,16 @@ const PRESETS = {
       const k = makeStar('K', 0, 0, 0, 0); bodies.push(k); orbitAround(bh, k, 170, 0.6); } },
   betelgeuse: { name:'Betelgeuse-like red supergiant', extent:110, build() {
       bodies.push(makeStar('RSG', 0, 0, 0, 0)); } },
-  zoo:      { name:'Stellar zoo', extent:330, build() {
-      const bh = makeBH(0, 0, 0, 0, 25); bodies.push(bh);
-      const plan = [['WD',40],['M',62],['K',88],['G',118],['F',152],['A',192],['B',245],['RG',320]];
-      plan.forEach(([t, r], i) => { const s = makeStar(t, 0, 0, 0, 0); bodies.push(s); orbitAround(bh, s, r, i * 2.39996); }); } },
+  zoo:      { name:'Stellar zoo', extent:3500, build() {
+      // a 300 Msun hole; orbits start well outside its innermost stable orbit (225 units) and are spaced 1.4x apart,
+      // so each star stays clear of its neighbors' pull
+      const bh = makeBH(0, 0, 0, 0, 300); bodies.push(bh);
+      const plan = [['WD',320],['M',448],['K',627],['G',878],['F',1229],['A',1721],['B',2409],['RG',3373]];
+      // place every star around a fixed hole, then remove the system's net momentum once
+      // (letting each placement nudge the hole would leave earlier stars on oval orbits)
+      plan.forEach(([t, r], i) => { const s = makeStar(t, 0, 0, 0, 0); bodies.push(s); orbitAround(bh, s, r, i * 2.39996); bh.vx = 0; bh.vy = 0; });
+      let px = 0, py = 0, M = 0; for (const b of bodies) { px += b.m * b.vx; py += b.m * b.vy; M += b.m; }
+      for (const b of bodies) { b.vx -= px / M; b.vy -= py / M; } } },
   chaos:    { name:'Three-body chaos', extent:150, build() {
       const m = 25, R = 62, s = R * Math.sqrt(3), w = Math.sqrt(G * 3 * m / (s * s * s));
       for (let k = 0; k < 3; k++) {
@@ -516,17 +577,31 @@ const PRESETS = {
   empty:    { name:'Empty space', extent:200, build() {} },
 };
 
+// place `b` on a Keplerian orbit around `host` (at rest at the origin of its own motion)
+function keplerPlace(host, b, aAU, e, omega, sense, meanAnom) {
+  const AU = 1.496e8 / KM_PER_UNIT, a = aAU * AU, GM = G * (host.m + b.m);
+  let E = meanAnom; for (let k = 0; k < 30; k++) E -= (E - e * Math.sin(E) - meanAnom) / (1 - e * Math.cos(E));
+  const nu = 2 * Math.atan2(Math.sqrt(1 + e) * Math.sin(E / 2), Math.sqrt(1 - e) * Math.cos(E / 2));
+  const r = a * (1 - e * Math.cos(E)), p = a * (1 - e * e), vk = Math.sqrt(GM / p);
+  let x = r * Math.cos(nu), y = r * Math.sin(nu), vx = -vk * Math.sin(nu), vy = vk * (e + Math.cos(nu));
+  if (sense < 0) { y = -y; vy = -vy; }
+  const c = Math.cos(omega), s = Math.sin(omega);
+  b.x = host.x + x * c - y * s; b.y = host.y + x * s + y * c; b.vx = host.vx + vx * c - vy * s; b.vy = host.vy + vx * s + vy * c;
+}
 function loadPreset(id) {
   currentPreset = id;
+  warp = PRESETS[id].warp || 1; realSizes = !!PRESETS[id].real; tdeSlowUntil = -1e9; trailEvery = PRESETS[id].trailEvery || 2;
   if (typeof toastsEl !== 'undefined') toastsEl.replaceChildren();
   bodies = []; gN = 0; gwSrc = null; slow = 1; slowHoldUntil = -1; totalFed = 0; totalWind = 0; simTime = 0; flashes.length = 0; if (typeof xrBuf !== 'undefined') xrBuf.fill(0);
   scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0);
   setTilt(PRESETS[id].tilt || 0); setYaw(0);
   followId = null; followPos = null; placed.length = 0;
+  closeUpId = null; closeUpDrift = null;
   PRESETS[id].build();
   fitView(PRESETS[id].extent);
   opt.follow = true; syncToggles();
   computeAccel();
+  if (PRESETS[id].after) PRESETS[id].after();
 }
 // What the camera centers on. Automatic: the heaviest object, or the barycenter of it and any bound partner
 // with at least 30% of its mass (a true binary). Otherwise the object the viewer clicked.
@@ -560,7 +635,7 @@ function focusLabel() {
 function fitView(extent) {
   const c = com(); camX = c.x; camY = c.y;
   const usable = Math.max(200, Math.min(vw, vh - 250));
-  zoom = clamp(usable / (2 * extent), 0.03, 30);
+  zoom = clamp(usable / (2 * extent), 1e-12, 30);
 }
 function fitBodies() {
   const c = com(); let r = 8;
@@ -639,10 +714,9 @@ function mergeDist(a, b) {
   return 1.3 * (a.R + b.R);
 }
 
-function stepBodies(simDt) {
-  const n = bodies.length;
-  if (!n) { simTime += simDt; return simDt; }
-  let tmin = Infinity;
+// shortest dynamical time among close pairs: the step size has to resolve it
+function dynTime() {
+  const n = bodies.length; let tmin = Infinity;
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
     const a = bodies[i], b = bodies[j];
     const r = Math.hypot(b.x - a.x, b.y - a.y);
@@ -654,21 +728,27 @@ function stepBodies(simDt) {
     const t2 = rv > 0 ? 2 * rr / rv : Infinity;
     tmin = Math.min(tmin, t1, t2);
   }
-  const dtMax = isFinite(tmin) ? 0.02 * tmin : simDt;
+  return tmin;
+}
+// Kick-drift-kick leapfrog with the step re-chosen every step, so a plunge through pericenter in the middle of a
+// long (time-warped) frame is still resolved. Past 240 steps it stops early: time dilates instead of losing accuracy.
+function stepBodies(simDt) {
+  if (!bodies.length) { simTime += simDt; return simDt; }
   const CAP = 240;
-  if (simDt / dtMax > CAP) simDt = dtMax * CAP; // dilate time instead of losing accuracy
-  const ns = Math.max(1, Math.ceil(simDt / dtMax));
-  const dt = simDt / ns;
+  let left = simDt, steps = 0;
   computeAccel();
-  for (let k = 0; k < ns; k++) {
+  while (left > simDt * 1e-9 && steps < CAP) {
+    const tmin = dynTime();
+    const dt = Math.min(left, isFinite(tmin) ? 0.02 * tmin : left);
     for (const b of bodies) { b.vx += 0.5 * dt * b.ax; b.vy += 0.5 * dt * b.ay; b.x += dt * b.vx; b.y += dt * b.vy; }
     computeAccel();
     for (const b of bodies) { b.vx += 0.5 * dt * b.ax; b.vy += 0.5 * dt * b.ay; }
-    simTime += dt;
+    simTime += dt; left -= dt; steps++;
     let guard = 0;
     while (collisions() && guard++ < 6) computeAccel();
+    if (!bodies.length) { simTime += left; left = 0; }
   }
-  return simDt;
+  return simDt - left;
 }
 
 function collisions() {
@@ -827,6 +907,7 @@ function mergeStars(a, b) {
 // Below it a merger leaves one smaller, heavier white dwarf (they shrink as they gain mass);
 // above it carbon ignites in a runaway and the whole star explodes as a Type Ia supernova.
 const M_CH = 1.44;
+function sized(b, Rsim, t) { return b.real ? Rsim / t.R * t.Rsun * RSUN_U : Rsim; }
 function wdRadius(m) { return clamp(TYPE.WD.R * Math.pow(m / 0.8, -1 / 3) * Math.sqrt(Math.max(0.05, 1 - Math.pow(m / M_CH, 4 / 3))) / 0.737, 0.6, 2.6); }
 function mergeWhiteDwarfs(a, b) {
   const big = a.m >= b.m ? a : b, small = big === a ? b : a, M = a.m + b.m;
@@ -834,7 +915,7 @@ function mergeWhiteDwarfs(a, b) {
   big.x = (a.x * a.m + b.x * b.m) / M; big.y = (a.y * a.m + b.y * b.m) / M;
   big.m = M; big.m0 = M; big.mBirth = M;
   if (big.type.id === 'HeWD' && M > 0.5 && !(a.type.id === 'HeWD' && b.type.id === 'HeWD')) big.type = TYPE.WD;
-  big.R = big.R0 = wdRadius(Math.min(M, M_CH * 0.99));
+  big.R = big.R0 = sized(big, wdRadius(Math.min(M, M_CH * 0.99)), TYPE.WD);
   bodies = bodies.filter(o => o !== small);
   if (followId === small.id) followId = big.id;
   const heA = a.type.id === 'HeWD', heB = b.type.id === 'HeWD';
@@ -952,7 +1033,7 @@ function commonEnvelope(st, host, r) {
   const t = core < 0.5 ? TYPE.HeWD : core < 2.5 ? TYPE.sdB : TYPE.WR;
   const oldR = st.R;
   retype(st, t); st.m = core; st.m0 = core; st.mBirth = Math.max(st.mBirth, core);
-  if (t === TYPE.WR) st.R = st.R0 = 2.4; // a stripped core is compact
+  if (t === TYPE.WR) st.R = st.R0 = sized(st, 2.4, TYPE.WR); // a stripped core is compact
   const touch = host.kind === 'bh' ? 1.5 * host.kP * rsOf(host.m) : host.R;
   const aTrue = ratio * r, aDraw = Math.max(aTrue, 3.5 * (st.R + touch));
   const Mn = core + ma, ang = Math.atan2(st.y - host.y, st.x - host.x);
@@ -1081,8 +1162,129 @@ function snClass(st) {
   if (id === 'YSG') return 'Type IIb: only a thin layer of hydrogen was left';
   return 'Type II: hydrogen lines in its light';
 }
+/* ---------- star aging ----------
+   A star's life is set by the mass it was born with. Each press of "Age it" jumps to its next stage,
+   skipping the millions or billions of years in between (shown in the inspector). */
+const msLife = m => 1e10 * Math.pow(m, -2.5);           // main-sequence lifetime, years
+const wdMassFor = mi => clamp(0.109 * mi + 0.394, 0.5, 1.38); // initial-final mass relation for white dwarfs
+function fmtYears(y) { return y >= 1e9 ? `${(y / 1e9).toFixed(y >= 1e10 ? 0 : 1)} billion years` : y >= 1e6 ? `${Math.round(y / 1e6)} million years` : `${Math.round(y / 1e3).toLocaleString('en-US')} thousand years`; }
+const STAGE_NAME = { RG:'red giant', RSG:'red supergiant', BSG:'blue supergiant', LBV:'luminous blue variable', WR:'Wolf–Rayet star', PN:'white dwarf', SN:'supernova', WD:'white dwarf' };
+function lifeTrack(b) {
+  if (b.kind !== 'star' || isNS(b)) return null;
+  const m = b.mBirth || b.m, id = b.type.id, ms = b.type.kind === 'ms' && !['WR', 'sdB'].includes(id);
+  if (id === 'BD') return { stages: [id], note: 'A brown dwarf never fuses hydrogen. It just cools and fades.' };
+  if (b.type.kind === 'wd') return { stages: [id], note: 'A white dwarf only cools from here, for far longer than the universe has existed. It changes only if something feeds it.' };
+  if (id === 'sdB') return { stages: [id, 'WD'], wait: 1e8 };
+  if (id === 'RCB') return { stages: [id, 'WD'], wait: 1e5 };
+  if (id === 'WR') return { stages: [id, 'SN'], wait: 3e5 };
+  if (id === 'LBV') return { stages: [id, 'WR', 'SN'], wait: 1e5 };
+  if (id === 'RSG' || id === 'BSG') return { stages: [id, 'SN'], wait: id === 'RSG' ? 1e6 : 5e5 };
+  if (id === 'RG' || id === 'YSG') return { stages: [id, 'PN'], wait: 0.1 * msLife(m) };
+  if (!ms) return null;
+  if (m < 0.8) return { stages: [id], note: `It will burn hydrogen for ${fmtYears(msLife(m))}, longer than the universe is old, so no star like it has aged yet.` };
+  const wait = msLife(m);
+  if (m < 8) return { stages: [id, 'RG', 'PN'], wait };
+  if (m < 25) return { stages: [id, 'RSG', 'SN'], wait };
+  if (m < 40) return { stages: [id, 'BSG', 'SN'], wait };
+  return { stages: [id, 'LBV', 'WR', 'SN'], wait };
+}
+// drawn radius for a new stage (stars here are not to scale; the ordering follows real ones)
+function stageRadius(id, m) {
+  return id === 'RG' ? 22 * Math.pow(m / 1.2, 0.4) : id === 'RSG' ? 46 * Math.pow(m / 18, 0.5) : id === 'BSG' ? 30 * Math.pow(m / 25, 0.4)
+    : id === 'LBV' ? 28 * Math.pow(m / 90, 0.3) : TYPE[id].R;
+}
+function ejectShell(st, mass, vmin, vmax, N) { // a slow, glowing shell of gas leaving a star
+  N = Math.min(N, MAXG - gN);
+  for (let k = 0; k < N; k++) {
+    const a = Math.random() * Math.PI * 2, rr = st.R * (0.9 + 0.4 * Math.random()), x = st.x + Math.cos(a) * rr, y = st.y + Math.sin(a) * rr;
+    const vInf = (vmin + (vmax - vmin) * Math.random()) * C, ve = escapeSpeed(x, y, st), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
+    if (addGas(x, y, st.vx + Math.cos(a) * sp, st.vy + Math.sin(a) * sp, mass / Math.max(N, 1), st.id)) gf[gN - 1] = 3;
+  }
+}
+// skipping ahead in time: gas this star shed earlier would long since have drifted away
+function clearShedGas(b) { for (let i = 0; i < gN; i++) if (gsrc[i] === b.id && gf[i] === 3) { removeGas(i); i--; } }
+function ageStar(b) {
+  const tr = lifeTrack(b); if (!tr || tr.stages.length < 2 || b.grow || b.sn) return;
+  clearShedGas(b);
+  const next = tr.stages[1], m = b.mBirth || b.m, from = b.type.lc, when = fmtYears(tr.wait || 0);
+  if (next === 'SN') {
+    if (!canSupernova(b)) return;
+    startSupernova(b);
+    toast('Out of fuel', [`After about ${when} more, the ${from}'s core is iron, which can't be burned for energy`, 'With nothing holding it up, the core collapses'], 'w');
+    return;
+  }
+  if (next === 'PN' || next === 'WD') { // the outer layers drift off; the core is left as a white dwarf
+    const mw = b.type.id === 'sdB' || b.type.id === 'RCB' ? Math.min(b.m, 1.2) : Math.min(wdMassFor(m), b.m);
+    const lost = b.m - mw;
+    if (lost > 0.001) ejectShell(b, lost, 0.0005, 0.002, 500);
+    retype(b, mw < 0.5 ? TYPE.HeWD : TYPE.WD); b.m = b.m0 = mw;
+    b.R = b.R0 = sized(b, wdRadius(Math.min(mw, M_CH * 0.99)), TYPE.WD);
+    flashes.push({ x: b.x, y: b.y, t0: wallNow, dur: 5000, kind: 'sn', R: 10, power: 0.25, st: simTime });
+    toast(lost > 0.01 ? 'Planetary nebula' : 'Settled into a white dwarf', lost > 0.01
+      ? [`After about ${when} more, the ${from} puffed off its outer ${fmtM(lost)} M☉ as a glowing shell`, `Its ${fmtM(mw)} M☉ core is left as a white dwarf, about the size of Earth`]
+      : [`After about ${when}, the ${from} has used up its helium and settled into a ${fmtM(mw)} M☉ white dwarf`], 'w');
+    return;
+  }
+  // swell into the next stage, shedding some mass in a wind on the way
+  const t = TYPE[next], windFrac = next === 'RSG' ? 0.12 : next === 'BSG' ? 0.1 : next === 'LBV' ? 0.2 : next === 'WR' ? 0.55 : 0;
+  const lost = b.m * windFrac;
+  if (lost > 0.001) ejectShell(b, lost, 0.002, 0.006, 400);
+  const R0 = b.R;
+  retype(b, t); b.m = b.m0 = b.m - lost;
+  b.core = next === 'RG' ? wdMassFor(m) : next === 'RSG' ? 0.33 * m : next === 'BSG' ? 0.36 * m : next === 'LBV' ? 0.45 * m : 0;
+  const R1 = sized(b, stageRadius(next, b.m), t);
+  b.R = b.R0 = R0; b.grow = { t0: wallNow, R0, R1, dur: 3200 };
+  const why = next === 'WR' ? `Its winds have stripped the outer layers away, exposing the hot helium core` : `It has burned the hydrogen in its core and is swelling as it starts on helium`;
+  toast(`Now a ${STAGE_NAME[next]}`, [`After about ${when}, the ${from} moved on`, why, lost > 0.001 ? `${fmtM(lost)} M☉ blew away in its wind` : 'Watch it swell; if anything is close, it may start feeding it'], 'w');
+}
+// animate a swelling or shrinking star; its Roche lobe and feeding respond as it grows
+function updateGrowth() {
+  for (const b of bodies) {
+    if (!b.grow) continue;
+    const p = clamp((wallNow - b.grow.t0) / b.grow.dur, 0, 1), e = p * p * (3 - 2 * p);
+    b.R = b.R0 = b.grow.R0 + (b.grow.R1 - b.grow.R0) * e;
+    if (p >= 1) b.grow = null;
+  }
+}
+/* ---------- editing ---------- */
+function massBounds(b) {
+  if (b.kind === 'bh') return [0.5, 1e10];
+  if (isNS(b)) return [1.1, 3];
+  const k = b.type.kind;
+  return k === 'bd' ? [0.01, 0.08] : k === 'wd' ? [0.1, 1.6] : k === 'giant' ? [0.3, 300] : [0.08, 300];
+}
+function applyEdit(b, m, chi) {
+  const [lo, hi] = massBounds(b);
+  if (Number.isFinite(m)) {
+    m = clamp(m, lo, hi);
+    if (b.kind === 'star' && b.type.kind === 'ms' && !isNS(b)) b.R = b.R0 = b.R * Math.pow(m / b.m, 0.8);
+    if (b.kind === 'star' && b.type.kind === 'giant' && b.core) b.core *= m / b.m;
+    b.m = b.m0 = m; if (b.kind === 'star') b.mBirth = m;
+    if (b.kind === 'star' && b.type.kind === 'wd') { b.R = b.R0 = sized(b, wdRadius(Math.min(m, M_CH * 0.99)), TYPE.WD); if (m >= M_CH && !b.sn) { b.sn = { t0: wallNow, mode: 'ia' }; toast('Over the Chandrasekhar limit', [`At ${fmtM(m)} M☉ the white dwarf can't hold itself up`, 'Carbon is about to ignite']); } }
+    if (b.kind === 'star' && (b.type.kind === 'ms' || b.type.kind === 'giant') && m >= 140 && !b.sn) { startSupernova(b); toast('Too massive to survive', [`A ${fmtM(m)} M☉ star is far past the ~150 M☉ that stars can hold together`]); }
+  }
+  if (b.kind === 'bh' && Number.isFinite(chi)) b.chi = clamp(chi, -0.99, 0.99);
+  if (b.kind === 'bh') updateKerr(b);
+  computeAccel();
+}
+function deleteBody(b) {
+  bodies = bodies.filter(o => o !== b);
+  if (followId === b.id) followId = null;
+  if (closeUpId === b.id) closeUpId = null;
+  computeAccel();
+  toast('Removed', [`${describe(b)} taken out of the simulation`]);
+}
+/* ---------- spaghettification close-up ---------- */
+let closeUpId = null, closeUpDrift = null;
+function toggleCloseUp(b) {
+  if (closeUpId === b.id) { closeUpId = null; return; }
+  closeUpId = b.id; followId = b.id; opt.follow = true; syncToggles();
+  toast('Close-up', ['The hole pulls harder on the side of the star facing it than on the far side', 'That difference stretches the star along the line to the hole and squeezes it from the sides'], 'w');
+}
+// how stretched a star looks: grows steeply as it nears the point where it's torn apart
+function stretchOf(b) { const q = clamp((b.f - 0.75) / 0.85, 0, 1); return 1 + 3 * Math.pow(q, 1.6); }
 function retype(st, t, keepMass) {
-  st.type = t; st.m0 = st.m; st.R = st.R0 = t.R; st.core = 0;
+  st.type = t; st.m0 = st.m; st.R = st.R0 = st.real ? t.Rsun * RSUN_U : t.R; st.core = 0;
   st.noted = false; st.emitAcc = 0; st.ep = null; st.f = 0;
 }
 function exposeCore(st) {
@@ -1112,23 +1314,34 @@ function emitL1(st, host, rL, pm) {
   return addGas(x, y, vx, vy, pm, st.id);
 }
 function shred(st, host, r, kind) {
-  const N = Math.min(kind === 'tde' ? 800 : 600, MAXG - gN);
+  const N = Math.min(kind === 'tde' ? 900 : 600, MAXG - gN);
   const rx = st.x - host.x, ry = st.y - host.y;
   const om = (rx * (st.vy - host.vy) - ry * (st.vx - host.vx)) / (r * r || 1);
+  // spaghettified: the debris starts as a long thin noodle pointing at the hole. Its near end sits deeper in
+  // the hole's gravity than its far end, so about half ends up bound (falls back) and half escapes.
+  const nx = -rx / (r || 1), ny = -ry / (r || 1), str = Math.max(stretchOf(st), 3), sq = 1 / Math.sqrt(str);
   for (let k = 0; k < N; k++) {
-    const a = Math.random() * Math.PI * 2, rr = st.R * Math.sqrt(Math.random());
-    const ox = Math.cos(a) * rr, oy = Math.sin(a) * rr;
+    const u = (Math.random() * 2 - 1), w = (Math.random() * 2 - 1) * Math.sqrt(1 - u * u);
+    const ox = (nx * u * str - ny * w * sq) * st.R, oy = (ny * u * str + nx * w * sq) * st.R;
     addGas(st.x + ox, st.y + oy, st.vx - om * oy, st.vy + om * ox, st.m / Math.max(N, 1));
+  }
+  if (closeUpId === st.id) { closeUpId = null; closeUpDrift = { t0: wallNow, vx: st.vx, vy: st.vy, z0: zoom }; }
+  if (host.kind === 'bh' && host.m > 1e4) {
+    // a galactic-center disruption happens where orbits take hours, inside a scene that skips weeks per frame:
+    // drop time at once to resolve orbits at this radius (~100 sub-steps per frame) and end this frame here
+    const tdyn = Math.sqrt(r * r * r / (G * host.m));
+    tdeSlow = clamp(60 * tdyn / (warp * SPEEDS[speedIdx]), 1e-6, 0.5); // sized for the longest frame the loop allows (0.05 s)
+    tdeSlowUntil = wallNow + 30000; slow = tdeSlow; breakFrame = true;
   }
   bodies = bodies.filter(o => o !== st);
   if (kind === 'ns') {
-    toast(`${st.type.name} shredded by a neutron star`, [`Torn apart ${fmtKm(r * KM_PER_UNIT)} km from the ${fmtM(host.m)} M☉ neutron star`, 'Its debris forms a disk; the neutron star feeds on it and spins up'], 'w');
+    toast(`${st.type.name} shredded by a neutron star`, [`Torn apart ${fmtDist(r * KM_PER_UNIT)} from the ${fmtM(host.m)} M☉ neutron star`, 'Its debris forms a disk; the neutron star feeds on it and spins up'], 'w');
   } else if (kind === 'nsbh') {
     flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 9000, scale: 0.3 });
     host.grbT = wallNow;
-    toast('Neutron star torn apart', [`Disrupted ${fmtKm(r * KM_PER_UNIT)} km from a ${fmtM(host.m)} M☉ hole spinning at ${fmtChi(host.chi)}`, 'Its debris feeds the hole, launches a jet and lights a kilonova'], 'w');
+    toast('Neutron star torn apart', [`Disrupted ${fmtDist(r * KM_PER_UNIT)} from a ${fmtM(host.m)} M☉ hole spinning at ${fmtChi(host.chi)}`, 'Its debris feeds the hole, launches a jet and lights a kilonova'], 'w');
   } else {
-    toast('Tidal disruption', [`${st.type.name} torn apart ${fmtKm(r * KM_PER_UNIT)} km from a ${fmtM(host.m)} M☉ hole`, 'Half the debris is bound and falls back; the rest escapes']);
+    toast('Tidal disruption', [`${st.type.name} torn apart ${fmtDist(r * KM_PER_UNIT)} from a ${fmtM(host.m)} M☉ hole`, 'Half the debris is bound and falls back; the rest escapes']);
   }
 }
 
@@ -1176,7 +1389,7 @@ function stepGas(simDt) {
   if (!gN || simDt <= 0) return;
   const bh = bodies.filter(isAccretor);
   if (!bh.length) {
-    for (let i = 0; i < gN; i++) { gx[i] += gvx[i] * simDt; gy[i] += gvy[i] * simDt; gage[i] += simDt; if (gage[i] > 300) { removeGas(i); i--; } }
+    for (let i = 0; i < gN; i++) { gx[i] += gvx[i] * simDt; gy[i] += gvy[i] * simDt; gage[i] += simDt / warp; if (gage[i] > 300) { removeGas(i); i--; } }
     return;
   }
   const GG = G * G, C3 = C * C * C;
@@ -1202,7 +1415,7 @@ function stepGas(simDt) {
         if (b.id !== gsrc[i] && (isHole ? r < Math.max(1.05 * b.kPlus * rs, 2.2 * rp) : r < 1.2 * b.R)) {
           accrete(b, gm[i], -dx, -dy, rvx, rvy); dead = true; break;
         }
-        if (r < 30000) far = false;
+        if (r < Math.max(30000, 3000 * rs)) far = false;
         const d = Math.max(r - rp, 0.3 * rp), a = G * b.m / (d * d);
         ax += a * dx / r; ay += a * dy / r;
         if (isHole && b.chi !== 0) { // frame dragging: gravitomagnetic push toward co-rotation
@@ -1243,7 +1456,7 @@ function stepGas(simDt) {
       }
       x += vx * dt; y += vy * dt; rh = r;
     }
-    gage[i] += simDt;
+    gage[i] += simDt / warp;
     if (dead || gage[i] > 400) { removeGas(i); i--; continue; }
     gx[i] = x; gy[i] = y; gvx[i] = vx; gvy[i] = vy;
     gb[i] = clamp(Math.round((1 - Math.log(Math.max(rh / (2.6 * hrp), 1)) / LOG80) * 23), 0, 23);
@@ -1288,7 +1501,7 @@ function updateGW() {
     gwSrc = { mode:'binary', cx:(a.x * a.m + b.x * b.m) / M, cy:(a.y * a.m + b.y * b.m) / M, phi:w.phi, om:w.om, A:w.A, vis:w.vis, sep:r };
     env = w.A; h = w.A * Math.cos(2 * w.phi);
     f = Math.abs(w.om) / Math.PI / SIM2REAL;
-    fgwText = `f_GW ${fmtHz(f)} · ${fmtKm(r * KM_PER_UNIT)} km apart`;
+    fgwText = `f_GW ${fmtHz(f)} · ${fmtDist(r * KM_PER_UNIT)} apart`;
   } else {
     gwSrc = null; fgwText = bodies.length ? 'no binary' : 'no source';
   }
@@ -1601,10 +1814,10 @@ function drawScene() {
     if (b.kind !== 'star') continue;
     const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, R = Math.max(b.R * zoom, 1.6) * s;
     if (b.sn) { drawCollapse(b, X, Y, R, snP(b)); continue; }
-    const e = clamp((b.f - 0.8) / 0.6, 0, 1) * 0.55;
-    if (e > 0.01) {
+    const st = stretchOf(b), e = st - 1;
+    if (e > 0.01) { // tidally stretched toward the hole, squeezed from the sides
       const ang = Math.atan2(toSY(b.hx, b.hy) * s - Y, toSX(b.hx, b.hy) * s - X);
-      sctx.save(); sctx.translate(X, Y); sctx.rotate(ang); sctx.translate(R * e * 0.35, 0); sctx.scale(1 + e, 1 - e * 0.25);
+      sctx.save(); sctx.translate(X, Y); sctx.rotate(ang); sctx.translate(R * e * 0.25, 0); sctx.scale(st, 1 / Math.sqrt(st));
       sctx.drawImage(starCore[b.type.id], -R, -R, 2 * R, 2 * R); sctx.restore();
     } else sctx.drawImage(starCore[b.type.id], X - R, Y - R, 2 * R, 2 * R);
   }
@@ -1869,8 +2082,8 @@ function predictPath(x, y, vx, vy, isBH) {
   };
   let a = acc(px, py); if (!a) return pts;
   const lim = 3 * Math.max(vw, vh) / zoom;
-  for (let k = 0; k < 2000 && t < 10; k++) {
-    const dt = clamp(0.015 * a[2], 0.0002, 0.04);
+  for (let k = 0; k < 2000 && t < 10 * warp; k++) {
+    const dt = clamp(0.015 * a[2], 0.0002 * warp, 0.04 * warp);
     vx += 0.5 * dt * a[0]; vy += 0.5 * dt * a[1]; px += dt * vx; py += dt * vy;
     a = acc(px, py); if (!a) { pts.push([px, py]); break; }
     vx += 0.5 * dt * a[0]; vy += 0.5 * dt * a[1]; t += dt;
@@ -1883,7 +2096,7 @@ function placementVelocity(wx, wy, dxs, dys) {
   const dist = Math.hypot(dxs, dys);
   const host = dominantBH(wx, wy) || dominantAny(wx, wy);
   if (dist < 12) return { circular: true, host };
-  const k = 2.2 * Math.sqrt(zoom), o = scrOff(dxs, dys);
+  const k = warp > 1 ? 1 / (2 * warp) : 2.2 * Math.sqrt(zoom), o = scrOff(dxs, dys);
   return { circular:false, host, vx: (host ? host.vx : 0) + o[0] * k, vy: (host ? host.vy : 0) + o[1] * k };
 }
 function ghost(c, sx, sy) {
@@ -1922,13 +2135,36 @@ function drawOverlay() {
       if (b.kind === 'bh') {
         const R = 2.598 * rsOf(b.m) * zoom;
         c.font = `500 11px ${MONO}`; c.fillStyle = 'rgba(236,230,218,0.78)';
-        c.fillText(`${fmtM(b.m)} M☉`, X, Y + R + 15);
+        c.fillText(`${b.label ? b.label + ' · ' : ''}${fmtM(b.m)} M☉`, X, Y + R + 15);
         if (Math.abs(b.chi) > 0.005) { c.font = `400 10px ${MONO}`; c.fillStyle = 'rgba(143,147,168,0.9)'; c.fillText(`χ ${fmtChi(b.chi)} ${b.chi > 0 ? '↺' : '↻'}`, X, Y + R + 28); }
       } else if (isNS(b) || zoom * b.R > 1.2 || bodies.length < 14) {
         const R = Math.max(b.R * zoom, 1.6);
         c.font = `400 10px ${MONO}`; c.fillStyle = `rgba(${b.type.col},0.8)`;
-        c.textAlign = 'left'; c.fillText(isNS(b) ? `NS ${fmtM(b.m)} · ${b.spinHz >= 100 ? (1000 / b.spinHz).toFixed(1) + ' ms' : Math.round(b.spinHz) + '/s'}` : b.type.id, X + R + 6, Y - R - 2); c.textAlign = 'center';
+        c.textAlign = 'left'; c.fillText(isNS(b) ? `NS ${fmtM(b.m)} · ${b.spinHz >= 100 ? (1000 / b.spinHz).toFixed(1) + ' ms' : Math.round(b.spinHz) + '/s'}` : b.label || b.type.id, X + R + 6, Y - R - 2); c.textAlign = 'center';
       }
+    }
+  }
+  if (closeUpId != null) {
+    const b = bodies.find(o => o.id === closeUpId);
+    if (b && b.f > 0.5) {
+      const X = toSX(b.x, b.y), Y = toSY(b.x, b.y), str = stretchOf(b), R = Math.max(b.R * zoom, 6);
+      const ang = Math.atan2(toSY(b.hx, b.hy) - Y, toSX(b.hx, b.hy) - X), ca = Math.cos(ang), sa = Math.sin(ang);
+      const arrow = (x1, y1, x2, y2, col) => {
+        c.strokeStyle = col; c.fillStyle = col; c.lineWidth = 2; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+        const a = Math.atan2(y2 - y1, x2 - x1); c.beginPath(); c.moveTo(x2, y2);
+        c.lineTo(x2 - 9 * Math.cos(a - 0.4), y2 - 9 * Math.sin(a - 0.4)); c.lineTo(x2 - 9 * Math.cos(a + 0.4), y2 - 9 * Math.sin(a + 0.4)); c.closePath(); c.fill();
+      };
+      const L = R * str + 14, W = R / Math.sqrt(str) + 30, k = clamp((b.f - 0.5) * 2, 0, 1);
+      const out = `rgba(255,179,106,${0.9 * k})`, inn = `rgba(127,211,230,${0.9 * k})`;
+      for (const sg of [1, -1]) {
+        arrow(X + ca * L * sg, Y + sa * L * sg, X + ca * (L + 34) * sg, Y + sa * (L + 34) * sg, out);
+        arrow(X - sa * (W + 30) * sg, Y + ca * (W + 30) * sg, X - sa * W * sg, Y + ca * W * sg, inn);
+      }
+      c.font = `600 12px "Saira Condensed", sans-serif`; c.textAlign = 'center';
+      c.fillStyle = out; c.fillText('STRETCHED', X + ca * (L + 52), Y + sa * (L + 52) + 4);
+      c.fillStyle = inn; c.fillText('SQUEEZED', X - sa * (W + 44), Y + ca * (W + 44) + 4);
+      c.fillStyle = 'rgba(236,230,218,0.85)'; c.font = `500 11px ${MONO}`;
+      c.fillText(`tidal stretch ${str.toFixed(1)}× · Roche lobe ${Math.round(b.f * 100)}% full`, X, Y + Math.max(R, W) + 62);
     }
   }
   for (const b of bodies) {
@@ -2141,14 +2377,21 @@ function renderMoveCtx(force) {
 }
 const insEl = $('inspect');
 let insKey = '', insRefs = null;
-function kindName(b) { return b.kind === 'bh' ? 'Black hole' : b.type.name; }
+function kindName(b) { return (b.label ? b.label + ' · ' : '') + (b.kind === 'bh' ? 'Black hole' : b.type.name); }
 function swatchHTML(b) {
   if (b.kind === 'bh') return '<span class="sw bh"></span>';
   if (isNS(b)) return '<span class="sw ns"></span>';
   return `<span class="sw" style="background:rgb(${b.type.col});color:rgba(${b.type.col},.55)"></span>`;
 }
-function fmtSec(t) { return t < 1 ? `${(t * 1000).toFixed(t < 0.01 ? 2 : 0)} ms` : t < 120 ? `${t.toFixed(t < 10 ? 2 : 1)} s` : `${(t / 60).toFixed(1)} min`; }
-function fmtMass(m) { return m >= 10 ? m.toFixed(4) : m.toFixed(5); }
+function fmtSec(t) {
+  if (t < 1) return `${(t * 1000).toFixed(t < 0.01 ? 2 : 0)} ms`;
+  if (t < 120) return `${t.toFixed(t < 10 ? 2 : 1)} s`;
+  if (t < 7200) return `${(t / 60).toFixed(1)} min`;
+  if (t < 172800) return `${(t / 3600).toFixed(1)} h`;
+  if (t < 3.156e7 * 1.5) return `${(t / 86400).toFixed(t < 864000 ? 1 : 0)} days`;
+  return `${(t / 3.156e7).toFixed(t < 3.156e8 ? 1 : 0)} years`;
+}
+function fmtMass(m) { return m >= 1e5 ? m.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : m >= 10 ? m.toFixed(4) : m.toFixed(5); }
 function partnerOf(b) {
   let best = null, ba = 0;
   for (const o of bodies) { if (o === b) continue; const a = o.m / ((o.x - b.x) ** 2 + (o.y - b.y) ** 2 + 1e-6); if (a > ba) { ba = a; best = o; } }
@@ -2159,16 +2402,16 @@ function orbitText(b) {
   const r = Math.hypot(o.x - b.x, o.y - b.y), GM = G * (o.m + b.m);
   const E = 0.5 * ((o.vx - b.vx) ** 2 + (o.vy - b.vy) ** 2) - GM / r;
   const who = o.kind === 'bh' ? `${fmtM(o.m)} M☉ hole` : o.type.lc;
-  if (E >= 0) return `passing a ${who} · ${fmtKm(r * KM_PER_UNIT)} km`;
+  if (E >= 0) return `passing a ${who} · ${fmtDist(r * KM_PER_UNIT)}`;
   const a = -GM / (2 * E), P = 2 * Math.PI * Math.sqrt(a * a * a / GM) * SIM2REAL;
-  return `${who} · ${fmtKm(r * KM_PER_UNIT)} km · ${fmtSec(P)}`;
+  return `${who} · ${fmtDist(r * KM_PER_UNIT)} · ${fmtSec(P)}`;
 }
 // rows: [label, value function] for each kind of body
 function inspectRows(b) {
   if (b.kind === 'bh') return [
     ['Spin χ', () => `${fmtChi(b.chi)} ${b.chi > 0 ? '↺' : b.chi < 0 ? '↻' : ''}`],
-    ['Horizon radius', () => `${fmtKm(b.kPlus * rsOf(b.m) * KM_PER_UNIT)} km`],
-    ['Innermost stable orbit', () => `${fmtKm(3 * b.kP * rsOf(b.m) * KM_PER_UNIT)} km`],
+    ['Horizon radius', () => `${fmtDist(b.kPlus * rsOf(b.m) * KM_PER_UNIT)}`],
+    ['Innermost stable orbit', () => `${fmtDist(3 * b.kP * rsOf(b.m) * KM_PER_UNIT)}`],
     ['Eaten so far', () => `${(b.fedTotal || 0).toFixed(4)} M☉`],
     ['Blown out by its disk', () => `${(b.windM || 0).toFixed(4)} M☉`],
     ['Jet', () => { const j = jetPower(b); if (j < 0.03) return 'off'; const v = apparentJetSpeed(); return sinI < 0.05 ? `${Math.round(j * 100)}% · pointed at you` : `${Math.round(j * 100)}% · knots appear ${v.toFixed(1)}c${v > 1 ? ' (illusion)' : ''}`; }],
@@ -2182,7 +2425,9 @@ function inspectRows(b) {
     ['Blown out by its disk', () => `${(b.windM || 0).toFixed(4)} M☉`],
     ['Nearest partner', () => orbitText(b)],
   ];
+  const tr = lifeTrack(b);
   const rows = [
+    ...(tr && tr.stages.length > 1 ? [['Life ahead', () => tr.stages.slice(1).map(s => STAGE_NAME[s]).join(' → ')]] : []),
     ...(b.type.eg ? [['Real example', () => b.type.eg.replace(/^like /, '')]] : []),
     ['Surface temperature', () => `${b.type.T.toLocaleString('en-US')} K`],
     ['Roche lobe filled', () => b.f > 0 ? `${Math.round(b.f * 100)}%` : '—'],
@@ -2206,23 +2451,54 @@ function statusOf(b) {
   if (b.m < b.mBirth * 0.999) return ['Stripped, now stable', ''];
   return ['Stable', ''];
 }
+function actionsHTML(b) {
+  if (b.kind !== 'star' || isNS(b)) return '';
+  const tr = lifeTrack(b), hasHole = bodies.some(o => o.kind === 'bh');
+  const next = tr && tr.stages.length > 1 ? tr.stages[1] : null;
+  const btns = [];
+  if (next && next !== 'SN') btns.push(`<button class="ins-act age" type="button"${b.grow ? ' disabled' : ''} title="Skips about ${fmtYears(tr.wait || 0)}">${b.grow ? 'Changing…' : 'Age it · ' + STAGE_NAME[next]}</button>`);
+  if (canSupernova(b) || b.sn) btns.push(`<button class="ins-act sn" type="button"${b.sn ? ' disabled' : ''}>${b.sn ? 'Collapsing…' : 'Go supernova'}</button>`);
+  if (hasHole && !b.sn) btns.push(`<button class="ins-act cu" type="button" aria-pressed="${closeUpId === b.id}">${closeUpId === b.id ? 'Exit close-up' : 'Close-up'}</button>`);
+  let note = '';
+  if (tr && tr.note) note = tr.note;
+  else if (!canSupernova(b) && !b.sn && next !== 'SN' && !(tr && tr.stages.includes('SN'))) note = snBlocker(b).replace(/ Try the O star or the blue supergiant\.$/, '');
+  return (btns.length ? `<div class="ins-acts">${btns.join('')}</div>` : '') + (note ? `<p class="ins-note">${note}</p>` : '');
+}
 function updateInspect() {
   const b = followId != null ? bodies.find(o => o.id === followId) : null;
   if (!b) { if (!insEl.hidden) { insEl.hidden = true; insKey = ''; } return; }
-  const key = `${b.id}|${b.kind === 'bh' ? 'bh' : b.type.id}|${b.passes || 0}|${b.sn ? 1 : 0}`;
+  const key = `${b.id}|${b.kind === 'bh' ? 'bh' : b.type.id}|${b.passes || 0}|${b.sn ? 1 : 0}|${b.grow ? 1 : 0}|${closeUpId === b.id ? 1 : 0}|${bodies.some(o => o.kind === 'bh') ? 1 : 0}`;
   if (key !== insKey) {
     insKey = key;
     const rows = inspectRows(b);
     insEl.innerHTML = `<div class="ins-head">${swatchHTML(b)}<h2></h2><button class="ins-x" type="button" aria-label="Close and go back to auto focus"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div class="ins-mass"><span class="lbl">Mass</span><span class="big"><span class="mv"></span><small>M☉</small></span><span class="ins-rate"></span></div>
       <div class="ins-status"></div>
-      ${b.kind === 'star' && !isNS(b) ? (canSupernova(b) || b.sn
-        ? `<button class="ins-act" type="button"${b.sn ? ' disabled' : ''}>${b.sn ? 'Collapsing…' : 'Go supernova'}</button>`
-        : `<button class="ins-act no" type="button" disabled>Can't go supernova</button><p class="ins-note">${snBlocker(b)}</p>`) : ''}
-      <dl class="ins-rows">${rows.map(r => `<dt>${r[0]}</dt><dd></dd>`).join('')}</dl>`;
+      ${actionsHTML(b)}
+      <dl class="ins-rows">${rows.map(r => `<dt>${r[0]}</dt><dd></dd>`).join('')}</dl>
+      <details class="ins-edit"><summary>Edit</summary>
+        <div class="ins-form">
+          <label for="insMass">Mass (M☉)<input id="insMass" type="number" step="any" min="${massBounds(b)[0]}" max="${massBounds(b)[1]}" value="${+b.m.toPrecision(4)}"></label>
+          ${b.kind === 'bh' ? `<label for="insSpin">Spin χ<input id="insSpin" type="number" step="0.01" min="-0.99" max="0.99" value="${b.chi.toFixed(2)}"></label>` : ''}
+          <button class="follow-x" type="button" data-act="set">Set</button>
+        </div>
+        <button class="ins-del" type="button">Delete</button>
+      </details>`;
     insEl.querySelector('h2').textContent = kindName(b);
-    const act = insEl.querySelector('.ins-act');
-    if (act && !act.disabled) act.addEventListener('click', () => { startSupernova(b); updateInspect(); });
+    const on = (sel, fn) => { const el = insEl.querySelector(sel); if (el && !el.disabled) el.addEventListener('click', fn); };
+    on('.ins-act.sn', () => { startSupernova(b); updateInspect(); });
+    on('.ins-act.age', () => { ageStar(b); updateInspect(); });
+    on('.ins-act.cu', () => { toggleCloseUp(b); updateInspect(); });
+    on('[data-act=set]', () => {
+      const m = parseFloat($('insMass').value), sp = $('insSpin') ? parseFloat($('insSpin').value) : NaN;
+      applyEdit(b, m, sp); insKey = ''; updateInspect();
+    });
+    const del = insEl.querySelector('.ins-del'); let armed = 0;
+    del.addEventListener('click', () => {
+      if (wallNow - armed < 3000) { deleteBody(b); updateInspect(); return; }
+      armed = wallNow; del.classList.add('arm'); del.textContent = 'Click again to delete';
+      setTimeout(() => { if (del.isConnected) { del.classList.remove('arm'); del.textContent = 'Delete'; } }, 3000);
+    });
     insEl.querySelector('.ins-x').addEventListener('click', () => { followId = null; opt.follow = true; syncToggles(); renderMoveCtx(true); updateInspect(); });
     insRefs = { mv: insEl.querySelector('.mv'), rate: insEl.querySelector('.ins-rate'), st: insEl.querySelector('.ins-status'), dd: [...insEl.querySelectorAll('dd')], rows };
     insEl.hidden = false;
@@ -2232,7 +2508,7 @@ function updateInspect() {
   if (mag < 2e-6) { insRefs.rate.textContent = 'steady'; insRefs.rate.className = 'ins-rate'; }
   else {
     const digits = mag >= 0.01 ? 4 : mag >= 0.001 ? 5 : 6;
-    insRefs.rate.textContent = `${r < 0 ? '▼ −' : '▲ +'}${mag.toFixed(digits)} M☉ per sim second`;
+    insRefs.rate.textContent = `${r < 0 ? '▼ −' : '▲ +'}${mag.toFixed(digits)} M☉ per ${warp > 1 ? 'screen' : 'sim'} second`;
     insRefs.rate.className = 'ins-rate ' + (r < 0 ? 'down' : 'up');
   }
   const [txt, cls] = statusOf(b);
@@ -2313,7 +2589,7 @@ ui.addEventListener('pointermove', e => {
   if (drag.mode === 'pinch' && pointers.size >= 2) {
     const [a, b] = [...pointers.values()];
     const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-    zoom = clamp(drag.z0 * Math.hypot(a.x - b.x, a.y - b.y) / drag.d0, 0.03, 30);
+    zoom = clamp(drag.z0 * Math.hypot(a.x - b.x, a.y - b.y) / drag.d0, 1e-12, 30);
     setYaw(drag.yaw0 + Math.atan2(b.y - a.y, b.x - a.x) - drag.a0);  // two-finger twist turns the view
     if (!opt.follow) { const o = scrOff(cx - vw / 2, cy - vh / 2); camX = drag.w[0] - o[0]; camY = drag.w[1] - o[1]; }
     return;
@@ -2345,7 +2621,7 @@ ui.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hover 
 ui.addEventListener('wheel', e => {
   e.preventDefault();
   const w = toW(e.clientX, e.clientY);
-  zoom = clamp(zoom * Math.exp(-e.deltaY * 0.0015), 0.03, 30);
+  zoom = clamp(zoom * Math.exp(-e.deltaY * 0.0015), 1e-12, 30);
   // while following, zoom about the focus; with a free camera, zoom about the cursor
   if (!opt.follow) { const o = scrOff(e.clientX - vw / 2, e.clientY - vh / 2); camX = w[0] - o[0]; camY = w[1] - o[1]; }
 }, { passive:false });
@@ -2411,6 +2687,13 @@ function frame(now) {
 function frameBody(now) {
   const wallDt = Math.min(0.05, (now - last) / 1000); last = now; frameN++; wallNow = now;
   let target = 1;
+  updateGrowth();
+  if (wallNow < tdeSlowUntil) target = Math.min(target, tdeSlow);
+  if (closeUpId != null) { // slow down as the star nears the point of no return, so the stretching is watchable
+    const b = bodies.find(o => o.id === closeUpId);
+    if (!b) closeUpId = null;
+    else if (b.f > 0.85) target = Math.min(target, 0.12);
+  }
   if (opt.slow) {
     const pair = closestPair();
     if (pair && pair[2] < 1.35 * mergeDist(pair[0], pair[1])) target = 0.07;
@@ -2418,7 +2701,7 @@ function frameBody(now) {
   }
   slow += (target - slow) * Math.min(1, (target < slow ? 4 : 0.9) * wallDt);
   $('slow').hidden = slow > 0.85;
-  if (!$('slow').hidden) $('slow').textContent = `slow-mo ${slow.toFixed(2)}×`;
+  if (!$('slow').hidden) $('slow').textContent = `slow-mo ${slow < 0.1 ? '1/' + Math.round(1 / slow) : slow.toFixed(2)}×`;
 
   const tWork = performance.now();
   if (paused) frameSim = 0;
@@ -2426,20 +2709,21 @@ function frameBody(now) {
     for (const b of bodies) { b.fedFrame = 0; if (b.kind === 'bh') updateKerr(b); }
     for (const b of bodies) if (isNS(b)) b.beamPh += (1.5 + 3.2 * Math.log10(1 + b.spinHz)) * wallDt;
     // advance bodies and gas together in short chunks so fast-moving accretors (neutron stars) never outrun their own gas
-    const want = wallDt * SPEEDS[speedIdx] * slow;
-    const chunk = gN > 0 && bodies.some(b => isNS(b) || isWD(b)) ? 0.004 : 0.02;
+    const want = wallDt * SPEEDS[speedIdx] * slow * warp;
+    const chunk = (gN > 0 && bodies.some(b => isNS(b) || isWD(b)) ? 0.004 : 0.02) * warp;
     const K = clamp(Math.ceil(want / chunk), 1, 40);
     let simDt = 0;
     frameSim = 0;
     for (let k = 0; k < K; k++) {
       const d = stepBodies(want / K);
       stepGas(d); stellarProcesses(d); simDt += d;
+      if (breakFrame) { breakFrame = false; break; }
     }
     frameSim = simDt;
     // smoothed rate of mass change for the inspector (per second of sim time)
     for (const b of bodies) {
       if (b.mPrev == null || simDt <= 0) { b.mPrev = b.m; b.mRate = b.mRate || 0; continue; }
-      const inst = (b.m - b.mPrev) / simDt; b.mPrev = b.m;
+      const inst = (b.m - b.mPrev) / (simDt / warp); b.mPrev = b.m;
       b.mRate = (b.mRate || 0) + (inst - (b.mRate || 0)) * Math.min(1, wallDt * 2.5);
     }
     for (const b of bodies.slice()) if (b.sn && snP(b) >= SN_BREAK) explode(b);
@@ -2452,12 +2736,12 @@ function frameBody(now) {
       toast('Collapse to a black hole', [`The neutron star grew to ${fmtM(ns.m)} M☉, past the ~2.3 M☉ limit, and collapsed`]);
     }
     for (const b of bodies) {
-      if (isAccretor(b) && simDt > 0) b.feedRate = (b.feedRate || 0) + ((b.fedFrame || 0) / simDt - (b.feedRate || 0)) * Math.min(1, simDt * 1.5);
+      if (isAccretor(b) && simDt > 0) { const ts = simDt / warp; b.feedRate = (b.feedRate || 0) + ((b.fedFrame || 0) / ts - (b.feedRate || 0)) * Math.min(1, ts * 1.5); }
       if (b.kind === 'bh') {
         updateKerr(b);
         if (b.ring && simTime - b.ring.t0 > 12 * b.ring.tau) b.ring = null;
       }
-      if (opt.trails && frameN % 2 === 0) { b.trail.push([b.x, b.y]); if (b.trail.length > 260) b.trail.shift(); }
+      if (opt.trails && frameN % trailEvery === 0) { b.trail.push([b.x, b.y]); if (b.trail.length > 260) b.trail.shift(); }
     }
   }
   updateGW();
@@ -2470,6 +2754,14 @@ function frameBody(now) {
       if (followPos) for (const o of bodies) { const d = Math.hypot(o.x - followPos[0], o.y - followPos[1]) / Math.sqrt(o.m); if (d < bd) { bd = d; best = o; } }
       followId = best ? best.id : null; followPos = best ? [best.x, best.y] : null;
     }
+  }
+  if (closeUpId != null) { // ease the zoom in until the star fills a good part of the screen
+    const b = bodies.find(o => o.id === closeUpId);
+    if (b) { const zt = Math.min(vw, vh) * 0.11 / Math.max(b.R, 1e-9); zoom *= Math.pow(zt / zoom, Math.min(1, 2 * wallDt)); }
+  } else if (closeUpDrift) { // after it's torn apart, drift with the debris and pull back out
+    const t = (wallNow - closeUpDrift.t0) / 1000;
+    if (t > 4) closeUpDrift = null;
+    else { opt.follow = false; camX += closeUpDrift.vx * frameSim; camY += closeUpDrift.vy * frameSim; zoom *= Math.pow(0.35, Math.min(1, wallDt / 2)); }
   }
   if (opt.follow && bodies.length) {
     // carry the camera along with the target's own motion, then ease out any remaining offset
@@ -2489,7 +2781,7 @@ function frameBody(now) {
     let nb = 0, ns = 0, mb = 0;
     for (const b of bodies) { if (b.kind === 'bh') { nb++; mb += b.m; } else ns++; }
     $('fgw').textContent = fgwText;
-    $('readouts').innerHTML = `<span><b>${nb}</b> holes · <b>${ns}</b> stars · <b>${gN}</b> gas</span><span>M<sub>BH</sub> <b>${fmtM(mb)}</b> M☉</span><span>fed <b>${totalFed.toFixed(3)}</b> · blown out <b>${totalWind.toFixed(3)}</b> M☉</span><span>view <b>${fmtKm(vw / zoom * KM_PER_UNIT)}</b> km</span>`;
+    $('readouts').innerHTML = `<span><b>${nb}</b> holes · <b>${ns}</b> stars · <b>${gN}</b> gas</span><span>M<sub>BH</sub> <b>${fmtM(mb)}</b> M☉</span><span>fed <b>${totalFed.toFixed(3)}</b> · blown out <b>${totalWind.toFixed(3)}</b> M☉</span><span>view <b>${fmtDist(vw / zoom * KM_PER_UNIT)}</b></span><span>1 s = <b>${fmtSec(SPEEDS[speedIdx] * slow * warp * SIM2REAL)}</b> real</span>`;
   }
 }
 
@@ -2498,8 +2790,87 @@ setTool('move');
 toolsEdges();
 drawGizmo();
 syncPlay(); syncToggles();
+/* ---------- share links ----------
+   The whole setup (bodies, camera, scene scale) is packed into the link's #hash: JSON, deflated, then written in
+   base32 (letters and digits only, so it survives as a plain #name everywhere). Gas isn't saved. */
+const B32 = 'abcdefghijklmnopqrstuvwxyz234567';
+const num = v => +(+v).toPrecision(9);
+function snapshot() {
+  return { v: 1, p: currentPreset, w: num(warp), rs: realSizes ? 1 : 0, te: trailEvery, t: num(tiltDeg), y: num(yaw), z: num(zoom), c: [num(camX), num(camY)],
+    f: followId != null ? bodies.findIndex(b => b.id === followId) : -1,
+    b: bodies.map(b => b.kind === 'bh'
+      ? ['h', num(b.m), num(b.x), num(b.y), num(b.vx), num(b.vy), num(b.chi), b.label || '']
+      : ['s', b.type.id, num(b.m), num(b.x), num(b.y), num(b.vx), num(b.vy), num(b.R), num(b.mBirth || b.m), num(b.core || 0), b.label || '', b.real ? 1 : 0, num(b.spinHz || 0)]) };
+}
+function restore(st) {
+  toastsEl.replaceChildren();
+  bodies = []; gN = 0; gwSrc = null; flashes.length = 0; totalFed = 0; totalWind = 0; closeUpId = null; closeUpDrift = null;
+  scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); xrBuf.fill(0);
+  warp = st.w || 1; realSizes = !!st.rs; trailEvery = st.te || 2; tdeSlowUntil = -1e9;
+  for (const a of st.b || []) {
+    if (a[0] === 'h') { const b = makeBH(a[2], a[3], a[4], a[5], a[1], a[6]); if (a[7]) b.label = a[7]; bodies.push(b); continue; }
+    if (!TYPE[a[1]]) continue;
+    const b = makeStar(a[1], a[3], a[4], a[5], a[6], a[2]);
+    b.R = b.R0 = a[7]; b.mBirth = a[8]; b.core = a[9]; if (a[10]) b.label = a[10]; b.real = !!a[11]; if (isNS(b) && a[12]) b.spinHz = a[12];
+    bodies.push(b);
+  }
+  setTilt(st.t || 0); setYaw(st.y || 0); zoom = st.z || 1; camX = st.c ? st.c[0] : 0; camY = st.c ? st.c[1] : 0;
+  followId = st.f >= 0 && bodies[st.f] ? bodies[st.f].id : null; opt.follow = true; syncToggles();
+  if (PRESETS[st.p]) { currentPreset = st.p; presetSel.value = st.p; }
+  computeAccel(); renderMoveCtx(true);
+}
+function toB32(bytes) {
+  let out = '', bits = 0, val = 0;
+  for (const by of bytes) { val = (val << 8) | by; bits += 8; while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; } }
+  if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+  return out;
+}
+function fromB32(str) {
+  const out = []; let bits = 0, val = 0;
+  for (const ch of str) { const i = B32.indexOf(ch); if (i < 0) throw new Error('bad link'); val = (val << 5) | i; bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; } }
+  return new Uint8Array(out);
+}
+async function pipeBytes(bytes, stream) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer()); }
+async function encodeState() {
+  const raw = new TextEncoder().encode(JSON.stringify(snapshot()));
+  if (typeof CompressionStream === 'function') { try { return 's1z-' + toB32(await pipeBytes(raw, new CompressionStream('deflate-raw'))); } catch (e) {} }
+  return 's1r-' + toB32(raw);
+}
+async function decodeState(code) {
+  const m = /^s1([zr])-([a-z2-7]+)$/.exec(code); if (!m) return null;
+  let bytes = fromB32(m[2]);
+  if (m[1] === 'z') bytes = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+async function loadFromHash() {
+  const h = location.hash.slice(1); if (!/^s1[zr]-/.test(h)) return false;
+  try { const st = await decodeState(h); if (!st) return false; restore(st); toast('Shared setup loaded', [`${bodies.length} objects, exactly as they were when the link was made`]); return true; }
+  catch (e) { toast('Link not readable', ['That link looks incomplete or damaged, so the default scene is shown instead']); return false; }
+}
+const sharePop = $('sharepop');
+$('share').addEventListener('click', async () => {
+  if (!sharePop.hidden) { sharePop.hidden = true; $('share').setAttribute('aria-expanded', 'false'); return; }
+  const code = await encodeState();
+  try { history.replaceState(null, '', '#' + code); } catch (e) { location.hash = code; }
+  const topLevel = (() => { try { return window.top === window; } catch (e) { return false; } })();
+  $('shareUrl').value = location.href;
+  $('shareNote').textContent = topLevel
+    ? `Anyone opening this link gets this exact setup: ${bodies.length} objects, the camera and the view. Gas clouds and debris aren't included.`
+    : `The setup is now in this page's address. Copy the address, or use the Share menu, to send it. Gas clouds and debris aren't included.`;
+  sharePop.hidden = false; $('share').setAttribute('aria-expanded', 'true');
+  $('shareUrl').focus(); $('shareUrl').select();
+});
+$('shareCopy').addEventListener('click', () => {
+  const el = $('shareUrl'), done = () => { $('shareCopy').textContent = 'Copied'; setTimeout(() => { $('shareCopy').textContent = 'Copy'; }, 1600); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(el.value).then(done, () => { el.focus(); el.select(); });
+  else { el.focus(); el.select(); }
+});
+addEventListener('pointerdown', e => { if (!sharePop.hidden && !sharePop.contains(e.target) && !$('share').contains(e.target)) { sharePop.hidden = true; $('share').setAttribute('aria-expanded', 'false'); } });
+addEventListener('hashchange', () => { loadFromHash(); });
+
 presetSel.value = currentPreset;
 loadPreset(currentPreset);
+loadFromHash();
 requestAnimationFrame(t => { last = t; wallNow = t; frame(t); });
 })();
 </script>
