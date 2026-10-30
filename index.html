@@ -113,6 +113,7 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
 .chip{flex:0 0 auto;display:flex;align-items:center;gap:7px;height:38px;padding:0 12px 0 9px;border-radius:9px;border:1px solid transparent;
   background:transparent;color:var(--dim);font:500 14.5px/1 var(--f-ui);letter-spacing:.03em;cursor:pointer;white-space:nowrap}
 .chip:hover{color:var(--ink);background:rgba(255,255,255,.04)}
+.tsep{flex:none;width:1px;align-self:stretch;margin:7px 3px;background:var(--line)}
 .chip[aria-checked="true"]{color:var(--ink);background:rgba(255,179,106,.11);border-color:rgba(255,179,106,.45)}
 .sw{width:14px;height:14px;border-radius:50%;flex:none;box-shadow:0 0 10px currentColor}
 .sw.bh{background:#000;box-shadow:0 0 0 1.5px var(--accent),0 0 9px rgba(255,179,106,.6)}
@@ -243,6 +244,7 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     <li>Not all the stolen gas gets eaten. Near the hole, part of it is blown back out by its own light, 15–65% here and more when the hole is feeding hard, as in ultraluminous X-ray sources. The purple band on the scope tracks how fast gas is falling in.</li>
     <li>Stars above about 8 M☉ can go supernova from the inspector. The iron core collapses, bounces at nuclear density, and the shock stalls until neutrinos reheat it; then it blows the envelope off at thousands of km/s. Stars born above about 20 M☉ leave a black hole here, the rest a neutron star with a kick of a few hundred km/s. Collisions can build stars no galaxy makes on its own: from about 140 to 260 M☉ the star ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ it collapses straight into an intermediate-mass black hole. A real star like that would live a couple of million years first; here it ends at once. In reality the collapse takes a fraction of a second and the shock needs hours to reach a supergiant's surface; here the sequence takes about 5 seconds. Because stars here are drawn far smaller than real ones, ejecta is launched fast enough to escape their exaggerated surface gravity and then coasts away at a realistic 5,000–20,000 km/s. In a tight binary it is launched faster still, to keep the real ratio of ejecta speed to orbital speed (about 50 to 1 in nature), since binaries here are compressed to about 1,000 km.</li>
     <li>White dwarfs are held up by electron pressure, which fails at 1.44 M☉ (the Chandrasekhar limit), and they shrink as they gain mass. Two carbon–oxygen white dwarfs that merge below the limit make one smaller, heavier white dwarf; two helium white dwarfs reignite as a helium-burning hot subdwarf, and a helium plus a carbon–oxygen white dwarf swell into an R Coronae Borealis giant. Past the limit, carbon ignites in a runaway and the whole star explodes as a Type Ia supernova, leaving nothing (some may instead collapse quietly into a neutron star; that outcome isn't modeled). A white dwarf that hits an ordinary star sinks into it.</li>
+    <li>Star types follow real classes, each with a real example. Red giants are Sun-like stars in old age and end as white dwarfs; red supergiants like Betelgeuse are massive stars in old age and are the most common supernova progenitors. A supernova's class (II-P, II, IIb, IIn, Ib/c) follows from how much hydrogen envelope the star kept.</li>
     <li>Click any object to inspect it. Masses and rates are live; rates are per second of simulation time, and orbital periods are given in real seconds.</li>
     <li>Not to scale: ordinary stars are drawn thousands of times smaller than life (a white dwarf is really Earth-sized, about 500× a neutron star, but here only 1.6×), and mass transfer runs fast enough to watch.</li>
   </ul>
@@ -276,24 +278,28 @@ const ISCO_K = Math.sqrt(27 * KR * KR * KR / G);
 const rsOf = m => KR * m;
 const MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
 
+// Star types, grouped as the toolbar shows them. R is the drawn radius in sim units: ordered like real stars,
+// but thousands of times smaller than life (except neutron stars, which are true size).
 const STAR_TYPES = [
-  { id:'NS',  name:'Neutron star',     short:'Neutron star', m:1.4, R:1.0, T:1e6, col:[200,230,255], kind:'ns' },
-  { id:'M',   name:'M dwarf',          short:'M dwarf',   m:0.3, R:2.0, T:3200,  col:[255,132,88],  kind:'ms' },
-  { id:'K',   name:'K dwarf',          short:'K dwarf',   m:0.7, R:2.8, T:4400,  col:[255,188,118], kind:'ms' },
-  { id:'G',   name:'G dwarf (Sun-like)', short:'G · Sun-like', m:1.0, R:3.4, T:5800, col:[255,230,165], kind:'ms' },
-  { id:'F',   name:'F star',           short:'F star',    m:1.4, R:4.0, T:6700,  col:[255,246,226], kind:'ms' },
-  { id:'A',   name:'A star',           short:'A star',    m:2.0, R:5.0, T:8800,  col:[224,233,255], kind:'ms' },
-  { id:'B',   name:'B star',           short:'B star',    m:6.0, R:7.0, T:18000, col:[168,196,255], kind:'ms' },
-  { id:'O',   name:'O star',           short:'O star',    m:20,  R:10,  T:38000, col:[138,172,255], kind:'ms' },
-  { id:'RG',  name:'Red giant',        short:'Red giant', m:1.2, R:22,  T:3900,  col:[255,116,72],  kind:'giant', core:0.35 },
-  { id:'BSG', name:'Blue supergiant',  short:'Blue supergiant', m:25, R:30, T:22000, col:[122,164,255], kind:'giant', core:9 },
-  { id:'WD',  name:'White dwarf',      short:'White dwarf', m:0.8, R:1.6, T:20000, col:[236,242,255], kind:'wd' },
-  // remnants that only appear when a star is stripped (not in the toolbar)
-  { id:'HeWD', name:'Helium white dwarf', short:'He white dwarf', m:0.35, R:1.9, T:25000, col:[226,236,255], kind:'wd' },
-  { id:'sdB', name:'Hot subdwarf',     short:'Hot subdwarf', m:0.5, R:2.4, T:30000, col:[176,200,255], kind:'ms', hidden:true },
-  { id:'RCB', name:'R Coronae Borealis star', short:'R CrB star', m:0.9, R:14, T:6500, col:[255,224,168], kind:'giant', hidden:true },
-  { id:'WR',  name:'Wolf–Rayet star',  short:'Wolf–Rayet', m:9, R:4.2, T:60000, col:[150,186,255], kind:'ms', hidden:true },
-  { id:'BD',  name:'Brown dwarf',      short:'Brown dwarf', m:0.07, R:0.9, T:1800, col:[176,84,60], kind:'bd', hidden:true },
+  { g:1, id:'NS',  name:'Neutron star',     short:'Neutron star', m:1.4, R:1.0, T:1e6, col:[200,230,255], kind:'ns' },
+  { g:2, id:'BD',  name:'Brown dwarf',      short:'Brown dwarf', m:0.05, R:0.9, T:1800, col:[176,84,60], kind:'bd' },
+  { g:2, id:'M',   name:'M dwarf', eg:'like Proxima Centauri',          short:'M dwarf',   m:0.3, R:2.0, T:3200,  col:[255,132,88],  kind:'ms' },
+  { g:2, id:'K',   name:'K dwarf',          short:'K dwarf',   m:0.7, R:2.8, T:4400,  col:[255,188,118], kind:'ms' },
+  { g:2, id:'G',   name:'G dwarf', eg:'like the Sun', short:'G · Sun-like', m:1.0, R:3.4, T:5800, col:[255,230,165], kind:'ms' },
+  { g:2, id:'F',   name:'F star',           short:'F star',    m:1.4, R:4.0, T:6700,  col:[255,246,226], kind:'ms' },
+  { g:2, id:'A',   name:'A star',           short:'A star',    m:2.0, R:5.0, T:8800,  col:[224,233,255], kind:'ms' },
+  { g:2, id:'B',   name:'B star',           short:'B star',    m:6.0, R:7.0, T:18000, col:[168,196,255], kind:'ms' },
+  { g:2, id:'O',   name:'O star',           short:'O star',    m:20,  R:10,  T:38000, col:[138,172,255], kind:'ms' },
+  { g:3, id:'RG',  name:'Red giant', eg:'like Arcturus',        short:'Red giant', m:1.2, R:22,  T:3900,  col:[255,116,72],  kind:'giant', core:0.35 },
+  { g:3, id:'YSG', name:'Yellow supergiant', eg:'like Polaris', short:'Yellow supergiant', m:6, R:26, T:6000, col:[255,232,160], kind:'giant', core:1.8 },
+  { g:3, id:'RSG', name:'Red supergiant', eg:'like Betelgeuse', short:'Red supergiant', m:18, R:46, T:3500, col:[255,94,58], kind:'giant', core:6 },
+  { g:3, id:'BSG', name:'Blue supergiant', eg:'like Rigel',  short:'Blue supergiant', m:25, R:30, T:22000, col:[122,164,255], kind:'giant', core:9 },
+  { g:3, id:'LBV', name:'Luminous blue variable', eg:'like Eta Carinae', short:'Luminous blue variable', m:90, R:28, T:20000, col:[178,206,255], kind:'giant', core:40 },
+  { g:3, id:'WR',  name:'Wolf–Rayet star', eg:'like WR 104',  short:'Wolf–Rayet', m:12, R:4.2, T:60000, col:[150,186,255], kind:'ms' },
+  { g:4, id:'WD',  name:'White dwarf', eg:'like Sirius B',      short:'White dwarf', m:0.8, R:1.6, T:20000, col:[236,242,255], kind:'wd' },
+  { g:4, id:'HeWD', name:'Helium white dwarf', short:'He white dwarf', m:0.35, R:1.9, T:25000, col:[226,236,255], kind:'wd' },
+  { g:4, id:'sdB', name:'Hot subdwarf',     short:'Hot subdwarf', m:0.5, R:2.4, T:30000, col:[176,200,255], kind:'ms' },
+  { g:4, id:'RCB', name:'R Coronae Borealis star', eg:'like R CrB itself', short:'R CrB star', m:0.9, R:14, T:6500, col:[255,224,168], kind:'giant', core:0.8 },
 ];
 const TYPE = Object.fromEntries(STAR_TYPES.map(t => [t.id, t]));
 
@@ -313,6 +319,7 @@ let bhMass = 30, bhSpin = 0;
 let camX = 0, camY = 0, zoom = 1;
 let tiltDeg = 0, cosI = 1, sinI = 0, yaw = 0, cY = 1, sY = 0;
 let followId = null, followPos = null; // null = automatic focus
+let shake = -1e9, shX = 0, shY = 0;   // brief camera shake when something explodes
 const placed = [];                     // ids of objects the viewer placed, for undo
 let totalFed = 0, totalWind = 0;
 let gwSrc = null;
@@ -468,6 +475,8 @@ const PRESETS = {
       st.x = r0 * rx; st.y = r0 * ry; st.vx = rx * vr + ry * vt; st.vy = ry * vr - rx * vt;
       bodies.push(bh, st);
       const k = makeStar('K', 0, 0, 0, 0); bodies.push(k); orbitAround(bh, k, 170, 0.6); } },
+  betelgeuse: { name:'Betelgeuse-like red supergiant', extent:110, build() {
+      bodies.push(makeStar('RSG', 0, 0, 0, 0)); } },
   zoo:      { name:'Stellar zoo', extent:330, build() {
       const bh = makeBH(0, 0, 0, 0, 25); bodies.push(bh);
       const plan = [['WD',40],['M',62],['K',88],['G',118],['F',152],['A',192],['B',245],['RG',320]];
@@ -903,12 +912,12 @@ function escapeSpeed(x, y, skip, extra, ex, ey, extraHole) {
 }
 function explode(st) {
   const name = st.type.name.toLowerCase(), mode = st.sn ? st.sn.mode : 'cc';
-  const toBH = mode === 'dc' || (mode === 'cc' && st.mBirth >= 20 && st.type.id !== 'WR');
+  const toBH = mode === 'dc' || (mode === 'cc' && (st.type.id === 'WR' ? st.m >= 15 : st.mBirth >= 20));
   const mRem = mode === 'pi' || mode === 'ia' ? 0 : mode === 'dc' ? 0.9 * st.m : toBH ? clamp(0.3 * st.m, 5, 15) : 1.25 + 0.2 * Math.random();
   const ej = Math.max(0, st.m - mRem);
   // ejecta. Stars here are drawn far smaller than real ones, so gravity at their surface is far too strong;
   // launch fast enough to escape and still coast away at a realistic speed (about 5,000-20,000 km/s).
-  const N = Math.min(mode === 'pi' ? 1000 : mode === 'dc' ? 250 : mode === 'ia' ? 400 : 700, MAXG - gN);
+  const N = Math.min(mode === 'pi' ? 1600 : mode === 'dc' ? 300 : mode === 'ia' ? 900 : 1300, MAXG - gN);
   // In a real binary the ejecta move ~50x faster than the orbit. Binaries here are compressed to ~1,000 km, so
   // orbits run near 0.2c; keep the ejecta several times faster than the orbit or the partner sweeps most of it up.
   const pt = partnerOf(st), vOrb = pt ? Math.sqrt(G * (st.m + pt.m) / Math.max(Math.hypot(pt.x - st.x, pt.y - st.y), 1)) : 0;
@@ -919,14 +928,14 @@ function explode(st) {
     const vReal = (mode === 'dc' ? 0.005 + 0.01 * Math.random() : 0.017 + 0.05 * Math.random()) * C;
     const vInf = Math.min(Math.max(vReal, (mode === 'dc' ? 1.2 : 2.5 + 1.5 * Math.random()) * vOrb), 0.7 * C);
     const ve = escapeSpeed(x, y, st, mRem, st.x, st.y, toBH), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
-    if (addGas(x, y, st.vx + Math.cos(a) * sp, st.vy + Math.sin(a) * sp, ej / Math.max(N, 1))) gf[gN - 1] = 2;
+    if (addGas(x, y, st.vx + Math.cos(a) * sp, st.vy + Math.sin(a) * sp, ej / Math.max(N, 1))) gf[gN - 1] = 3;
     vmean += vReal;
   }
   vmean = N ? vmean / N : 0;
   if (mode === 'ia') { // nothing survives
     bodies = bodies.filter(o => o !== st);
     if (followId === st.id) followId = null;
-    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 12000, scale: 1.4, kind: 'sn' });
+    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 12000, kind: 'sn', R: Math.max(st.R, 6), power: 1.1, st: simTime }); shake = wallNow;
     toast('Type Ia supernova', [
       `The ${fmtM(st.m)} M☉ white dwarf exploded completely. Nothing is left behind`,
       'Carbon and oxygen burned to nickel in about a second; the glow that follows is that nickel decaying to iron',
@@ -937,7 +946,7 @@ function explode(st) {
   if (mode === 'pi') { // nothing survives
     bodies = bodies.filter(o => o !== st);
     if (followId === st.id) followId = null;
-    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 14000, scale: Math.max(1, st.R / 5), kind: 'sn' });
+    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 14000, kind: 'sn', R: st.R, power: 1.4, st: simTime }); shake = wallNow;
     toast('Pair-instability supernova', [
       `The ${fmtM(st.m)} M☉ star blew itself completely apart. No neutron star, no black hole: nothing is left`,
       `Its core got so hot that light turned into electron–positron pairs, the core lost pressure and collapsed, and the oxygen in it ignited all at once`,
@@ -953,7 +962,7 @@ function explode(st) {
   bodies = bodies.filter(o => o !== st); bodies.push(rem);
   if (followId === st.id) { followId = rem.id; followPos = [rem.x, rem.y]; }
   if (mode === 'dc') {
-    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 6000, scale: Math.max(0.3, st.R / 30), kind: 'sn' });
+    flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 6000, kind: 'sn', R: st.R, power: 0.25, st: simTime });
     toast('Direct collapse', [
       `The ${fmtM(st.m)} M☉ star fell straight into a ${fmtM(mRem)} M☉ black hole without exploding`,
       `Too massive for the shock to win, so there is only a faint outburst as it vanishes. Astronomers have watched a star do roughly this (N6946-BH1)`,
@@ -961,9 +970,10 @@ function explode(st) {
     ], 'w');
     return;
   }
-  flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 11000, scale: Math.max(0.5, st.R / 10), kind: 'sn' });
+  flashes.push({ x: st.x, y: st.y, t0: wallNow, dur: 11000, kind: 'sn', R: st.R, power: 1, st: simTime }); shake = wallNow;
   const lines = [
     `The ${name}'s core collapsed into a ${toBH ? fmtM(mRem) + ' M☉ black hole' : fmtM(mRem) + ' M☉ neutron star'}`,
+    snClass(st),
     `${fmtM(ej)} M☉ of outer layers blown off at about ${Math.round(vmean / C * 299792.458).toLocaleString('en-US')} km/s`,
   ];
   const o = partnerOf(rem);
@@ -972,6 +982,16 @@ function explode(st) {
     lines.push(E > 0 ? `It lost so much mass that its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.name.toLowerCase()}, is no longer bound to it` : `Its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.name.toLowerCase()}, is still bound to it`);
   } else lines.push(toBH ? 'Most of the core fell back, so it collapsed past the neutron-star limit' : `Born with a kick of ${Math.round(kick / C * 299792.458)} km/s`);
   toast('Supernova', lines, 'w');
+}
+// the observed class of a core-collapse supernova follows from what the star still had on the outside
+function snClass(st) {
+  const id = st.type.id;
+  if (id === 'WR') return 'Type Ib/c: the star had already lost its hydrogen, so none shows in its light';
+  if (id === 'RSG') return 'Type II-P, the most common kind: a long plateau of light from the huge hydrogen envelope';
+  if (id === 'BSG') return 'Type II from a compact blue star, like SN 1987A';
+  if (id === 'LBV') return 'Type IIn: the blast slams into gas the star threw off in earlier eruptions';
+  if (id === 'YSG') return 'Type IIb: only a thin layer of hydrogen was left';
+  return 'Type II: hydrogen lines in its light';
 }
 function retype(st, t, keepMass) {
   st.type = t; st.m0 = st.m; st.R = st.R0 = t.R; st.core = 0;
@@ -1097,7 +1117,7 @@ function stepGas(simDt) {
       const px = x - hb.x, py = y - hb.y, r = Math.hypot(px, py), d = Math.max(r - hrp, 0.3 * hrp);
       let rvx = vx - hb.vx, rvy = vy - hb.vy;
       const eps = 0.5 * (rvx * rvx + rvy * rvy) - G * hb.m / d;
-      if (eps < 0 && gf[i] !== 2) {
+      if (eps < 0 && gf[i] < 2) {
         // disk viscosity: damp radial sloshing (circularizes the stream) and shed angular momentum so orbits shrink
         const vc = Math.sqrt(G * hb.m * r) / d, om = vc / r, rx = px / r, ry = py / r;
         const vr = rvx * rx + rvy * ry, tvx = rvx - vr * rx, tvy = rvy - vr * ry;
@@ -1372,8 +1392,8 @@ function resize() {
 
 // Orbital plane seen by a camera that is first turned by `yaw` about the plane's axis, then tilted by i
 // (far side toward the top of the screen). Both coordinates are needed for either screen axis.
-const toSX = (x, y) => ((x - camX) * cY - (y - camY) * sY) * zoom + vw / 2;
-const toSY = (x, y) => ((x - camX) * sY + (y - camY) * cY) * zoom * cosI + vh / 2;
+const toSX = (x, y) => ((x - camX) * cY - (y - camY) * sY) * zoom + vw / 2 + shX;
+const toSY = (x, y) => ((x - camX) * sY + (y - camY) * cY) * zoom * cosI + vh / 2 + shY;
 function scrOff(du, dv) { const u = du / zoom, w = dv / (zoom * cosI); return [u * cY + w * sY, -u * sY + w * cY]; }
 function toW(sx, sy) { const o = scrOff(sx - vw / 2, sy - vh / 2); return [camX + o[0], camY + o[1]]; }
 
@@ -1407,6 +1427,7 @@ function drawScene() {
     const f = flashes[i], a = Math.max(0, (wallNow - f.t0) / f.dur);
     if (a > 1) { flashes.splice(i, 1); continue; }
     const X = toSX(f.x, f.y) * s, Y = toSY(f.x, f.y) * s;
+    if (f.kind === 'sn') { drawSupernovaFlash(f, a, X, Y, W, H); continue; }
     const R = Math.max((4 + 90 * Math.pow(a, 0.55)) * f.scale * zoom, 6) * s;
     const k = clamp((a - 0.12) / 0.55, 0, 1);
     const col = (f.kind === 'sn' ? [255, 250 - 70 * k, 240 - 170 * k] : [180 + 75 * k, 205 - 110 * k, 255 - 210 * k]).map(Math.round).join(',');
@@ -1428,6 +1449,8 @@ function drawScene() {
     const X = toSX(gx[i], gy[i]) * s, Y = toSY(gx[i], gy[i]) * s;
     if (X < -mg || Y < -mg || X > W + mg || Y > H + mg) continue;
     let bucket = gb[i], sz = gsz;
+    let fade3 = 1;
+    if (gf[i] === 3) { const age = gage[i]; bucket = clamp(Math.round(23 - age * 2.2), 1, 23); sz = gsz * (1.8 + Math.min(age, 8) * 0.45); fade3 = Math.max(0, 1 - age / 16); }
     if (tilted) {
       const bl = Math.min((gvx[i] * sY + gvy[i] * cY) * sinI / C, 0.95), b2 = Math.min((gvx[i] * gvx[i] + gvy[i] * gvy[i]) / (C * C), 0.95);
       const del = Math.sqrt(1 - b2) / (1 - bl);
@@ -1439,8 +1462,10 @@ function drawScene() {
     }
     const h = sz / 2;
     if (gf[i] === 2) sctx.globalAlpha *= 0.45;
+    if (gf[i] === 3) sctx.globalAlpha = (tilted ? sctx.globalAlpha : 1) * fade3;
     if (h > 0 && h < 400) sctx.drawImage(gasSprites[bucket], X - h, Y - h, sz, sz);
     if (gf[i] === 2) sctx.globalAlpha = tilted ? sctx.globalAlpha / 0.45 : 1;
+    if (gf[i] === 3) sctx.globalAlpha = 1;
   }
   sctx.globalAlpha = 1;
   // stars: glow
@@ -1474,6 +1499,30 @@ function drawScene() {
   }
 }
 
+// A supernova: a blinding bloom, a fireball that grows and cools from white to deep red, and the light front
+// racing outward at c (it is lensed like everything else on this canvas).
+function drawSupernovaFlash(f, a, X, Y, W, H) {
+  const s = RS, P = f.power, tw = (wallNow - f.t0) / 1000;
+  const radial = (r, stops) => { const g = sctx.createRadialGradient(X, Y, 0, X, Y, r); for (const [o, c] of stops) g.addColorStop(o, c); sctx.fillStyle = g; sctx.fillRect(X - r, Y - r, 2 * r, 2 * r); };
+  // bloom: the first half second washes out much of the screen
+  if (tw < 0.6) {
+    const k = (1 - tw / 0.6) ** 2 * Math.min(1, P), r = Math.max(W, H) * (0.35 + 0.45 * P);
+    radial(r, [[0, `rgba(255,255,255,${0.95 * k})`], [0.25, `rgba(235,240,255,${0.45 * k})`], [1, 'rgba(220,230,255,0)']]);
+  }
+  // fireball: at least a good fraction of the screen, growing and cooling as it fades
+  const base = Math.max(f.R * zoom * s * 3, Math.min(W, H) * 0.09 * P);
+  const r = base * (1 + 3 * Math.pow(a, 0.6)), k = Math.pow(1 - a, 1.1) * Math.min(1, 0.5 + P);
+  const cool = clamp(a * 1.8, 0, 1);
+  const c0 = [255, 255 - 30 * cool, 245 - 170 * cool].map(Math.round).join(','), c1 = [255, 200 - 120 * cool, 120 - 90 * cool].map(Math.round).join(',');
+  radial(r, [[0, `rgba(${c0},${0.95 * k})`], [0.3, `rgba(${c1},${0.55 * k})`], [0.7, `rgba(${c1},${0.18 * k})`], [1, `rgba(${c1},0)`]]);
+  // the light front: a thin ring moving outward at the speed of light
+  const rl = (simTime - f.st) * C * zoom * s;
+  if (rl > 2 && rl < Math.hypot(W, H) * 1.2 && P > 0.5) {
+    const al = 0.5 * Math.max(0, 1 - rl / (Math.hypot(W, H) * 1.2));
+    sctx.strokeStyle = `rgba(255,248,230,${al})`; sctx.lineWidth = Math.max(1.5, 3 * s);
+    sctx.beginPath(); sctx.ellipse(X, Y, rl, rl * Math.max(cosI, 0.15), 0, 0, Math.PI * 2); sctx.stroke();
+  }
+}
 // cutaway of a collapsing star: the envelope turns translucent so the core is visible
 function drawCollapse(b, X, Y, R, p) {
   const s = RS, coreMax = Math.max(R * 0.32, 5 * s), mode = b.sn.mode;
@@ -1884,10 +1933,12 @@ $('sound').addEventListener('click', () => {
 const TOOLS = [
   { id:'move', label:'Move', icon:'<svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>' },
   { id:'bh', label:'Black hole' },
-  ...STAR_TYPES.filter(t => !t.hidden).map(t => ({ id:t.id, label:t.short, col:t.col })),
+  ...STAR_TYPES.filter(t => !t.hidden).flatMap((t, i, a) => (i === 0 || a[i - 1].g !== t.g ? [{ sep: true }] : []).concat([{ id:t.id, label:t.short, col:t.col }])),
 ];
 const toolsEl = $('tools');
+const CHIPS = TOOLS.filter(t => !t.sep);
 for (const t of TOOLS) {
+  if (t.sep) { const d = document.createElement('span'); d.className = 'tsep'; d.setAttribute('aria-hidden', 'true'); toolsEl.appendChild(d); continue; }
   const b = document.createElement('button');
   b.className = 'chip'; b.type = 'button'; b.dataset.tool = t.id; b.setAttribute('role', 'radio');
   const sw = t.icon ? t.icon : t.id === 'bh' ? '<span class="sw bh"></span>' : t.id === 'NS' ? '<span class="sw ns"></span>'
@@ -1899,7 +1950,7 @@ for (const t of TOOLS) {
 function spinText() { return Math.abs(bhSpin) < 0.005 ? 'χ 0 · none' : `χ ${fmtChi(bhSpin)} ${bhSpin > 0 ? '↺' : '↻'}`; }
 function setTool(id) {
   tool = id;
-  for (const b of toolsEl.children) { const on = b.dataset.tool === id; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; }
+  for (const b of toolsEl.querySelectorAll('.chip')) { const on = b.dataset.tool === id; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; }
   const ctx = $('ctx');
   if (id === 'bh') {
     ctx.innerHTML = `<span class="grp"><label for="bhMass"><b>Mass</b></label><input id="bhMass" type="range" min="3" max="80" step="1" value="${bhMass}"><output id="bhMassOut" class="mono">${bhMass} M☉</output></span>`
@@ -1913,7 +1964,7 @@ function setTool(id) {
     ctx.innerHTML = `<span class="sw ns"></span><b>Neutron star</b><span class="mono dim">1.4 M☉ · 12 km · true size</span><span class="hint">Pair two up to hear them merge</span>`;
   } else {
     const t = TYPE[id];
-    ctx.innerHTML = `<span class="sw" style="background:rgb(${t.col});color:rgba(${t.col},.55)"></span><b>${t.name}</b><span class="mono dim">${t.m} M☉ · ${t.T.toLocaleString('en-US')} K</span><span class="hint">Tap: orbit · Drag: throw</span>`;
+    ctx.innerHTML = `<span class="sw" style="background:rgb(${t.col});color:rgba(${t.col},.55)"></span><b>${t.name}</b>${t.eg ? `<span class="dim">${t.eg}</span>` : ''}<span class="mono dim">${t.m} M☉ · ${t.T.toLocaleString('en-US')} K</span><span class="hint">Tap: orbit · Drag: throw</span>`;
   }
   if (id !== 'move') {
     const u = document.createElement('button'); u.className = 'follow-x'; u.type = 'button'; u.textContent = 'Undo';
@@ -1988,6 +2039,7 @@ function inspectRows(b) {
     ['Nearest partner', () => orbitText(b)],
   ];
   const rows = [
+    ...(b.type.eg ? [['Real example', () => b.type.eg.replace(/^like /, '')]] : []),
     ['Surface temperature', () => `${b.type.T.toLocaleString('en-US')} K`],
     ['Roche lobe filled', () => b.f > 0 ? `${Math.round(b.f * 100)}%` : '—'],
     ['Lost so far', () => { const l = Math.max(0, b.mBirth - b.m); return `${l.toFixed(4)} M☉ (${(l / b.mBirth * 100).toFixed(1)}%)`; }],
@@ -2052,8 +2104,8 @@ function undoPlace() {
 }
 toolsEl.addEventListener('keydown', e => {
   if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-  const i = TOOLS.findIndex(t => t.id === tool), n = (i + (e.key === 'ArrowRight' ? 1 : -1) + TOOLS.length) % TOOLS.length;
-  setTool(TOOLS[n].id); toolsEl.children[n].focus(); e.preventDefault();
+  const i = CHIPS.findIndex(t => t.id === tool), n = (i + (e.key === 'ArrowRight' ? 1 : -1) + CHIPS.length) % CHIPS.length;
+  setTool(CHIPS[n].id); toolsEl.querySelectorAll('.chip')[n].focus(); e.preventDefault();
 });
 
 const toastsEl = $('toasts');
@@ -2279,6 +2331,7 @@ function frameBody(now) {
     camX += c.vx * frameSim; camY += c.vy * frameSim;
     camX += (c.x - camX) * k; camY += (c.y - camY) * k;
   }
+  { const t = wallNow - shake; const amp = reduceMotion || t > 700 ? 0 : 7 * (1 - t / 700) ** 2; shX = (Math.random() - 0.5) * 2 * amp; shY = (Math.random() - 0.5) * 2 * amp; }
   drawScene(); composite(); drawOverlay(); drawScope();
   renderMoveCtx(false);
   updateInspect();
