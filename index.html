@@ -79,6 +79,8 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
 .legend{display:flex;gap:12px;font-size:10.5px;color:var(--faint);letter-spacing:.04em}
 .legend span::before{content:"";display:inline-block;width:12px;height:2px;margin-right:5px;vertical-align:middle;background:var(--wave)}
 .legend span.f::before{background:var(--accent);opacity:.8}
+.legend span.x::before{background:#b9a3ff;opacity:.8}
+.legend{flex-wrap:wrap;row-gap:2px}
 
 .panel{position:fixed;z-index:7;top:calc(env(safe-area-inset-top,0px) + 58px);right:max(16px,env(safe-area-inset-right,0px));
   width:min(340px,calc(100% - 32px));max-height:calc(100% - 210px);overflow-y:auto;background:var(--glass-hi);border:1px solid var(--line);
@@ -178,7 +180,7 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     </button>
   </div>
   <canvas id="scope"></canvas>
-  <div class="legend mono"><span>strain</span><span class="f">frequency (log, 10 Hz–5 kHz)</span></div>
+  <div class="legend mono"><span>strain</span><span class="f">frequency (log)</span><span class="x">infall glow</span></div>
   <div id="readouts" class="mono"></div>
 </section>
 
@@ -208,6 +210,8 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
     <li>Neutron stars are the one thing at true size: 12 km radius, 1 grid unit. Two of them merging make a kilonova; above about 2.3 M☉ the remnant collapses to a hole (in reality, after a short-lived hypermassive phase). A real kilonova fades over days; here it takes about 9 seconds.</li>
     <li>Listen plays the GW frequency one octave up. The real 36 + 29 chirp lasts about 0.2 s; here it is stretched out.</li>
     <li>A white dwarf that spirals into a neutron star gets torn into a disk. The neutron star feeds and spins up (about 0.1 M☉ takes it to millisecond periods), the usual story for millisecond pulsars; the fastest known spins 716 times a second. A neutron star that eats past about 2.3 M☉ collapses into a hole. A neutron star sinking into a giant makes a Thorne–Żytkow object.</li>
+    <li>A black hole rarely eats a star whole. Gas spills off through the Roche lobe and the star keeps going. A giant stays big until its envelope is gone, then its helium core is left orbiting, as a white dwarf for a red giant or a Wolf–Rayet star for a blue supergiant. A small star can be whittled down to a brown dwarf. On a stretched orbit, each close pass takes a little (like ASASSN-14ko, which flares every 115 days).</li>
+    <li>Not all the stolen gas gets eaten. Near the hole, part of it is blown back out by its own light, 15–65% here and more when the hole is feeding hard, as in ultraluminous X-ray sources. The purple band on the scope tracks how fast gas is falling in.</li>
     <li>Not to scale: ordinary stars are drawn thousands of times smaller than life (a white dwarf is really Earth-sized, about 500× a neutron star, but here only 1.6×), and mass transfer runs fast enough to watch.</li>
   </ul>
 </aside>
@@ -247,9 +251,13 @@ const STAR_TYPES = [
   { id:'A',   name:'A star',           short:'A star',    m:2.0, R:5.0, T:8800,  col:[224,233,255], kind:'ms' },
   { id:'B',   name:'B star',           short:'B star',    m:6.0, R:7.0, T:18000, col:[168,196,255], kind:'ms' },
   { id:'O',   name:'O star',           short:'O star',    m:20,  R:10,  T:38000, col:[138,172,255], kind:'ms' },
-  { id:'RG',  name:'Red giant',        short:'Red giant', m:1.2, R:22,  T:3900,  col:[255,116,72],  kind:'giant' },
-  { id:'BSG', name:'Blue supergiant',  short:'Blue supergiant', m:25, R:30, T:22000, col:[122,164,255], kind:'giant' },
+  { id:'RG',  name:'Red giant',        short:'Red giant', m:1.2, R:22,  T:3900,  col:[255,116,72],  kind:'giant', core:0.35 },
+  { id:'BSG', name:'Blue supergiant',  short:'Blue supergiant', m:25, R:30, T:22000, col:[122,164,255], kind:'giant', core:9 },
   { id:'WD',  name:'White dwarf',      short:'White dwarf', m:0.8, R:1.6, T:20000, col:[236,242,255], kind:'wd' },
+  // remnants that only appear when a star is stripped (not in the toolbar)
+  { id:'HeWD', name:'Helium white dwarf', short:'He white dwarf', m:0.35, R:1.9, T:25000, col:[226,236,255], kind:'wd', hidden:true },
+  { id:'WR',  name:'Wolf–Rayet star',  short:'Wolf–Rayet', m:9, R:4.2, T:60000, col:[150,186,255], kind:'ms', hidden:true },
+  { id:'BD',  name:'Brown dwarf',      short:'Brown dwarf', m:0.07, R:0.9, T:1800, col:[176,84,60], kind:'bd', hidden:true },
 ];
 const TYPE = Object.fromEntries(STAR_TYPES.map(t => [t.id, t]));
 
@@ -270,7 +278,7 @@ let camX = 0, camY = 0, zoom = 1;
 let tiltDeg = 0, cosI = 1, sinI = 0, yaw = 0, cY = 1, sY = 0;
 let followId = null, followPos = null; // null = automatic focus
 const placed = [];                     // ids of objects the viewer placed, for undo
-let totalFed = 0;
+let totalFed = 0, totalWind = 0;
 let gwSrc = null;
 let currentPreset = 'kerr';
 let wallNow = 0;
@@ -279,7 +287,7 @@ const flashes = [];
 const MAXG = 5000;
 let gasCap = 3200;       // soft budget for streamed gas; the frame-time governor moves it
 const gx = new Float64Array(MAXG), gy = new Float64Array(MAXG), gvx = new Float64Array(MAXG), gvy = new Float64Array(MAXG);
-const gm = new Float64Array(MAXG), gage = new Float64Array(MAXG); const gb = new Uint8Array(MAXG);
+const gm = new Float64Array(MAXG), gage = new Float64Array(MAXG); const gb = new Uint8Array(MAXG), gf = new Uint8Array(MAXG);
 let gN = 0;
 
 /* Kerr helpers: a > 0 prograde. Radii in units of M = GM/c^2 = r_s/2 */
@@ -301,7 +309,8 @@ function makeBH(x, y, vx, vy, m, chi = 0) {
 }
 function makeStar(tid, x, y, vx, vy, m) {
   const t = TYPE[tid], mm = m || t.m;
-  const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:t.R, R0:t.R, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false };
+  const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:t.R, R0:t.R, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false,
+    core: t.core ? t.core * mm / t.m : 0, ep: null, passes: 0 };
   if (t.kind === 'ns') { s.spinHz = 1 + 3 * Math.random(); s.beamPh = Math.random() * 6.28; s.msp = false; }
   return s;
 }
@@ -312,12 +321,12 @@ const isCompact = b => b.kind === 'bh' || isNS(b) || isWD(b);
 const isAccretor = b => b.kind === 'bh' || isNS(b);
 function addGas(x, y, vx, vy, m) {
   if (gN >= MAXG) return false;
-  gx[gN] = x; gy[gN] = y; gvx[gN] = vx; gvy[gN] = vy; gm[gN] = m; gage[gN] = 0; gb[gN] = 9; gN++;
+  gx[gN] = x; gy[gN] = y; gvx[gN] = vx; gvy[gN] = vy; gm[gN] = m; gage[gN] = 0; gb[gN] = 9; gf[gN] = 0; gN++;
   return true;
 }
 function removeGas(i) {
   gN--;
-  gx[i] = gx[gN]; gy[i] = gy[gN]; gvx[i] = gvx[gN]; gvy[i] = gvy[gN]; gm[i] = gm[gN]; gage[i] = gage[gN]; gb[i] = gb[gN];
+  gx[i] = gx[gN]; gy[i] = gy[gN]; gvx[i] = gvx[gN]; gvy[i] = gvy[gN]; gm[i] = gm[gN]; gage[i] = gage[gN]; gb[i] = gb[gN]; gf[i] = gf[gN];
 }
 const bhList = () => bodies.filter(b => b.kind === 'bh');
 
@@ -404,6 +413,13 @@ const PRESETS = {
   feeding:  { name:'Red giant feeding a hole', extent:170, build() {
       const bh = makeBH(0, 0, 0, 0, 12); const st = makeStar('RG', 0, 0, 0, 0);
       bodies.push(bh, st); orbitAround(bh, st, 22 / (1.05 * rocheFrac(1.2 / 12)), 0); } },
+  partial:  { name:'Repeating partial disruption', extent:230, build() {
+      // a red giant on a stretched orbit: each close pass overflows its Roche lobe by ~25% and strips a little
+      const M = 20, bh = makeBH(0, 0, 0, 0, M), st = makeStar('RG', 0, 0, 0, 0), Mt = M + st.m;
+      const rp = st.R / (rocheFrac(st.m / M) * 1.25), ra = 330, a = (rp + ra) / 2;
+      const va = Math.sqrt(G * Mt * (2 / ra - 1 / a));
+      st.x = ra * M / Mt; bh.x = -ra * st.m / Mt; st.vy = -va * M / Mt; bh.vy = va * st.m / Mt;
+      bodies.push(bh, st); } },
   bsg:      { name:'Blue supergiant + hole', extent:130, build() {
       const bh = makeBH(0, 0, 0, 0, 15, 0.5); const st = makeStar('BSG', 0, 0, 0, 0);
       bodies.push(bh, st); orbitAround(bh, st, 30 / (1.04 * rocheFrac(25 / 15)), Math.PI); } },
@@ -433,7 +449,7 @@ const PRESETS = {
 function loadPreset(id) {
   currentPreset = id;
   if (typeof toastsEl !== 'undefined') toastsEl.replaceChildren();
-  bodies = []; gN = 0; gwSrc = null; slow = 1; slowHoldUntil = -1; totalFed = 0; simTime = 0; flashes.length = 0;
+  bodies = []; gN = 0; gwSrc = null; slow = 1; slowHoldUntil = -1; totalFed = 0; totalWind = 0; simTime = 0; flashes.length = 0; if (typeof xrBuf !== 'undefined') xrBuf.fill(0);
   scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0);
   setTilt(PRESETS[id].tilt || 0); setYaw(0);
   followId = null; followPos = null; placed.length = 0;
@@ -720,7 +736,11 @@ function mergeStars(a, b) {
 function updateRadius(s) {
   const x = s.m / s.m0;
   if (s.type.kind === 'ms') s.R = s.R0 * Math.pow(x, 0.8);
-  else if (s.type.kind === 'giant') s.R = s.R0 * Math.min(1.6, Math.pow(x, -0.15));
+  else if (s.type.kind === 'giant') { // a giant's size is set by its core, so it stays big while the envelope drains
+    const env = s.m0 > s.core ? clamp((s.m - s.core) / (s.m0 - s.core), 0, 1) : 1;
+    s.R = s.R0 * (0.9 + 0.1 * env);
+  }
+  else if (s.type.kind === 'bd') s.R = s.R0;
   else s.R = s.R0 * Math.min(1.8, Math.pow(x, -1 / 3));
   s.R = Math.max(s.R, 0.5);
 }
@@ -736,7 +756,17 @@ function stellarProcesses(simDt) {
     const f = st.R / rL; st.f = f;
     // white dwarf mass transfer onto a neutron star is unstable above ~0.2 Msun: it gets torn apart
     if (isWD(st) && isNS(host) && f > 1) { shred(st, host, r, 'ns'); continue; }
-    if (f > 1.6 || st.m < 0.12 * st.m0) { shred(st, host, r, isNS(host) ? 'ns' : 'tde'); continue; }
+    if (f > 1.6 || (st.type.kind === 'wd' && st.m < 0.12 * st.m0)) { shred(st, host, r, isNS(host) ? 'ns' : 'tde'); continue; }
+    // track each overflow episode so close passes on a stretched orbit report what they took
+    if (f > 1 && !st.ep) st.ep = { m: st.m, t: simTime };
+    else if (f < 0.97 && st.ep) {
+      const lost = st.ep.m - st.m; st.ep = null;
+      // only a stretched orbit makes discrete passes; a near-circular one just flickers in and out of overflow
+      const rvx = st.vx - host.vx, rvy = st.vy - host.vy, GM = G * (host.m + st.m);
+      const En = 0.5 * (rvx * rvx + rvy * rvy) - GM / r, hz = (st.x - host.x) * rvy - (st.y - host.y) * rvx;
+      const ecc = Math.sqrt(Math.max(0, 1 + 2 * En * hz * hz / (GM * GM)));
+      if (lost > 0.0005 && ecc > 0.3) { st.passes++; toast(`Partial disruption · pass ${st.passes}`, [`The ${st.type.name.toLowerCase()} lost ${lost.toFixed(3)} M☉ at its closest approach and survived`, `${fmtM(st.m)} M☉ left · the hole flares as that gas falls in`]); }
+    }
     if (f > 1 && simDt > 0) {
       const rate = Math.min(0.04, 0.05 * st.m * (f - 1));
       // fewer, heavier particles as the disk fills up: same mass flow, bounded particle count
@@ -745,9 +775,27 @@ function stellarProcesses(simDt) {
       st.emitAcc += rate * simDt / pm;
       while (st.emitAcc >= 1 && st.m > pm * 2) { if (!emitL1(st, host, rL, pm)) { st.emitAcc = 0; break; } st.m -= pm; st.emitAcc -= 1; }
       updateRadius(st);
+      if (st.type.kind === 'giant' && st.m <= st.core * 1.01) { exposeCore(st); continue; }
+      if (st.type.kind === 'ms' && st.m < 0.075 && st.type.id !== 'BD') { becomeBrownDwarf(st); continue; }
       if (!st.noted) { st.noted = true; toast('Mass transfer', [`${st.type.name} is overflowing its Roche lobe onto the ${fmtM(host.m)} M☉ ${isNS(host) ? 'neutron star' : 'hole'}`]); }
     }
   }
+}
+function retype(st, t, keepMass) {
+  st.type = t; st.m0 = st.m; st.R = st.R0 = t.R; st.core = 0;
+  st.noted = false; st.emitAcc = 0; st.ep = null; st.f = 0;
+}
+function exposeCore(st) {
+  const from = st.type.name.toLowerCase(), wr = st.type.id === 'BSG';
+  retype(st, wr ? TYPE.WR : TYPE.HeWD);
+  toast('Stripped to the core', wr
+    ? [`The ${from}'s envelope is gone`, `Its ${fmtM(st.m)} M☉ helium core is left as a Wolf–Rayet star, still orbiting`]
+    : [`The ${from}'s envelope is gone`, `Its ${fmtM(st.m)} M☉ helium core is left as a white dwarf, still orbiting`], 'w');
+}
+function becomeBrownDwarf(st) {
+  const from = st.type.name;
+  retype(st, TYPE.BD);
+  toast('Whittled down', [`The ${from} has been stripped to ${st.m.toFixed(3)} M☉, too light to fuse hydrogen`, 'What is left is a brown dwarf']);
 }
 function emitL1(st, host, rL, pm) {
   const dx = host.x - st.x, dy = host.y - st.y, r = Math.hypot(dx, dy) || 1, nx = dx / r, ny = dy / r;
@@ -784,7 +832,7 @@ function shred(st, host, r, kind) {
   }
 }
 
-const mspQueue = [];
+const mspQueue = [], windQueue = [];
 // gas mass m landing on accretor b; (px, py, rvx, rvy) = position and velocity relative to b
 function accrete(b, m, px, py, rvx, rvy) {
   if (b.kind === 'bh') { // accreted angular momentum spins the hole up (or down, for retrograde gas)
@@ -796,6 +844,7 @@ function accrete(b, m, px, py, rvx, rvy) {
   } else { // recycling: ~0.1 Msun of accreted gas spins a neutron star up to millisecond periods
     b.spinHz = Math.min(716, b.spinHz + m / b.m * 4000);
     if (!b.msp && b.spinHz >= 100) { b.msp = true; mspQueue.push(b); }
+    b.fedFrame = (b.fedFrame || 0) + m;
   }
   b.m += m; totalFed += m;
 }
@@ -840,6 +889,18 @@ function stepGas(simDt) {
         if (a > bestA) { bestA = a; hb = b; hrp = rp; }
       }
       if (dead || far) { dead = true; break; }
+      if (gf[i] === 0) { // first time this gas reaches the inner disk: some of it is blown back out
+        const ex = x - hb.x, ey = y - hb.y, er = Math.hypot(ex, ey);
+        if (er < 15 * hrp) {
+          const fOut = hb.kind === 'bh' ? 0.15 + 0.5 * clamp(hb.feedRate * 160, 0, 1) : 0.4;
+          if (Math.random() < fOut) {
+            const sp = (0.3 + 0.15 * Math.random()) * C;
+            vx += ex / er * sp; vy += ey / er * sp; gf[i] = 2;
+            totalWind += gm[i];
+            if (!hb.windNoted) { hb.windNoted = true; windQueue.push(hb); }
+          } else gf[i] = 1;
+        }
+      }
       vx += ax * dt; vy += ay * dt;
       const px = x - hb.x, py = y - hb.y, r = Math.hypot(px, py), d = Math.max(r - hrp, 0.3 * hrp);
       let rvx = vx - hb.vx, rvy = vy - hb.vy;
@@ -868,7 +929,8 @@ function stepGas(simDt) {
 
 /* ================= gravitational-wave source + scope ================= */
 const SCOPE_N = 540;
-const scopeBuf = new Float32Array(SCOPE_N), scopeMark = new Uint8Array(SCOPE_N), freqBuf = new Float32Array(SCOPE_N);
+const scopeBuf = new Float32Array(SCOPE_N), scopeMark = new Uint8Array(SCOPE_N), freqBuf = new Float32Array(SCOPE_N), xrBuf = new Float32Array(SCOPE_N);
+let xrMax = 1e-6;
 let scopeHead = 0, scopeMax = 0.5, markScope = false;
 let fgwText = 'no source', audioF = 0, audioEnv = 0;
 
@@ -909,6 +971,8 @@ function updateGW() {
   }
   audioF = f; audioEnv = env;
   if (!paused) {
+    let xr = 0; for (const b of bodies) if (isAccretor(b)) xr += b.feedRate || 0;
+    xrBuf[scopeHead] = xr;
     scopeBuf[scopeHead] = h; freqBuf[scopeHead] = f; scopeMark[scopeHead] = markScope ? 1 : 0; markScope = false;
     scopeHead = (scopeHead + 1) % SCOPE_N;
   }
@@ -1182,7 +1246,9 @@ function drawScene() {
       if (boost > 1) sz = gsz * Math.sqrt(Math.min(boost, 4));
     }
     const h = sz / 2;
+    if (gf[i] === 2) sctx.globalAlpha *= 0.45;
     if (h > 0 && h < 400) sctx.drawImage(gasSprites[bucket], X - h, Y - h, sz, sz);
+    if (gf[i] === 2) sctx.globalAlpha = tilted ? sctx.globalAlpha / 0.45 : 1;
   }
   sctx.globalAlpha = 1;
   // stars: glow
@@ -1459,6 +1525,16 @@ function drawScope() {
   c.stroke();
   let mx = 0; for (let i = 0; i < SCOPE_N; i++) mx = Math.max(mx, Math.abs(scopeBuf[i]));
   scopeMax = Math.max(0.02, scopeMax + (mx - scopeMax) * (mx > scopeMax ? 0.3 : 0.02));
+  // accretion glow: how fast gas is falling in, as a soft filled band along the bottom
+  let xm = 0; for (let i = 0; i < SCOPE_N; i++) xm = Math.max(xm, xrBuf[i]);
+  xrMax = Math.max(1e-6, xrMax + (xm - xrMax) * (xm > xrMax ? 0.3 : 0.01));
+  if (xm > 1e-5) {
+    c.beginPath(); c.moveTo(0, H);
+    for (let k = 0; k < SCOPE_N; k++) { const i = (scopeHead + k) % SCOPE_N; c.lineTo(k / (SCOPE_N - 1) * W, H - xrBuf[i] / xrMax * H * 0.42); }
+    c.lineTo(W, H); c.closePath();
+    c.fillStyle = 'rgba(185,163,255,0.22)'; c.fill();
+    c.strokeStyle = 'rgba(185,163,255,0.7)'; c.lineWidth = 1 * d; c.stroke();
+  }
   // frequency track, log scale 10 Hz – 5 kHz
   const fy = f => H - 3 * d - (Math.log10(clamp(f, 10, 5000)) - 1) / 2.7 * (H - 6 * d);
   c.strokeStyle = 'rgba(255,179,106,0.75)'; c.lineWidth = 1.3 * d; c.beginPath();
@@ -1504,7 +1580,7 @@ $('gw').addEventListener('input', e => { gwBoost = +e.target.value; $('gwOut').t
 $('tilt').addEventListener('input', e => setTilt(+e.target.value));
 for (const k of TOGGLES) $('t-' + k).addEventListener('change', e => { opt[k] = e.target.checked; renderMoveCtx(true); if (k === 'trails' && !opt.trails) bodies.forEach(b => b.trail.length = 0); });
 $('fit').addEventListener('click', () => { fitBodies(); renderMoveCtx(true); });
-$('clear').addEventListener('click', () => { bodies = []; gN = 0; gwSrc = null; totalFed = 0; flashes.length = 0; scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); });
+$('clear').addEventListener('click', () => { bodies = []; gN = 0; gwSrc = null; totalFed = 0; totalWind = 0; xrBuf.fill(0); flashes.length = 0; scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); });
 $('sound').addEventListener('click', () => {
   if (!au && !initAudio()) { toast('No audio', ['This browser does not support Web Audio']); return; }
   if (au.ctx.state === 'suspended') au.ctx.resume();
@@ -1514,7 +1590,7 @@ $('sound').addEventListener('click', () => {
 const TOOLS = [
   { id:'move', label:'Move', icon:'<svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>' },
   { id:'bh', label:'Black hole' },
-  ...STAR_TYPES.map(t => ({ id:t.id, label:t.short, col:t.col })),
+  ...STAR_TYPES.filter(t => !t.hidden).map(t => ({ id:t.id, label:t.short, col:t.col })),
 ];
 const toolsEl = $('tools');
 for (const t of TOOLS) {
@@ -1770,6 +1846,7 @@ function frameBody(now) {
       stepGas(d); stellarProcesses(d); simDt += d;
     }
     frameSim = simDt;
+    while (windQueue.length) { const h = windQueue.shift(); toast('Disk wind', [`Gas near the ${h.kind === 'bh' ? fmtM(h.m) + ' M☉ hole' : 'neutron star'} glows so hard its own light blows part of it away`, 'The faint spray heading outward is stolen gas that will never be eaten'], 'w'); }
     while (mspQueue.length) { const ns = mspQueue.shift(); toast('Millisecond pulsar', [`Accretion spun the neutron star up to ${Math.round(ns.spinHz)} turns per second (period ${(1000 / ns.spinHz).toFixed(1)} ms)`, 'This is how most millisecond pulsars are thought to form: “recycled” by a companion'], 'w'); }
     for (const ns of bodies.filter(isNS)) if (ns.m > 2.3) { // accretion-induced collapse
       const bhn = makeBH(ns.x, ns.y, ns.vx, ns.vy, ns.m, Math.min(0.7, ns.spinHz / 1000));
@@ -1777,9 +1854,9 @@ function frameBody(now) {
       toast('Collapse to a black hole', [`The neutron star grew to ${fmtM(ns.m)} M☉, past the ~2.3 M☉ limit, and collapsed`]);
     }
     for (const b of bodies) {
+      if (isAccretor(b) && simDt > 0) b.feedRate = (b.feedRate || 0) + ((b.fedFrame || 0) / simDt - (b.feedRate || 0)) * Math.min(1, simDt * 1.5);
       if (b.kind === 'bh') {
         updateKerr(b);
-        if (simDt > 0) b.feedRate += (b.fedFrame / simDt - b.feedRate) * Math.min(1, simDt * 1.5);
         if (b.ring && simTime - b.ring.t0 > 12 * b.ring.tau) b.ring = null;
       }
       if (opt.trails && frameN % 2 === 0) { b.trail.push([b.x, b.y]); if (b.trail.length > 260) b.trail.shift(); }
@@ -1812,7 +1889,7 @@ function frameBody(now) {
     let nb = 0, ns = 0, mb = 0;
     for (const b of bodies) { if (b.kind === 'bh') { nb++; mb += b.m; } else ns++; }
     $('fgw').textContent = fgwText;
-    $('readouts').innerHTML = `<span><b>${nb}</b> holes · <b>${ns}</b> stars · <b>${gN}</b> gas</span><span>M<sub>BH</sub> <b>${fmtM(mb)}</b> M☉</span><span>fed <b>${totalFed.toFixed(3)}</b> M☉</span><span>view <b>${fmtKm(vw / zoom * KM_PER_UNIT)}</b> km</span>`;
+    $('readouts').innerHTML = `<span><b>${nb}</b> holes · <b>${ns}</b> stars · <b>${gN}</b> gas</span><span>M<sub>BH</sub> <b>${fmtM(mb)}</b> M☉</span><span>fed <b>${totalFed.toFixed(3)}</b> · blown out <b>${totalWind.toFixed(3)}</b> M☉</span><span>view <b>${fmtKm(vw / zoom * KM_PER_UNIT)}</b> km</span>`;
   }
 }
 
