@@ -146,7 +146,8 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
 .ins-act{height:34px;border-radius:9px;border:1px solid rgba(255,154,114,.5);background:rgba(255,154,114,.12);color:#ffc2a6;
   font:600 13.5px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
 .ins-act:hover:not(:disabled){background:rgba(255,154,114,.22)}
-.ins-act:disabled{cursor:default;opacity:.55}
+.ins-act:disabled{cursor:default;opacity:.7}
+.ins-act.no{border:1px dashed var(--faint);background:transparent;color:var(--dim)}
 .ins-note{margin:-3px 0 0;font-size:12.5px;line-height:1.35;color:var(--dim)}
 .ins-rows{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13.5px}
 .ins-rows dt{color:var(--dim);white-space:nowrap}
@@ -834,7 +835,7 @@ function snBlocker(b) {
   if (b.type.kind === 'wd') return 'A white dwarf has no fuel left to collapse. It can only explode if it gains enough mass to pass 1.44 M☉.';
   if (b.type.kind === 'bd') return 'A brown dwarf never fused hydrogen, so it never builds an iron core.';
   if (isNS(b)) return '';
-  return `Too light to collapse. Below about 8 M☉ a star sheds its outer layers gently and ends as a white dwarf.`;
+  return `Too light to collapse: it needs at least 8 M☉ and this one is ${fmtM(b.m)} M☉. A star this size sheds its outer layers gently and ends as a white dwarf. Try the O star or the blue supergiant.`;
 }
 // How a star ends depends on its mass: core collapse (8–140 Msun), pair-instability (140–260 Msun:
 // the star blows itself apart and leaves nothing), or direct collapse to a black hole (above ~260 Msun).
@@ -1911,7 +1912,7 @@ function statusOf(b) {
     if (b.ring && b.kind === 'bh') return ['Ringing down after a merger', 'feed'];
     return (b.feedRate || 0) > 1e-4 ? ['Feeding on infalling gas', 'feed'] : ['Quiet', ''];
   }
-  if (b.f > 1) return [b.passes || b.ep ? `Close pass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)` : `Losing mass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)`, 'hot'];
+  if (b.f > 1) return [b.passes ? `Close pass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)` : `Losing mass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)`, 'hot'];
   if (b.f > 0.85) return [`Close to overflowing (Roche lobe ${Math.round(b.f * 100)}% full)`, ''];
   if (b.m < b.mBirth * 0.999) return ['Stripped, now stable', ''];
   return ['Stable', ''];
@@ -1928,7 +1929,7 @@ function updateInspect() {
       <div class="ins-status"></div>
       ${b.kind === 'star' && !isNS(b) ? (canSupernova(b) || b.sn
         ? `<button class="ins-act" type="button"${b.sn ? ' disabled' : ''}>${b.sn ? 'Collapsing…' : 'Go supernova'}</button>`
-        : `<button class="ins-act" type="button" disabled>Go supernova</button><p class="ins-note">${snBlocker(b)}</p>`) : ''}
+        : `<button class="ins-act no" type="button" disabled>Can't go supernova</button><p class="ins-note">${snBlocker(b)}</p>`) : ''}
       <dl class="ins-rows">${rows.map(r => `<dt>${r[0]}</dt><dd></dd>`).join('')}</dl>`;
     insEl.querySelector('h2').textContent = kindName(b);
     const act = insEl.querySelector('.ins-act');
