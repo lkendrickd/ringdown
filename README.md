@@ -37,6 +37,9 @@ It's a single self-contained `index.html` with no build step and no dependencies
 | Share the setup | Share button (top right) | Share button |
 | Back to Move | Esc | Move chip |
 | Pause | Space | Pause button |
+| Hide all the controls | H, or the eye button | Eye button (tap it again to bring them back) |
+
+On a phone the layout tightens up on its own: the strain scope folds into a one-line strip (tap it to open), the inspector and settings become sheets above the object bar (tap an inspected object's name for the full readout), and only the newest notice shows, small, at the top (tap to dismiss). It also works held sideways.
 
 ## The physics
 
