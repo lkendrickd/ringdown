@@ -859,6 +859,39 @@ function planetTides(dt) {
     if (p.tidal > 1 && r > host.R + p.R) ringFrom(p, host, r);
   }
 }
+/* Two small worlds that have captured each other (bound, and within three combined radii) do not stay a pair:
+   that close, each is inside the other's Roche zone, and tides and debris bring them together within a few orbits.
+   This is how a swarm of moonlets ends up as one moon. Wide, stable pairs like Earth and its Moon are left alone. */
+function planetPairs() {
+  for (let i = 0; i < bodies.length; i++) {
+    const a = bodies[i]; if (!isPlanet(a)) continue;
+    for (let j = i + 1; j < bodies.length; j++) {
+      const b = bodies[j]; if (!isPlanet(b) || Math.min(a.m, b.m) < 0.02 * Math.max(a.m, b.m)) continue;   // peers only: a moon close to its planet is the Roche limit's business
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+      if (d > 3 * (a.R + b.R)) continue;
+      const vx = b.vx - a.vx, vy = b.vy - a.vy;
+      if (0.5 * (vx * vx + vy * vy) - G * (a.m + b.m) / d >= 0) continue;
+      const big = a.m >= b.m ? a : b, small = big === a ? b : a, M = a.m + b.m;
+      big.x = (a.x * a.m + b.x * b.m) / M; big.y = (a.y * a.m + b.y * b.m) / M;
+      big.vx = (a.vx * a.m + b.vx * b.m) / M; big.vy = (a.vy * a.m + b.vy * b.m) / M;
+      big.m = M; big.hot = Math.max(big.hot || 0, small.hot || 0); big.tidal = 0;
+      bodies = bodies.filter(o => o !== small);
+      if (followId === small.id) followId = big.id;
+      regrade(big); computeAccel();
+      return planetPairs();
+    }
+  }
+}
+// in the giant-impact scene, say so when the debris has gathered into something like the real Moon
+function nameTheMoon() {
+  if (currentPreset !== 'theia' || bodies.some(b => b.label === 'Moon')) return;
+  const earth = bodies.find(b => b.label === 'Proto-Earth'); if (!earth) return;
+  const moons = bodies.filter(b => isPlanet(b) && b !== earth && !b.label).sort((p, q) => q.m - p.m);
+  if (!moons.length || moons[0].m < 0.5 * 3.694e-8 || (moons[1] && moons[1].m > 0.25 * moons[0].m)) return;
+  const m = moons[0]; m.label = 'Moon'; m.moonOf = earth.id; m.col = [200, 196, 188];
+  toast('A Moon', [`${(m.m / 3.694e-8).toFixed(2)} times the mass of the real Moon, ${(Math.hypot(m.x - earth.x, m.y - earth.y) * KM_PER_UNIT / 6371).toFixed(1)} Earth radii out`,
+    'The real one is thought to have gathered at 3 to 5 Earth radii within months to years, and has been drifting outward ever since, 3.8 cm a year today.'], 'w');
+}
 function ringFrom(p, host, r) {
   const N = Math.min(Math.round(clamp(500 + 160 * Math.log10(p.m / 1e-12), 300, 1500)), MAXM - qN);
   bodies = bodies.filter(o => o !== p);
@@ -1108,12 +1141,12 @@ const PRESETS = {
         ['Ceres',    'AST',  9.38e20,  470,  [156,150,142], 2.767,  0.0785, 153.9, 308],
         ['Orcus',    'MOON', 6.3e20,   455,  [172,172,178], 39.42,  0.220,  341.1, 191],
         ['Pluto',    'MOON', 1.303e22, 1188, [216,190,160], 39.482, 0.2488, 224.1, 54],
-        ['Haumea',   'MOON', 4.01e21,  800,  [226,226,230], 43.1,   0.196,  1.2,   225],
+        ['Haumea',   'MOON', 4.01e21,  800,  [226,226,230], 43.22,  0.196,  1.2,   225],
         ['Quaoar',   'MOON', 1.2e21,   545,  [178,132,112], 43.7,   0.041,  336,   300],
-        ['Makemake', 'MOON', 3.1e21,   715,  [206,162,132], 45.4,   0.161,  14.4,  173],
-        ['Gonggong', 'MOON', 1.75e21,  615,  [192,102,82],  67.5,   0.503,  184.5, 110],
-        ['Eris',     'MOON', 1.66e22,  1163, [234,234,238], 67.86,  0.4361, 187.6, 212],
-        ['Sedna',    'MOON', 1e21,     500,  [198,86,62],   506,    0.8496, 95.5,  358.43],
+        ['Makemake', 'MOON', 3.1e21,   715,  [206,162,132], 45.56,  0.161,  14.4,  173],
+        ['Gonggong', 'MOON', 1.75e21,  615,  [192,102,82],  67.38,  0.503,  184.5, 110],
+        ['Eris',     'MOON', 1.66e22,  1163, [234,234,238], 67.78,  0.4361, 187.6, 212],
+        ['Sedna',    'MOON', 1e21,     500,  [198,86,62],   506,    0.8496, 95.5,  358.32],
       ];
       for (const [name, t, kg, km, col, a, e, peri, M] of W) { const b = world(t, name, kg, km, col); keplerPlace(sun, b, a, e, peri * D, -1, M * D); bodies.push(b); }
       // the big moons: name, planet, mass (kg), radius (km), orbit radius (km)
@@ -4146,7 +4179,7 @@ function frameBody(now) {
     // the matter's own gravity and sticking are slow processes: every third frame is plenty
     mcDt += simDt; mcWall += wallDt;
     if (frameN % 3 === 0) { matterCollective(mcDt, mcWall); mcDt = 0; mcWall = 0; }
-    planetTides(simDt);
+    planetTides(simDt); planetPairs(); if (frameN % 30 === 0) nameTheMoon();
     // smoothed rate of mass change for the inspector (per second of sim time)
     for (const b of bodies) {
       if (b.mPrev == null || simDt <= 0) { b.mPrev = b.m; b.mRate = b.mRate || 0; continue; }
