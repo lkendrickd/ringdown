@@ -1,10 +1,10 @@
 # Ringdown
 
-An interactive black hole simulator that runs in your browser. Merge black holes and hear the gravitational-wave chirp and ringdown. Spin them up, feed them stars, and smash neutron stars into kilonovae.
+An interactive astrophysics sandbox that runs in your browser. Merge black holes and hear the gravitational-wave chirp and ringdown. Spin them up, feed them stars, and smash neutron stars into kilonovae. Pour out raw matter and watch it fall together into moons, planets and stars. Fly the Solar System out to Sedna and on to the nearest stars, replay the impact that made the Moon, and give a planet rings.
 
 **Live:** https://lkendrickd.github.io/ringdown/
 
-It's a single self-contained `index.html` with no build step and no dependencies beyond Google Fonts. It uses WebGL2 for gravitational lensing and the black hole shadows, and Web Audio for sound.
+It's a single self-contained `index.html` with no build step and no dependencies beyond Google Fonts. It uses WebGL2 for everything on screen (instanced gas and stars, HDR with bloom, ray-traced lensing of the disk) and Web Audio for sound. Without WebGL2 it falls back to a plain 2D canvas.
 
 ## What you can do
 
@@ -21,6 +21,12 @@ It's a single self-contained `index.html` with no build step and no dependencies
 - **Share a setup.** The share button packs the whole scene into the link.
 - **Inspect anything.** Click a body to see its mass ticking live, how fast it's gaining or losing mass, and what's happening to it. A dashed ring shows the orbit it's on, run a lap ahead with the sim's own gravity: closest and farthest points, precession near a hole, and where it will fall in, get torn apart or escape.
 - **Make it explode.** Stars above about 8 M☉ can go supernova from the inspector: the iron core collapses, bounces, the shock stalls until neutrinos revive it, and the envelope is blown off, leaving a neutron star or a black hole. Pile stars together and collisions build monsters no galaxy makes on its own: 140–260 M☉ ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ the star collapses straight into an intermediate-mass black hole.
+- **Pour out matter.** The Matter tool sprays raw gas and dust wherever you hold the pointer, from a dusting to tens of Suns a second. In empty space it falls together under its own gravity; near a body it goes into orbit. What forms depends only on how much gathers: asteroid, moon, rocky planet, ice giant, gas giant, brown dwarf (13 Jupiters), star (0.075 M☉), and a star that keeps growing moves up the main sequence until it can't hold together.
+- **Planets, moons and asteroids.** Drop them like stars. Their size follows their mass. Two that collide slowly merge; a fast glancing hit throws off molten debris that can gather into a moon.
+- **Rings.** Anything held together only by its own gravity is pulled apart inside a planet's Roche limit, and the pieces spread into a ring that can't re-form into a moon that close in. The dashed red circle shows the limit while you place a moon. Outside it, ring matter sticks back together into moonlets.
+- **The Solar System.** All eight planets on their real orbits, the Moon, the Galilean moons and Titan, Ceres, Pluto, Orcus, Haumea, Quaoar, Makemake, Gonggong, Eris and Sedna, the asteroid belt, Jupiter's Trojans and the Kuiper belt. Click a world to follow it and zoom in. Zoom out past the heliopause and the Oort cloud to the fourteen nearest star systems.
+- **How the Moon formed.** A Mars-sized world strikes the young Earth off-centre. Part of it is thrown into orbit, and the debris beyond the Roche limit gathers into moonlets that merge.
+- **A solar nebula.** A disk of dust round a young star sticks together into a family of planets.
 - **Tilt the view.** Seen from the side, the disk is brighter on the side coming toward you (Doppler beaming), spinning holes show their exact Kerr shadow, and jets show up.
 
 ## Controls
@@ -32,6 +38,7 @@ It's a single self-contained `index.html` with no build step and no dependencies
 | Tilt & rotate | Right-drag or Shift-drag, or the view dial | Twist two fingers, or drag the view dial |
 | Inspect & follow an object | Click it (Esc to close) | Tap it |
 | Place an object | Pick it in the bar, click to orbit, drag to throw | Same |
+| Pour out matter | Pick Matter, set the flow, hold and drag | Same |
 | Undo placement | Ctrl/Cmd+Z | Undo button |
 | Edit or delete a body | Inspector → Edit | Inspector → Edit |
 | Share the setup | Share button (top right) | Share button |
@@ -49,9 +56,14 @@ G and c are scaled together, so 1 grid unit is 11.8 km. Horizon sizes, orbital s
 - **Remnants:** spin from the Rezzolla et al. (2008) aligned-spin fit; radiated energy from the remnant's ISCO binding energy. 36 + 29 M☉ gives about 62 M☉, spin 0.68, and 3 M☉ radiated, close to GW150914.
 - **Ringdown:** Berti, Cardoso & Will fits for the l = m = 2 quasi-normal mode.
 - **Black hole shadows:** the exact Kerr outline (Bardeen 1973) for each hole's spin and the viewing angle.
+- **Lensed disks:** each pixel near a hole is traced back along a Schwarzschild null geodesic to where it crosses the orbital plane, once for the direct view and once more for light bent round the far side.
 - **Orbits near holes:** a pseudo-Newtonian potential with the Bardeen–Press–Teukolsky ISCO for prograde and retrograde orbits.
 - **Mass transfer:** Eggleton's Roche-lobe formula. Giants keep their size while the envelope drains, since a giant's radius is set by its core.
 - **Disk winds:** 15–65% of the gas reaching the inner disk is blown out, more when the hole is feeding hard, as in ultraluminous X-ray sources.
+- **Planets:** radius from mass on a curve through Ceres, the Moon, Earth, Neptune, Saturn and Jupiter. In scenes with nothing relativistic in them, bodies are integrated with a plain Newtonian leapfrog that resolves every orbit down to the moons.
+- **Roche limit:** a body breaks up inside 2 × its radius × (host mass / its mass)^(1/3) after about one of its own free-fall times there; loose matter only clumps where the clump would fit well inside its Hill sphere.
+- **Giant impacts:** debris fraction grows with impact angle and with speed above escape speed; the Moon-forming scene is the canonical case (0.13 Earth masses, about 45°, just over escape speed).
+- **Solar System:** J2000 orbital elements run forward to late 2026, real masses and radii, all in one plane.
 - **Jets:** power scales with feeding rate × spin² (Blandford–Znajek), beamed for β = 0.92.
 
-**What it fakes:** ordinary stars are drawn thousands of times smaller than life, mass transfer and pulsar spin-up run fast enough to watch, the space ripples and horizon wobble are exaggerated, lensing is a flat point-lens approximation, and the jets are drawn schematically.
+**What it fakes:** ordinary stars are drawn thousands of times smaller than life, mass transfer and pulsar spin-up run fast enough to watch, the space ripples and horizon wobble are exaggerated, the background sky is bent with a flat point lens (only the disk is ray traced, and without spin), and the jets are drawn schematically. Matter sticks and clumps on a coarse grid of a few thousand particles, enormously faster than in nature. The Solar System is flattened into one plane, dwarf-planet positions are approximate, and the nearest stars are markers, not simulated bodies.

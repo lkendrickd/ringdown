@@ -437,6 +437,12 @@ const STAR_TYPES = [
   { g:4, id:'HeWD', Rsun:0.02, name:'Helium white dwarf', short:'He white dwarf', m:0.35, R:1.9, T:25000, col:[226,236,255], kind:'wd' },
   { g:4, id:'sdB', Rsun:0.2, name:'Hot subdwarf',     short:'Hot subdwarf', m:0.5, R:2.4, T:30000, col:[176,200,255], kind:'ms' },
   { g:4, id:'RCB', Rsun:70, name:'R Coronae Borealis star', eg:'like R CrB itself', short:'R CrB star', m:0.9, R:14, T:6500, col:[255,224,168], kind:'giant', core:0.8 },
+  // cold bodies. Their radius comes from their mass (planetR), so R and Rsun here are only the toolbar defaults.
+  { g:5, id:'AST',  Rsun:0.00068, name:'Asteroid', eg:'like Ceres',            short:'Asteroid',     m:4.7e-10,  R:0.16, T:170, col:[168,156,142], kind:'planet' },
+  { g:5, id:'MOON', Rsun:0.0025,  name:'Small world', eg:'like the Moon or Pluto', short:'Moon',     m:3.694e-8, R:0.31, T:250, col:[196,192,184], kind:'planet' },
+  { g:5, id:'ROCK', Rsun:0.00916, name:'Rocky planet', eg:'like Earth',        short:'Rocky planet', m:3.003e-6, R:0.5,  T:288, col:[98,152,224],  kind:'planet' },
+  { g:5, id:'ICE',  Rsun:0.0354,  name:'Ice giant', eg:'like Neptune',         short:'Ice giant',    m:5.15e-5,  R:0.62, T:72,  col:[124,190,226], kind:'planet' },
+  { g:5, id:'GAS',  Rsun:0.1005,  name:'Gas giant', eg:'like Jupiter',         short:'Gas giant',    m:9.546e-4, R:0.75, T:165, col:[216,174,126], kind:'planet' },
 ];
 const RSUN_U = 696000 / KM_PER_UNIT; // one solar radius in sim units
 // lowercase name for use mid-sentence, keeping proper names (Wolf–Rayet, R Coronae Borealis) capitalized
@@ -448,7 +454,7 @@ let bodies = [];
 let nextId = 1;
 let simTime = 0;
 let paused = false;
-const SPEEDS = [0.25, 0.5, 1, 2, 4];
+const SPEEDS = [0.25, 0.5, 1, 2, 4, 16, 64];
 let speedIdx = 2;
 let slow = 1, slowHoldUntil = -1;
 let gwBoost = 1;
@@ -497,7 +503,7 @@ function makeBH(x, y, vx, vy, m, chi = 0) {
 }
 function makeStar(tid, x, y, vx, vy, m) {
   const t = TYPE[tid], mm = m || t.m;
-  const R0 = realSizes ? t.Rsun * RSUN_U * (t.kind === 'ms' ? Math.pow(mm / t.m, 0.8) : 1) : t.R;
+  const R0 = t.kind === 'planet' ? planetR(mm, realSizes) : realSizes ? t.Rsun * RSUN_U * (t.kind === 'ms' ? Math.pow(mm / t.m, 0.8) : 1) : t.R;
   const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:R0, R0, real: realSizes, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false,
     core: t.core ? t.core * mm / t.m : 0, ep: null, passes: 0, mBirth: mm };
   if (t.kind === 'ns') { s.spinHz = 1 + 3 * Math.random(); s.beamPh = Math.random() * 6.28; s.msp = false; }
@@ -519,10 +525,400 @@ function removeGas(i) {
 }
 const bhList = () => bodies.filter(b => b.kind === 'bh');
 
+/* ================= planets and cold matter =================
+   Planets, moons and asteroids are bodies like stars (same orbits, same collisions) with a type of kind 'planet'.
+   Cold matter is a second set of particles: rock, ice and gas that feels every body's gravity and its own.
+   It clumps where its own gravity beats the tide of whatever it orbits (outside the Roche limit) and stays a
+   ring where it can't (inside it). What a clump becomes is decided by its mass alone. */
+const MEARTH = 3.003e-6, MJUP = 9.546e-4, REARTH_SUN = 6371 / 696000;
+const isPlanet = b => b.kind === 'star' && b.type.kind === 'planet';
+// mass in the unit a person would use for it
+function massStr(m) {
+  if (m >= 0.0124) return `${fmtM(m)} M☉`;
+  if (m >= 0.1 * MJUP) { const v = m / MJUP; return `${v.toFixed(v < 10 ? 2 : 1)} Jupiter masses`; }
+  if (m >= 1e-4 * MEARTH) { const v = m / MEARTH; return `${v >= 10 ? v.toFixed(1) : v >= 0.1 ? v.toFixed(2) : v.toPrecision(2)} Earth masses`; }
+  return `${(m * 1.989e30).toExponential(1).replace('e+', '×10^')} kg`;
+}
+function massUnit(b) {
+  if (!isPlanet(b)) return { u: 'M☉', k: 1 };
+  return b.m >= 0.1 * MJUP ? { u: 'Jupiter masses', k: MJUP } : { u: 'Earth masses', k: MEARTH };
+}
+// Mass–radius relation for cold bodies (log10, Earth units), through Ceres, the Moon, Earth, a 10-Earth super-Earth,
+// Neptune, Saturn, Jupiter, and flat from there to the brown-dwarf boundary (degenerate matter: more mass, same size).
+const MR_PTS = [[-3.80, -1.13], [-1.91, -0.564], [0, 0], [1, 0.28], [1.233, 0.589], [1.979, 0.961], [2.502, 1.049], [3.62, 1.03]];
+function planetRsun(m) {
+  const lm = Math.log10(Math.max(m, 1e-18) / MEARTH), P = MR_PTS, n = P.length;
+  let lr;
+  if (lm <= P[0][0]) lr = P[0][1] + (lm - P[0][0]) / 3;   // constant density below Ceres
+  else if (lm >= P[n - 1][0]) lr = P[n - 1][1];
+  else { let i = 1; while (P[i][0] < lm) i++; lr = P[i - 1][1] + (P[i][1] - P[i - 1][1]) * (lm - P[i - 1][0]) / (P[i][0] - P[i - 1][0]); }
+  return Math.pow(10, lr) * REARTH_SUN;
+}
+// drawn radius: true size in true-scale scenes; in the compressed scenes, small next to the (also shrunken) stars
+function planetR(m, real) { return real ? planetRsun(m) * RSUN_U : clamp(0.5 + 0.1 * Math.log10(Math.max(m, 1e-18) / MEARTH), 0.16, 0.95); }
+function typeForMass(m) {
+  if (m < 2e-9) return TYPE.AST;
+  if (m < 1.5e-7) return TYPE.MOON;
+  if (m < 3e-5) return TYPE.ROCK;
+  if (m < 1.5e-4) return TYPE.ICE;
+  if (m < 0.0124) return TYPE.GAS;
+  if (m < 0.075) return TYPE.BD;
+  return TYPE[m < 0.45 ? 'M' : m < 0.8 ? 'K' : m < 1.04 ? 'G' : m < 1.6 ? 'F' : m < 3 ? 'A' : m < 16 ? 'B' : 'O'];
+}
+function bodyName(b) { return b.label || (b.kind === 'bh' ? 'the black hole' : 'the ' + b.type.lc); }
+// A cold body's mass decides what it is. Past 13 Jupiters it fuses deuterium (a brown dwarf); past 0.075 Suns, hydrogen.
+function regrade(b) {
+  if (b.kind !== 'star' || (b.type.kind !== 'planet' && b.type.id !== 'BD')) return;
+  const t = typeForMass(b.m), was = b.type;
+  if (t !== was && (t.kind !== 'planet' || !b.label)) {   // a named world keeps its name and look until it stops being a planet
+    b.type = t;
+    if (t.kind === 'ms') {
+      b.col = null; b.label = ''; b.hot = 0;
+      toast('A star ignites', [`At ${fmtM(b.m)} M☉ the core is hot and dense enough to fuse hydrogen`, `What was a brown dwarf is now ${/^[AO]/.test(t.name) ? 'an' : 'a'} ${t.lc}`], 'w');
+    } else if (t.id === 'BD') {
+      b.col = null; b.label = '';
+      toast('Brown dwarf', ['Past about 13 Jupiter masses the core fuses deuterium', 'It glows on its own now, but it is still too light to burn hydrogen like a star'], 'w');
+    }
+  }
+  if (b.type.kind === 'planet') b.R = b.R0 = planetR(b.m, b.real) * (b.puff || 1);
+  else if (b.type.id === 'BD') b.R = b.R0 = b.real ? TYPE.BD.Rsun * RSUN_U : TYPE.BD.R;
+  else b.R = b.R0 = b.real ? b.type.Rsun * RSUN_U * Math.pow(b.m / b.type.m, 0.8) : b.type.R;
+  b.m0 = b.m; b.mBirth = Math.max(b.mBirth || 0, b.m);
+}
+
+const MAXM = 7000, BODY_CAP = 96;
+const qx = new Float64Array(MAXM), qy = new Float64Array(MAXM), qvx = new Float64Array(MAXM), qvy = new Float64Array(MAXM);
+const qm = new Float64Array(MAXM), qT = new Float32Array(MAXM), qc = new Int32Array(MAXM), qk = new Uint16Array(MAXM), qp = new Float32Array(MAXM), qr = new Uint8Array(MAXM); // qr: 1 = ring debris; qk: how many grains have stuck together; qp: size for its mass, relative to rock (ice is puffier)
+let qN = 0, matterFull = false, mcDt = 0, mcWall = 0;
+function addMatter(x, y, vx, vy, m, heat, puff) {
+  if (qN >= MAXM) return false;
+  qx[qN] = x; qy[qN] = y; qvx[qN] = vx; qvy[qN] = vy; qm[qN] = m; qT[qN] = heat || 0; qk[qN] = 1; qp[qN] = puff || 1; qr[qN] = 0; qN++;
+  return true;
+}
+function removeMatter(i) {
+  qN--;
+  qx[i] = qx[qN]; qy[i] = qy[qN]; qvx[i] = qvx[qN]; qvy[i] = qvy[qN]; qm[i] = qm[qN]; qT[i] = qT[qN]; qc[i] = qc[qN]; qk[i] = qk[qN]; qp[i] = qp[qN]; qr[i] = qr[qN];
+}
+// a piece of matter lands on a body
+function matterLands(b, m, vx, vy) {
+  const M = b.m + m;
+  b.vx += (vx - b.vx) * m / M; b.vy += (vy - b.vy) * m / M;
+  b.m = M;
+  if (b.kind === 'bh') { b.fedTotal = (b.fedTotal || 0) + m; totalFed += m; return; }
+  b.fedTotal = (b.fedTotal || 0) + m;
+  if (b.type.kind === 'planet' || b.type.id === 'BD') regrade(b);
+  else {
+    b.m0 = M; b.mBirth = Math.max(b.mBirth || 0, M);
+    if (isWD(b)) b.R = b.R0 = sized(b, wdRadius(Math.min(M, M_CH * 0.99)), TYPE.WD);
+    else if ('MKGFABO'.includes(b.type.id)) { // a growing star moves up the main sequence: hotter, bluer, bigger
+      const t = typeForMass(M);
+      if (t !== b.type && t.m > b.type.m) b.type = t;
+      b.R = b.R0 = b.real ? b.type.Rsun * RSUN_U * Math.pow(M / b.type.m, 0.8) : b.type.R * Math.pow(M / b.type.m, 0.5);
+      if (M >= 140 && !b.sn) startSupernova(b);
+    }
+  }
+}
+// Move the matter under the gravity of every body. Each particle takes as many substeps as its tightest orbit needs.
+const _bx = new Float64Array(BODY_CAP + 64), _by = new Float64Array(BODY_CAP + 64), _bvx = new Float64Array(BODY_CAP + 64), _bvy = new Float64Array(BODY_CAP + 64);
+const _bm = new Float64Array(BODY_CAP + 64), _br = new Float64Array(BODY_CAP + 64), _bhot = new Float64Array(BODY_CAP + 64);
+function stepMatter(simDt) {
+  if (!qN || simDt <= 0) return;
+  const nb = Math.min(bodies.length, _bx.length);
+  if (!nb) { for (let i = 0; i < qN; i++) { qx[i] += qvx[i] * simDt; qy[i] += qvy[i] * simDt; } return; }
+  for (let j = 0; j < nb; j++) {
+    const b = bodies[j];
+    _bx[j] = b.x; _by[j] = b.y; _bvx[j] = b.vx; _bvy[j] = b.vy; _bm[j] = G * b.m;
+    // what counts as landing: the surface of a star or planet; for a compact object, the edge of where gas would
+    // already be a hot disk (there the matter is handed over to the gas, which knows how to accrete)
+    if (b.kind === 'bh') { _br[j] = 0; _bhot[j] = 30 * rsOf(b.m); }
+    else if (isNS(b)) { _br[j] = 0; _bhot[j] = 30 * b.R; }
+    else if (isWD(b)) { _br[j] = 0; _bhot[j] = 5 * b.R; }
+    else {
+      _br[j] = b.R; _bhot[j] = 0;
+      if (b.type.kind === 'planet') { // In a thin, cold disk a body sweeps up what passes through a good part of its Hill sphere, not just what hits it
+        let tide = 0;
+        for (let k = 0; k < nb; k++) { const o = bodies[k]; if (o === b || o.m < 3 * b.m) continue; const r = Math.hypot(o.x - b.x, o.y - b.y), t = o.m / (r * r * r); if (t > tide) tide = t; }
+        if (tide > 0) { const rH = Math.cbrt(b.m / (3 * tide)); _br[j] = Math.max(b.R, Math.min(1.2 * Math.sqrt(b.R * rH), 0.3 * rH)); }
+      }
+    }
+  }
+  for (let i = 0; i < qN; i++) {
+    let x = qx[i], y = qy[i], vx = qvx[i], vy = qvy[i];
+    let t2 = Infinity;
+    for (let j = 0; j < nb; j++) { const dx = _bx[j] - x, dy = _by[j] - y, r2 = dx * dx + dy * dy; const t = r2 * Math.sqrt(r2) / _bm[j]; if (t < t2) t2 = t; }
+    const n = clamp(Math.ceil(simDt / (0.07 * Math.sqrt(t2))), 1, 60), dt = simDt / n;
+    let hit = -1, hot = false;
+    for (let s = 0; s < n && hit < 0; s++) {
+      const back = simDt - (s + 0.5) * dt;   // the bodies have already been moved to the end of this step: wind them back
+      let ax = 0, ay = 0;
+      for (let j = 0; j < nb; j++) {
+        const dx = _bx[j] - _bvx[j] * back - x, dy = _by[j] - _bvy[j] * back - y, r2 = dx * dx + dy * dy, r = Math.sqrt(r2);
+        if (r < _br[j]) { hit = j; break; }
+        if (r < _bhot[j]) { hit = j; hot = true; break; }
+        const k = _bm[j] / (r2 * r);
+        ax += k * dx; ay += k * dy;
+      }
+      if (hit >= 0) break;
+      vx += ax * dt; vy += ay * dt; x += vx * dt; y += vy * dt;
+    }
+    if (hit >= 0) {
+      if (hot) addGas(x, y, vx, vy, qm[i], 0); else matterLands(bodies[hit], qm[i], vx, vy);
+      removeMatter(i); i--; continue;
+    }
+    qx[i] = x; qy[i] = y; qvx[i] = vx; qvy[i] = vy;
+  }
+}
+/* The matter's own gravity, its collisions with itself, and collapse into bodies. Once a frame.
+   Particles are binned into cells about a tenth as wide as their distance from whatever they orbit. Cells pull on
+   each other, and each cell's particles are drawn toward its centre and share momentum (collisions lose energy,
+   which is what lets a clump settle). A cell collapses into a body when its matter is bound, packed well inside
+   its Hill sphere, and the body it would make fits inside that sphere too. That last test is the Roche limit:
+   close to a planet nothing passes it, so matter there stays a ring. */
+let clCap = 1024;
+let clM = new Float64Array(clCap), clX = new Float64Array(clCap), clY = new Float64Array(clCap), clVX = new Float64Array(clCap), clVY = new Float64Array(clCap);
+let clAX = new Float64Array(clCap), clAY = new Float64Array(clCap), clH = new Float64Array(clCap), clHM = new Float64Array(clCap), clHR = new Float64Array(clCap);
+let clS2 = new Float64Array(clCap), clSV = new Float64Array(clCap), clT = new Float64Array(clCap), clN = new Int32Array(clCap), clForm = new Int32Array(clCap);
+let clA = new Int32Array(clCap), clB = new Int32Array(clCap), clHI = new Int32Array(clCap);
+const cellOf = new Map();
+function growCells() {
+  clCap *= 2;
+  const g = a => { const b = new a.constructor(clCap); b.set(a); return b; };
+  clM = g(clM); clX = g(clX); clY = g(clY); clVX = g(clVX); clVY = g(clVY); clAX = g(clAX); clAY = g(clAY); clH = g(clH); clHM = g(clHM); clHR = g(clHR);
+  clS2 = g(clS2); clSV = g(clSV); clT = g(clT); clN = g(clN); clForm = g(clForm); clA = g(clA); clB = g(clB); clHI = g(clHI);
+}
+function matterCollective(dt, wallDt) {
+  if (!qN) return;
+  for (let i = 0; i < qN; i++) if (qT[i] > 0) qT[i] = Math.max(0, qT[i] - wallDt * 0.045);   // debris cools
+  if (qN < 2 || dt <= 0) return;
+  const nb = bodies.length;
+  let free = 0, ox = 0, oy = 0;
+  if (!nb) { // nothing to orbit: the cloud's own size sets the scale
+    let M = 0; for (let i = 0; i < qN; i++) { M += qm[i]; ox += qm[i] * qx[i]; oy += qm[i] * qy[i]; }
+    ox /= M; oy /= M;
+    let s = 0; for (let i = 0; i < qN; i++) s += qm[i] * ((qx[i] - ox) ** 2 + (qy[i] - oy) ** 2);
+    free = Math.max(Math.sqrt(s / M) / 8, 1e-9);
+  }
+  cellOf.clear(); let nc = 0;
+  for (let i = 0; i < qN; i++) {
+    const x = qx[i], y = qy[i];
+    let hM = 0, hR = 0, hx = ox, hy = oy, hid = 0, h = free;
+    if (nb) {
+      let best = -1;
+      for (let j = 0; j < nb; j++) { const b = bodies[j], dx = b.x - x, dy = b.y - y, r2 = dx * dx + dy * dy, t = b.m / (r2 * Math.sqrt(r2) + 1e-30); if (t > best) { best = t; hM = b.m; hR = Math.sqrt(r2); hx = b.x; hy = b.y; hid = j + 1; } }
+      h = 0.12 * hR;
+    }
+    const L = Math.round(Math.log2(h)), hs = Math.pow(2, L);
+    const key = ((hid * 4096 + (L + 2048)) * 65536 + clamp(Math.floor((x - hx) / hs), -32768, 32767) + 32768) * 65536 + clamp(Math.floor((y - hy) / hs), -32768, 32767) + 32768;
+    let c = cellOf.get(key);
+    if (c === undefined) {
+      if (nc >= clCap) growCells();
+      c = nc++; cellOf.set(key, c);
+      clM[c] = 0; clX[c] = 0; clY[c] = 0; clVX[c] = 0; clVY[c] = 0; clAX[c] = 0; clAY[c] = 0; clN[c] = 0; clS2[c] = 0; clSV[c] = 0; clT[c] = 0; clForm[c] = 0; clA[c] = -1; clB[c] = -1;
+      clH[c] = hs; clHM[c] = hM; clHR[c] = 0; clHI[c] = hid - 1;
+    }
+    const m = qm[i];
+    clM[c] += m; clX[c] += m * x; clY[c] += m * y; clVX[c] += m * qvx[i]; clVY[c] += m * qvy[i]; clHR[c] += m * hR; clT[c] += m * qT[i]; clN[c]++;
+    qc[i] = c;
+    // remember the heaviest grain in the cell, and one other picked at random
+    if (clA[c] < 0) clA[c] = i;
+    else if (m > qm[clA[c]]) { clB[c] = clA[c]; clA[c] = i; }
+    else if (clB[c] < 0 || Math.random() * clN[c] < 1) clB[c] = i;
+  }
+  for (let c = 0; c < nc; c++) { const m = clM[c]; clX[c] /= m; clY[c] /= m; clVX[c] /= m; clVY[c] /= m; clHR[c] /= m; clT[c] /= m; }
+  // cell-on-cell gravity (skipped for very large clouds, where the pull of the bodies dominates anyway)
+  let Mq = 0, Mb = 0; for (let c = 0; c < nc; c++) Mq += clM[c]; for (const b of bodies) if (b.m > Mb) Mb = b.m;
+  const heavy = Mq > 1e-5 * Mb;   // light belts and rings: their own gravity is nothing next to what they orbit
+  if (heavy && nc <= 1100) for (let a = 0; a < nc; a++) for (let b = a + 1; b < nc; b++) {
+    const dx = clX[b] - clX[a], dy = clY[b] - clY[a], e = 0.5 * (clH[a] + clH[b]), r2 = dx * dx + dy * dy + e * e, k = G / (r2 * Math.sqrt(r2));
+    clAX[a] += k * clM[b] * dx; clAY[a] += k * clM[b] * dy; clAX[b] -= k * clM[a] * dx; clAY[b] -= k * clM[a] * dy;
+  }
+  for (let i = 0; i < qN; i++) {
+    const c = qc[i], m = qm[i];
+    let ax = clAX[c], ay = clAY[c], tdt = dt;
+    if (heavy && clN[c] > 1) {
+      const dx = clX[c] - qx[i], dy = clY[c] - qy[i], dvx = clVX[c] - qvx[i], dvy = clVY[c] - qvy[i];
+      const d2 = dx * dx + dy * dy, e = 0.2 * clH[c], Min = G * (clM[c] - m);
+      clS2[c] += m * d2; clSV[c] += m * (dvx * dvx + dvy * dvy);
+      const r2 = d2 + e * e, k = Min / (r2 * Math.sqrt(r2));
+      const wSelf = Math.sqrt(Min / (e * e * e)), wHost = clHM[c] > 0 ? Math.sqrt(G * clHM[c] / Math.pow(clHR[c], 3)) : 0;
+      tdt = Math.min(dt, 0.35 / Math.max(wSelf, 1e-30));         // never kick harder than the clump's own free-fall allows
+      qvx[i] += k * dx * tdt; qvy[i] += k * dy * tdt;
+      const kd = 1 - Math.exp(-dt * 0.35 * Math.max(wSelf, wHost));   // inelastic collisions within the cell
+      qvx[i] += dvx * kd; qvy[i] += dvy * kd;
+    }
+    qvx[i] += ax * dt; qvy[i] += ay * dt;
+  }
+  /* Grains stick. Each particle stands for a swarm of small ones, so how often they collide depends on how much
+     matter is spread over how much area (the optical depth, taking grains a few metres across), about 3 x optical depth
+     collisions per orbit. A collision only builds something where the result could hold itself together against
+     the tide: outside the Roche limit. Inside it, a ring stays a ring. */
+  let room = BODY_CAP - bodies.length;
+  const M2 = Math.pow(KM_PER_UNIT * 1000, 2);
+  for (let c = 0; c < nc; c++) {
+    const A = clA[c], B = clB[c];
+    if (A < 0 || B < 0 || A === B || clForm[c]) continue;
+    const hM = clHM[c], hR = clHR[c], w = hM > 0 ? Math.sqrt(G * hM / (hR * hR * hR)) : Math.sqrt(G * clM[c] / Math.pow(clH[c], 3));
+    const tau = clM[c] * 1.989e30 / (clH[c] * clH[c] * M2) / 6000;
+    if (Math.random() > 0.45 * clN[c] * w * tau * dt) continue;
+    const m = qm[A] + qm[B];
+    const hill = hM > 0 ? hR * Math.cbrt(m / (3 * hM)) : Infinity;
+    if (planetR(m, realSizes) * Math.max(qp[A], qp[B]) > 0.55 * hill) continue;
+    qx[A] = (qx[A] * qm[A] + qx[B] * qm[B]) / m; qy[A] = (qy[A] * qm[A] + qy[B] * qm[B]) / m;
+    qvx[A] = (qvx[A] * qm[A] + qvx[B] * qm[B]) / m; qvy[A] = (qvy[A] * qm[A] + qvy[B] * qm[B]) / m;
+    qT[A] = Math.max(qT[A], qT[B]); qp[A] = Math.max(qp[A], qp[B]); qk[A] = Math.min(60000, qk[A] + qk[B]); qm[A] = m; qm[B] = 0;
+  }
+  for (let i = qN - 1; i >= 0; i--) {
+    if (qm[i] === 0) { removeMatter(i); continue; }
+    if (qk[i] >= 24 && room > 0) { // enough has stuck together to count as a body of its own, if it has a zone to itself
+      const c = qc[i], rH = clHM[c] > 0 ? clHR[c] * Math.cbrt(qm[i] / (3 * clHM[c])) : 0;
+      let crowded = false;
+      const host = clHI[c] >= 0 ? bodies[clHI[c]] : null;
+      for (const o of bodies) { // an orbit already owned by another small body (anywhere round it) is taken: that body will sweep this up
+        if (o.kind !== 'star' || o === host || o.m > 1e3 * qm[i]) continue;
+        const sep = host ? Math.abs(Math.hypot(o.x - host.x, o.y - host.y) - clHR[c]) : Math.hypot(o.x - qx[i], o.y - qy[i]);
+        if (sep < 3.5 * Math.max(rH, host ? clHR[c] * Math.cbrt(o.m / (3 * host.m)) : 0)) { crowded = true; break; }
+      }
+      if (crowded) continue;
+      const b = makeStar(typeForMass(qm[i]).id, qx[i], qy[i], qvx[i], qvy[i], qm[i]);
+      if (qp[i] > 1.02) { b.puff = qp[i]; b.R = b.R0 = b.R * qp[i]; }
+      b.hot = qT[i] > 0.15 ? wallNow : 0; bodies.push(b); announceBirth(b); room--; removeMatter(i);
+    }
+  }
+  // collapse
+  let formed = 0;
+  for (let c = 0; heavy && c < nc && room > 0; c++) {
+    if (clN[c] < 8) continue;
+    const m = clM[c], s = Math.sqrt(clS2[c] / m), sig2 = clSV[c] / m;
+    const t = typeForMass(m);
+    const Rb = t.kind === 'planet' ? planetR(m, realSizes) : realSizes ? t.Rsun * RSUN_U : t.R;
+    const hill = clHM[c] > 0 ? clHR[c] * Math.cbrt(m / (3 * clHM[c])) : Infinity;
+    if (s < 0.3 * clH[c] && s < 0.5 * hill && Rb < 0.55 * hill && sig2 < 2 * G * m / Math.max(s, Rb)) { clForm[c] = 1; formed++; room--; }
+  }
+  if (!formed) { if (room !== BODY_CAP - bodies.length) computeAccel(); return; }
+  for (let c = 0; c < nc; c++) {
+    if (!clForm[c]) continue;
+    const m = clM[c], t = typeForMass(m);
+    const b = makeStar(t.id, clX[c], clY[c], clVX[c], clVY[c], m);
+    b.hot = clT[c] > 0.15 ? wallNow : 0; b.born = simTime;
+    bodies.push(b);
+    announceBirth(b);
+  }
+  for (let i = qN - 1; i >= 0; i--) if (clForm[qc[i]]) removeMatter(i);
+  computeAccel();
+}
+let births = { n: 0, last: -1e9 };
+function announceBirth(b) {
+  const t = b.type;
+  if (t.kind === 'ms') { toast('A star is born', [`${massStr(b.m)} of matter fell together and its core lit up`, `It is ${/^[AO]/.test(t.name) ? 'an' : 'a'} ${t.lc}`], 'w'); return; }
+  if (t.id === 'BD') { toast('A brown dwarf forms', [`${massStr(b.m)} fell together: too light to burn hydrogen, heavy enough to glow`], 'w'); return; }
+  births.n++;
+  if (wallNow - births.last < 2500) return;   // moonlets come in swarms: say it once in a while
+  births.last = wallNow;
+  toast(t.id === 'GAS' || t.id === 'ICE' ? 'A giant planet forms' : t.id === 'ROCK' ? 'A planet forms' : t.id === 'MOON' ? 'A moon forms' : 'Rubble gathers', [`Matter clumped under its own gravity into ${massStr(b.m)}`, 'Outside the Roche limit a clump holds together. Inside it, tides would pull it back apart.']);
+}
+/* Tides on planets and moons. A body held together only by its own gravity is pulled apart once it orbits
+   closer than the Roche limit, about 2.4 (R of the big body) x (its density / the small body's density)^(1/3).
+   Small solid bodies have some strength and survive a little deeper. The pieces keep the orbit: a ring. */
+function planetTides(dt) {
+  for (const p of bodies.slice()) {
+    if (!isPlanet(p) || p.sn) continue;
+    let host = null, best = 0;
+    for (const o of bodies) {
+      if (o === p || o.m < 3 * p.m) continue;
+      const r = Math.hypot(o.x - p.x, o.y - p.y), t = o.m / (r * r * r);
+      if (t > best) { best = t; host = o; }
+    }
+    if (!host) { p.f = 0; continue; }
+    if (isAccretor(host)) continue;   // compact objects shred things their own way (stellarProcesses)
+    const r = Math.hypot(host.x - p.x, host.y - p.y);
+    const dR = (p.m < 1e-10 ? 1.5 : 2.0) * p.R * Math.cbrt(host.m / p.m);
+    p.f = dR / r; p.hx = host.x; p.hy = host.y; p.roche = dR;
+    // Coming apart takes time: about one of the body's own free-fall times spent well inside the limit.
+    // So a moon orbiting inside it is doomed, while something plunging straight through to an impact arrives whole.
+    const wp = Math.sqrt(G * p.m / (p.R * p.R * p.R));
+    if (r < dR) p.tidal = (p.tidal || 0) + Math.min(dt * wp * (Math.pow(dR / r, 3) - 1), 0.4);
+    else if (p.tidal) p.tidal *= Math.exp(-dt * wp * 0.05);
+    if (p.tidal > 1 && r > host.R + p.R) ringFrom(p, host, r);
+  }
+}
+function ringFrom(p, host, r) {
+  const N = Math.min(Math.round(clamp(500 + 160 * Math.log10(p.m / 1e-12), 300, 1500)), MAXM - qN);
+  bodies = bodies.filter(o => o !== p);
+  if (followId === p.id) followId = host.id;
+  if (N < 8) { matterLands(host, p.m, p.vx, p.vy); return; }
+  const vesc = Math.sqrt(2 * G * p.m / p.R), puff = p.R / planetR(p.m, p.real);
+  for (let k = 0; k < N; k++) {
+    const a = Math.random() * Math.PI * 2, d = p.R * Math.sqrt(Math.random()) * 1.1, sp = vesc * 0.5 * Math.random(), va = Math.random() * Math.PI * 2;
+    addMatter(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, p.vx + Math.cos(va) * sp, p.vy + Math.sin(va) * sp, p.m / N, 0, puff); qr[qN - 1] = 1;
+  }
+  toast('Torn into a ring', [`${cap(bodyName(p))} came within ${fmtDist(r * KM_PER_UNIT)} of ${bodyName(host)}, inside its Roche limit`,
+    'There the pull on its near side beats its own gravity, so it came apart. The pieces spread along the orbit into a ring and cannot gather back into a moon this close in.'], 'w');
+  computeAccel();
+}
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+/* Two planets collide. Slow or head-on, they simply merge. Fast or glancing, part of the smaller one is thrown
+   off as molten debris, some of it into orbit: this is how the Moon is thought to have formed. */
+function planetImpact(a, b) {
+  const big = a.m >= b.m ? a : b, small = big === a ? b : a, M = a.m + b.m;
+  const dx = small.x - big.x, dy = small.y - big.y, r = Math.hypot(dx, dy) || 1e-9;
+  const rvx = small.vx - big.vx, rvy = small.vy - big.vy, v = Math.hypot(rvx, rvy);
+  const vesc = Math.sqrt(2 * G * M / (big.R + small.R)), Lz = dx * rvy - dy * rvx;
+  // speed and angle as they were at first contact (the bodies overlap a little before this is called)
+  const Rc = big.R + small.R, vc = Math.sqrt(Math.max(v * v - 2 * G * M * (1 / r - 1 / Math.max(Rc, r)), 0.25 * v * v));
+  const sinT = vc > 0 ? Math.min(1, Math.abs(Lz) / (Rc * vc)) : 0, x = Math.max(0, vc / vesc - 1);
+  const kms = vc * KM_PER_UNIT / SIM2REAL;
+  let f = clamp(sinT * (0.3 + 0.5 * x) + 0.1 * x * x, 0, 0.9);
+  f *= big.real ? clamp((kms - 3) / 4, 0, 1) : 0.5;   // gentle bumps between small bodies just stick
+  let N = Math.min(Math.round(80 + 900 * f), MAXM - qN);
+  const md = f * small.m;
+  if (md < 2e-4 * M || N < 12) { N = 0; }
+  const keep = small.m - (N ? md : 0), Mn = big.m + keep;
+  const cx = (big.x * big.m + small.x * keep) / Mn, cy = (big.y * big.m + small.y * keep) / Mn;
+  const cvx = (big.vx * big.m + small.vx * keep) / Mn, cvy = (big.vy * big.m + small.vy * keep) / Mn;
+  const names = [cap(bodyName(small)), bodyName(big)];
+  big.x = cx; big.y = cy; big.vx = cvx; big.vy = cvy; big.m = Mn;
+  bodies = bodies.filter(o => o !== small);
+  if (followId === small.id) followId = big.id;
+  regrade(big);
+  if (N) {
+    big.hot = wallNow;
+    const sg = Lz >= 0 ? 1 : -1, phi = Math.atan2(dy, dx), Rm = big.R, GM = G * Mn;
+    for (let k = 0; k < N; k++) {
+      const rho = Rm * (1.25 + 2.3 * Math.pow(Math.random(), 1.3));
+      const ang = phi + sg * (-0.3 + 2.6 * Math.random());
+      const ux = Math.cos(ang), uy = Math.sin(ang), vc = Math.sqrt(GM / rho);
+      const vt = vc * (0.82 + 0.36 * Math.random()) * sg, vr = vc * 0.2 * (Math.random() - 0.3);
+      addMatter(cx + ux * rho, cy + uy * rho, cvx - uy * vt + ux * vr, cvy + ux * vt + uy * vr, md / N, 1);
+    }
+    flashes.push({ x: cx, y: cy, t0: wallNow, dur: 2600, scale: big.R / 30 });
+    shake = wallNow;
+    toast('Giant impact', [`${names[0]} struck ${names[1]} at ${kms >= 1 && big.real ? kms.toFixed(1) + ' km/s' : (vc / vesc).toFixed(1) + '× escape speed'}, ${Math.round(Math.asin(sinT) * 57.3)}° off head-on`,
+      `${Math.round(f * 100)}% of it was thrown off as molten debris. What falls back rejoins the planet; what stays in orbit beyond the Roche limit can gather into a moon.`], 'w');
+  } else toast('Worlds merge', [`${names[0]} merged into ${names[1]} · now ${massStr(Mn)}`]);
+}
+// the matter brush
+let matterRate = -5.5;   // log10 of solar masses sprayed per second
+function sprayMatter(sx, sy, wallDt) {
+  if (matterFull && qN > MAXM - 16) return;
+  matterFull = false;
+  const n = 8, m = Math.pow(10, matterRate) * Math.min(wallDt, 0.05) / n;
+  for (let k = 0; k < n; k++) {
+    const a = Math.random() * Math.PI * 2, d = 26 * Math.sqrt(Math.random());
+    const [wx, wy] = toW(sx + Math.cos(a) * d, sy + Math.sin(a) * d * Math.max(cosI, 0.2));
+    let vx = 0, vy = 0;
+    const host = dominantAny(wx, wy);
+    if (host) { // near something: put it on a circular orbit, with a little scatter
+      const dx = wx - host.x, dy = wy - host.y, r = Math.hypot(dx, dy) || 1, v = Math.sqrt(G * host.m / r) * (1 + 0.04 * (Math.random() - 0.5));
+      vx = host.vx + dy / r * v; vy = host.vy - dx / r * v;
+    }
+    if (!addMatter(wx, wy, vx, vy, m, 0)) { matterFull = true; toast('That is all the loose matter the sandbox can track', ['Let some of it settle into bodies, then spray more']); return; }
+  }
+}
+
 /* ================= helpers ================= */
 function rocheFrac(q) { const q13 = Math.cbrt(q), q23 = q13 * q13; return 0.49 * q23 / (0.6 * q23 + Math.log(1 + q13)); }
 function fmtM(m) { return m >= 1e5 ? `${(m / 1e6).toFixed(2)} million` : m >= 10 ? m.toFixed(1) : m.toFixed(2); }
-function fmtDist(km) { return km >= 1.5e7 ? `${(km / 1.496e8).toFixed(km < 1.5e9 ? 2 : km < 1.5e10 ? 1 : 0)} AU` : `${fmtKm(km)} km`; }
+function fmtDist(km) { return km >= 9.46e11 ? `${(km / 9.461e12).toFixed(km < 9.46e13 ? 2 : 1)} light-years` : km >= 1.5e7 ? `${(km / 1.496e8).toFixed(km < 1.5e9 ? 2 : km < 1.5e10 ? 1 : 0)} AU` : `${fmtKm(km)} km`; }
 function fmtKm(km) { return km >= 1000 ? Math.round(km).toLocaleString('en-US') : Math.round(km).toString(); }
 function fmtHz(f) { return f >= 1000 ? (f / 1000).toFixed(1) + ' kHz' : (f < 10 ? f.toFixed(1) : Math.round(f)) + ' Hz'; }
 function fmtChi(c) { return (c >= 0 ? '+' : '−') + Math.abs(c).toFixed(2); }
@@ -648,6 +1044,90 @@ const PRESETS = {
       const k = makeStar('K', 0, 0, 0, 0); bodies.push(k); orbitAround(bh, k, 170, 0.6); } },
   betelgeuse: { name:'Betelgeuse-like red supergiant', extent:110, build() {
       bodies.push(makeStar('RSG', 0, 0, 0, 0)); } },
+  solar:    { name:'The Solar System · planets, belts and dwarf planets', extent: 34 * 1.496e8 / KM_PER_UNIT, real:true, trailEvery: 3, marks:'solar', orbits:true,
+    // one screen second is a quarter of a year: Earth goes round in 4 s, Jupiter in 47 s. Speed it up for the outer worlds.
+    warp: 0.25 * 3.156e7 / SIM2REAL,
+    build() {
+      const D = Math.PI / 180, T = 2 * Math.PI, yr = 26.87; // years since J2000 (late 2026)
+      const sun = makeStar('G', 0, 0, 0, 0, 1); sun.label = 'Sun'; bodies.push(sun);
+      // name, type, mass (kg), radius (km), colour, a (AU), e, longitude of perihelion, mean longitude at J2000 (degrees)
+      const P = [
+        ['Mercury', 'ROCK', 3.301e23, 2439.7, [172,162,152], 0.387098, 0.205630, 77.458, 252.250],
+        ['Venus',   'ROCK', 4.867e24, 6051.8, [234,206,150], 0.723332, 0.006772, 131.603, 181.979],
+        ['Earth',   'ROCK', 5.972e24, 6371,   [98,152,224],  1.000003, 0.016709, 102.938, 100.465],
+        ['Mars',    'ROCK', 6.417e23, 3389.5, [214,112,78],  1.523710, 0.093394, 336.056, 355.447],
+        ['Jupiter', 'GAS',  1.898e27, 69911,  [216,174,126], 5.2029,   0.048386, 14.729, 34.396],
+        ['Saturn',  'GAS',  5.683e26, 58232,  [228,202,152], 9.5367,   0.053862, 92.599, 49.955],
+        ['Uranus',  'ICE',  8.681e25, 25362,  [160,222,228], 19.1892,  0.047257, 170.954, 313.238],
+        ['Neptune', 'ICE',  1.024e26, 24622,  [92,128,232],  30.0699,  0.008590, 44.965, 304.880],
+      ];
+      const by = {};
+      for (const [name, t, kg, km, col, a, e, peri, L0] of P) {
+        const b = world(t, name, kg, km, col), M = (((L0 - peri) + 360 * yr / Math.pow(a, 1.5)) * D) % T;
+        keplerPlace(sun, b, a, e, peri * D, -1, M); bodies.push(b); by[name] = b;
+      }
+      // dwarf planets: a, e, longitude of perihelion, mean anomaly now (from their perihelion dates)
+      const W = [
+        ['Ceres',    'AST',  9.38e20,  470,  [156,150,142], 2.767,  0.0785, 153.9, 308],
+        ['Orcus',    'MOON', 6.3e20,   455,  [172,172,178], 39.42,  0.220,  341.1, 191],
+        ['Pluto',    'MOON', 1.303e22, 1188, [216,190,160], 39.482, 0.2488, 224.1, 54],
+        ['Haumea',   'MOON', 4.01e21,  800,  [226,226,230], 43.1,   0.196,  1.2,   225],
+        ['Quaoar',   'MOON', 1.2e21,   545,  [178,132,112], 43.7,   0.041,  336,   300],
+        ['Makemake', 'MOON', 3.1e21,   715,  [206,162,132], 45.4,   0.161,  14.4,  173],
+        ['Gonggong', 'MOON', 1.75e21,  615,  [192,102,82],  67.5,   0.503,  184.5, 110],
+        ['Eris',     'MOON', 1.66e22,  1163, [234,234,238], 67.86,  0.4361, 187.6, 212],
+        ['Sedna',    'MOON', 1e21,     500,  [198,86,62],   506,    0.8496, 95.5,  358.43],
+      ];
+      for (const [name, t, kg, km, col, a, e, peri, M] of W) { const b = world(t, name, kg, km, col); keplerPlace(sun, b, a, e, peri * D, -1, M * D); bodies.push(b); }
+      // the big moons: name, planet, mass (kg), radius (km), orbit radius (km)
+      const Mn = [['Moon', 'Earth', 7.342e22, 1737.4, 384400], ['Io', 'Jupiter', 8.93e22, 1821.6, 421700], ['Europa', 'Jupiter', 4.8e22, 1560.8, 671100],
+        ['Ganymede', 'Jupiter', 1.4819e23, 2634.1, 1070400], ['Callisto', 'Jupiter', 1.0759e23, 2410.3, 1882700], ['Titan', 'Saturn', 1.3452e23, 2574.7, 1221870]];
+      Mn.forEach(([name, host, kg, km, a], i) => { const b = world('MOON', name, kg, km, [200,196,188]); b.moonOf = by[host].id; orbitAround(by[host], b, a / KM_PER_UNIT, i * 1.9); bodies.push(b); });
+      // belts, as loose matter on real kinds of orbits
+      let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const tmp = { m: 0, x: 0, y: 0, vx: 0, vy: 0 };
+      const put = (a, e, peri, M, m) => { keplerPlace(sun, tmp, a, e, peri, -1, M); addMatter(tmp.x, tmp.y, tmp.vx, tmp.vy, m, 0); };
+      for (let k = 0; k < 650; k++) put(2.12 + 1.15 * rnd(), 0.02 + 0.16 * rnd(), T * rnd(), T * rnd(), 1.5e21 / 1.989e30 / 650);          // main belt
+      const LJ = (34.396 + 360 * yr / Math.pow(5.2029, 1.5)) * D;
+      for (let k = 0; k < 140; k++) { const w = T * rnd(), L = LJ + (k % 2 ? 1 : -1) * (60 + 26 * (rnd() - 0.5)) * D; put(5.2029 + 0.1 * (rnd() - 0.5), 0.07 * rnd(), w, L - w, 1e20 / 1.989e30 / 140); } // Jupiter's Trojans
+      for (let k = 0; k < 160; k++) put(39.4 + 0.5 * (rnd() - 0.5), 0.1 + 0.2 * rnd(), T * rnd(), T * rnd(), 3e-11);                           // plutinos
+      for (let k = 0; k < 620; k++) put(42 + 6 * rnd(), 0.12 * rnd(), T * rnd(), T * rnd(), 3e-11);                                            // classical Kuiper belt
+      for (let k = 0; k < 220; k++) { const a = 50 + 70 * rnd(), q = 33 + 7 * rnd(); put(a, 1 - q / a, T * rnd(), T * rnd(), 3e-11); }         // scattered disc
+      let px = 0, py = 0; for (const b of bodies) if (b !== sun) { px += b.m * b.vx; py += b.m * b.vy; }
+      sun.vx = -px / sun.m; sun.vy = -py / sun.m;
+    } },
+  theia:    { name:'Giant impact · how the Moon formed', extent: 8.5 * 6371 / KM_PER_UNIT, real:true, orbits:true, warp: 600 / SIM2REAL,
+    // a Mars-sized world, Theia, strikes the young Earth off-centre at just over escape speed. One screen second is 10 minutes:
+    // the impact takes a few seconds, the disk a few minutes to gather (use the speed button).
+    build() {
+      const e = world('ROCK', 'Proto-Earth', 0.9 * 5.972e24, 0, [118,150,196]), th = world('ROCK', 'Theia', 0.13 * 5.972e24, 0, [204,122,92]);
+      const Rc = e.R + th.R, GM = G * (e.m + th.m), vc = 1.08 * Math.sqrt(2 * GM / Rc), L = Rc * vc * Math.sin(40 * Math.PI / 180), r0 = 6.5 * e.R;
+      const v0 = Math.sqrt(vc * vc - 2 * GM * (1 / Rc - 1 / r0)), vt = L / r0, vr = Math.sqrt(Math.max(0, v0 * v0 - vt * vt));
+      th.x = -r0; th.vx = vr; th.vy = vt;
+      e.vx = -th.vx * th.m / e.m; e.vy = -th.vy * th.m / e.m;
+      bodies.push(e, th);
+    } },
+  saturn:   { name:'Rings · a moon strays inside the Roche limit', extent: 3.4 * 58232 / KM_PER_UNIT, real:true, orbits:true, tilt: 58, warp: 6000 / SIM2REAL,
+    // an icy moon on a stretched orbit dips inside Saturn's Roche limit (as the lost moon "Chrysalis" may have, about 160 million years ago)
+    build() {
+      const R = 58232 / KM_PER_UNIT;
+      const sat = world('GAS', 'Saturn', 5.683e26, 58232, [228,202,152]); bodies.push(sat);
+      const m = world('MOON', 'Icy moon', 1.8e21, 735, [220,228,236]);
+      const ra = 2.3 * R, rp = 1.22 * R, a = (ra + rp) / 2;   // softened gravity keeps it a little farther out than this at closest approach
+      m.x = ra; m.vy = -Math.sqrt(G * sat.m * (2 / ra - 1 / a));
+      const far = world('MOON', 'Outer moon', 1.1e20, 252, [214,222,232]); far.moonOf = sat.id;
+      bodies.push(m, far); orbitAround(sat, far, 3.9 * R, 2.2);
+    } },
+  nursery:  { name:'Solar nebula · worlds gather from dust', extent: 3.6 * 1.496e8 / KM_PER_UNIT, real:true, orbits:true, trailEvery: 3, warp: 0.2 * 3.156e7 / SIM2REAL,
+    build() {
+      const AU = 1.496e8 / KM_PER_UNIT, sun = makeStar('G', 0, 0, 0, 0, 1); sun.label = 'Young star'; bodies.push(sun);
+      let seed = 5; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const N = 4200, Md = 0.004;
+      for (let k = 0; k < N; k++) {
+        const r = (0.45 + 2.6 * Math.pow(rnd(), 0.8)) * AU, a = 2 * Math.PI * rnd(), v = Math.sqrt(G * sun.m / r) * (1 + 0.03 * (rnd() - 0.5));
+        addMatter(r * Math.cos(a), r * Math.sin(a), Math.sin(a) * v, -Math.cos(a) * v, Md / N, 0);
+      }
+    } },
   zoo:      { name:'Stellar zoo', extent:3500, build() {
       // a 300 Msun hole; orbits start well outside its innermost stable orbit (225 units) and are spaced 1.4x apart,
       // so each star stays clear of its neighbors' pull
@@ -669,6 +1149,71 @@ const PRESETS = {
 };
 
 // place `b` on a Keplerian orbit around `host` (at rest at the origin of its own motion)
+// a named world with its real mass and (optionally) radius
+function world(typeId, name, kg, km, col) {
+  const b = makeStar(typeId, 0, 0, 0, 0, kg / 1.989e30); b.label = name;
+  if (km) { b.R = b.R0 = km / KM_PER_UNIT; if (b.type.kind === 'planet') b.puff = b.R / planetR(b.m, true); }
+  if (col) b.col = col;
+  return b;
+}
+/* Things to find when you zoom out of the Solar System. Not simulated: nothing here moves on a human timescale.
+   Stars sit at their true distance, in the direction of their right ascension. */
+let landmarks = null;
+const LANDMARKS = {
+  solar: {
+    rings: [[123, 'Heliopause · where the Sun’s wind gives way to interstellar gas'], [2000, 'Inner Oort cloud'], [50000, 'Outer Oort cloud · the Sun’s last comets']],
+    probes: [['Voyager 1 · about one light-day out', 173 * 1.496e8, 17.25]],
+    stars: [['Alpha Centauri', 4.37, 14.66, 'G'], ['Barnard’s Star', 5.96, 17.96, 'M'], ['Wolf 359', 7.86, 10.94, 'M'], ['Lalande 21185', 8.31, 11.06, 'M'],
+      ['Sirius', 8.66, 6.75, 'A'], ['Luyten 726-8', 8.73, 1.65, 'M'], ['Ross 154', 9.70, 18.83, 'M'], ['Ross 248', 10.30, 23.70, 'M'], ['Epsilon Eridani', 10.47, 3.55, 'K'],
+      ['Lacaille 9352', 10.72, 23.10, 'M'], ['Ross 128', 11.01, 11.80, 'M'], ['61 Cygni', 11.40, 21.12, 'K'], ['Procyon', 11.46, 7.66, 'F'], ['Tau Ceti', 11.91, 1.73, 'G']],
+  },
+};
+function setLandmarks(id) { landmarks = PRESETS[id] && PRESETS[id].marks ? LANDMARKS[PRESETS[id].marks] : null; }
+// The orbit each named world is on right now, worked out from its position and velocity (planetary scenes only).
+function drawOrbits(c) {
+  let star = null; for (const b of bodies) if (b.kind === 'star' && b.type.kind !== 'planet' && (!star || b.m > star.m)) star = b;
+  c.save(); c.lineWidth = 1;
+  for (const b of bodies) {
+    if (!isPlanet(b) || !b.label) continue;
+    const h = b.moonOf ? bodies.find(o => o.id === b.moonOf) : star;
+    if (!h) continue;
+    const rx = b.x - h.x, ry = b.y - h.y, vx = b.vx - h.vx, vy = b.vy - h.vy, r = Math.hypot(rx, ry), v2 = vx * vx + vy * vy, GM = G * (h.m + b.m);
+    const E = 0.5 * v2 - GM / r; if (E >= 0) continue;
+    const a = -GM / (2 * E); if (a * zoom < (b.moonOf ? 14 : 5)) continue;
+    const rv = rx * vx + ry * vy, ex = ((v2 - GM / r) * rx - rv * vx) / GM, ey = ((v2 - GM / r) * ry - rv * vy) / GM, e = Math.min(Math.hypot(ex, ey), 0.995), w = Math.atan2(ey, ex), pp = a * (1 - e * e);
+    c.strokeStyle = `rgba(${b.col || b.type.col},${b.moonOf ? 0.22 : 0.3})`; c.beginPath();
+    for (let k = 0; k <= 160; k++) { const th = k / 160 * Math.PI * 2, rr = pp / (1 + e * Math.cos(th)), x = h.x + rr * Math.cos(th + w), y = h.y + rr * Math.sin(th + w); k ? c.lineTo(toSX(x, y), toSY(x, y)) : c.moveTo(toSX(x, y), toSY(x, y)); }
+    c.stroke();
+  }
+  c.restore();
+}
+function drawLandmarks(c) {
+  if (!landmarks) return;
+  const sun = bodies.find(b => b.label === 'Sun') || { x: 0, y: 0 };
+  const X0 = toSX(sun.x, sun.y), Y0 = toSY(sun.x, sun.y), AU = 1.496e8 / KM_PER_UNIT;
+  c.save(); c.font = `400 10px ${MONO}`; c.textAlign = 'center';
+  for (const [au, name] of landmarks.rings) {
+    const r = au * AU * zoom; if (r < 46 || r > 6000) continue;
+    c.setLineDash([2, 6]); c.strokeStyle = 'rgba(127,211,230,0.32)'; c.lineWidth = 1;
+    c.beginPath(); c.ellipse(X0, Y0, r, r * cosI, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+    c.fillStyle = 'rgba(127,211,230,0.75)'; c.fillText(`${name} · ${au.toLocaleString('en-US')} AU`, X0, Y0 - r * cosI - 6);
+  }
+  const lab = [];
+  const dot = (km, raH, col, label, big) => {
+    const a = raH / 24 * Math.PI * 2, d = km / KM_PER_UNIT, x = sun.x + d * Math.cos(a), y = sun.y - d * Math.sin(a);
+    const X = toSX(x, y), Y = toSY(x, y);
+    if (X < -40 || Y < -20 || X > vw + 40 || Y > vh + 20 || d * zoom < 30) return;
+    const g = c.createRadialGradient(X, Y, 0, X, Y, big ? 9 : 5);
+    g.addColorStop(0, `rgba(${col},0.95)`); g.addColorStop(0.3, `rgba(${col},0.5)`); g.addColorStop(1, `rgba(${col},0)`);
+    c.fillStyle = g; c.fillRect(X - 10, Y - 10, 20, 20);
+    if (lab.some(q => Math.abs(q[0] - X) < 90 && Math.abs(q[1] - Y) < 12)) return;
+    lab.push([X, Y]);
+    c.fillStyle = `rgba(${col},0.9)`; c.fillText(label, X, Y - 10);
+  };
+  for (const [name, km, ra] of landmarks.probes) dot(km, ra, '236,230,218', name, false);
+  for (const [name, ly, ra, t] of landmarks.stars) dot(ly * 9.461e12, ra, TYPE[t].col.join(','), `${name} · ${ly} light-years`, true);
+  c.restore();
+}
 function keplerPlace(host, b, aAU, e, omega, sense, meanAnom) {
   const AU = 1.496e8 / KM_PER_UNIT, a = aAU * AU, GM = G * (host.m + b.m);
   let E = meanAnom; for (let k = 0; k < 30; k++) E -= (E - e * Math.sin(E) - meanAnom) / (1 - e * Math.cos(E));
@@ -683,12 +1228,13 @@ function loadPreset(id) {
   currentPreset = id;
   warp = PRESETS[id].warp || 1; realSizes = !!PRESETS[id].real; tdeSlowUntil = -1e9; trailEvery = PRESETS[id].trailEvery || 2;
   if (typeof toastsEl !== 'undefined') toastsEl.replaceChildren();
-  bodies = []; gN = 0; gwSrc = null; slow = 1; slowHoldUntil = -1; totalFed = 0; totalWind = 0; simTime = 0; flashes.length = 0; if (typeof xrBuf !== 'undefined') xrBuf.fill(0);
+  bodies = []; gN = 0; qN = 0; gwSrc = null; slow = 1; slowHoldUntil = -1; totalFed = 0; totalWind = 0; simTime = 0; flashes.length = 0; if (typeof xrBuf !== 'undefined') xrBuf.fill(0);
   scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0);
   setTilt(PRESETS[id].tilt || 0); setYaw(0);
   followId = null; followPos = null; placed.length = 0;
   closeUpId = null; closeUpDrift = null;
   PRESETS[id].build();
+  setLandmarks(id);
   fitView(PRESETS[id].extent);
   opt.follow = true; syncToggles();
   computeAccel();
@@ -716,11 +1262,11 @@ function com() {
   for (const b of focusGroup()) { M += b.m; x += b.m * b.x; y += b.m * b.y; vx += b.m * b.vx; vy += b.m * b.vy; }
   return M ? { x: x / M, y: y / M, vx: vx / M, vy: vy / M } : { x: camX, y: camY, vx: 0, vy: 0 };
 }
-function describe(b) { return b.kind === 'bh' ? `${fmtM(b.m)} M☉ black hole` : b.type.name; }
+function describe(b) { return b.kind === 'bh' ? `${fmtM(b.m)} M☉ black hole` : b.label || b.type.name; }
 function focusLabel() {
   const g = focusGroup(); if (!g.length) return 'nothing yet';
   if (g.length === 1) return describe(g[0]);
-  if (g.length === 2) return `${fmtM(g[0].m)} + ${fmtM(g[1].m)} M☉ barycenter`;
+  if (g.length === 2) return g[1].m < 0.0124 ? `${massStr(g[0].m)} + ${massStr(g[1].m)} barycenter` : `${fmtM(g[0].m)} + ${fmtM(g[1].m)} M☉ barycenter`;
   return `barycenter of ${g.length} objects`;
 }
 function fitView(extent) {
@@ -812,7 +1358,11 @@ function dynTime() {
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
     const a = bodies[i], b = bodies[j];
     const r = Math.hypot(b.x - a.x, b.y - a.y);
-    if (a.kind !== 'bh' && b.kind !== 'bh' && !(isNS(a) && isNS(b)) && r > (a.R + b.R) * 8) continue;
+    if (a.kind !== 'bh' && b.kind !== 'bh' && !(isNS(a) && isNS(b)) && r > (a.R + b.R) * 8) {
+      // far apart: no close-encounter physics to resolve, just the orbit itself (planets round a star, moons round a planet)
+      const t = 2.5 * Math.sqrt(r * r * r / (G * (a.m + b.m))); if (t < tmin) tmin = t;
+      continue;
+    }
     let rr = r;
     if ((a.kind === 'bh') !== (b.kind === 'bh')) { const bh = a.kind === 'bh' ? a : b, rs = rsOf(bh.m) * bh.kP; rr = Math.max(r - 0.8 * rs, 0.4 * rs); }
     const t1 = Math.sqrt(rr * rr * rr / (G * (a.m + b.m)));
@@ -826,6 +1376,7 @@ function dynTime() {
 // long (time-warped) frame is still resolved. Past 240 steps it stops early: time dilates instead of losing accuracy.
 function stepBodies(simDt) {
   if (!bodies.length) { simTime += simDt; return simDt; }
+  if (bodies.length > 3 && bodies.every(b => b.kind === 'star' && !isCompact(b))) return stepBodiesPlain(simDt);
   const CAP = 240;
   let left = simDt, steps = 0;
   computeAccel();
@@ -840,6 +1391,57 @@ function stepBodies(simDt) {
     while (collisions() && guard++ < 6) computeAccel();
     if (!bodies.length) { simTime += left; left = 0; }
   }
+  return simDt - left;
+}
+
+/* The same integrator for scenes with nothing relativistic in them (only ordinary stars, planets and moons), where
+   every pair feels plain softened Newtonian gravity. One tight pass finds the forces, the step size and any
+   collision together, which is what lets a whole planetary system with moons run at speed. */
+let pbN = 0, pbX = new Float64Array(64), pbY = new Float64Array(64), pbVX = new Float64Array(64), pbVY = new Float64Array(64);
+let pbAX = new Float64Array(64), pbAY = new Float64Array(64), pbGM = new Float64Array(64), pbR = new Float64Array(64);
+function stepBodiesPlain(simDt) {
+  let n = 0, tmin2 = Infinity, hit = false;
+  const load = () => {
+    n = bodies.length;
+    if (n > pbX.length) { const g = () => new Float64Array(n * 2); pbX = g(); pbY = g(); pbVX = g(); pbVY = g(); pbAX = g(); pbAY = g(); pbGM = g(); pbR = g(); }
+    for (let i = 0; i < n; i++) { const b = bodies[i]; pbX[i] = b.x; pbY[i] = b.y; pbVX[i] = b.vx; pbVY[i] = b.vy; pbGM[i] = G * b.m; pbR[i] = b.R; }
+  };
+  const store = () => { for (let i = 0; i < n; i++) { const b = bodies[i]; b.x = pbX[i]; b.y = pbY[i]; b.vx = pbVX[i]; b.vy = pbVY[i]; b.ax = pbAX[i]; b.ay = pbAY[i]; } };
+  const accel = () => {
+    tmin2 = Infinity; hit = false;
+    for (let i = 0; i < n; i++) { pbAX[i] = 0; pbAY[i] = 0; }
+    for (let i = 0; i < n; i++) {
+      const xi = pbX[i], yi = pbY[i], gi = pbGM[i], ri = pbR[i];
+      let ax = 0, ay = 0;
+      for (let j = i + 1; j < n; j++) {
+        const dx = pbX[j] - xi, dy = pbY[j] - yi, r2 = dx * dx + dy * dy, r = Math.sqrt(r2) || 1e-6, rr = ri + pbR[j];
+        const e = rr * 0.5, k = 1 / (r * (r2 + e * e)), gj = pbGM[j];
+        ax += k * gj * dx; ay += k * gj * dy; pbAX[j] -= k * gi * dx; pbAY[j] -= k * gi * dy;
+        // time for this pair to move appreciably: a sixth of that when they are about to touch, so impacts are resolved
+        let t2 = r2 * r / (gi + gj);
+        if (r < 3 * rr) { t2 /= 36; if (r < 0.95 * rr) hit = true; }
+        if (t2 < tmin2) tmin2 = t2;
+      }
+      pbAX[i] += ax; pbAY[i] += ay;
+    }
+  };
+  load(); accel();
+  let left = simDt, steps = 0;
+  while (left > simDt * 1e-9 && steps < 900) {
+    const dt = Math.min(left, 0.12 * Math.sqrt(tmin2));
+    for (let i = 0; i < n; i++) { pbVX[i] += 0.5 * dt * pbAX[i]; pbVY[i] += 0.5 * dt * pbAY[i]; pbX[i] += dt * pbVX[i]; pbY[i] += dt * pbVY[i]; }
+    accel();
+    for (let i = 0; i < n; i++) { pbVX[i] += 0.5 * dt * pbAX[i]; pbVY[i] += 0.5 * dt * pbAY[i]; }
+    simTime += dt; left -= dt; steps++;
+    if (hit) {
+      store();
+      let guard = 0, any = false; while (collisions() && guard++ < 6) any = true;
+      if (!bodies.length) { simTime += left; return simDt; }
+      if (any && !bodies.every(b => b.kind === 'star' && !isCompact(b))) { computeAccel(); return simDt - left; }
+      load(); accel(); hit = false;
+    }
+  }
+  store();
   return simDt - left;
 }
 
@@ -860,7 +1462,7 @@ function collisions() {
       if (r < Math.max(1.3 * bh.kPlus * rs, 1.5 * rp) + st.R * 0.2) { swallow(bh, st); return true; }
     } else if (isNS(a) && isNS(b)) {
       if (r < 1.3 * (a.R + b.R)) { mergeNS(a, b); return true; }
-    } else if (r < 0.6 * (a.R + b.R) && !(a.sn && a.sn.mode === 'ia') && !(b.sn && b.sn.mode === 'ia')) { mergeStars(a, b); return true; }
+    } else if (r < (isPlanet(a) && isPlanet(b) ? 0.95 : 0.6) * (a.R + b.R) && !(a.sn && a.sn.mode === 'ia') && !(b.sn && b.sn.mode === 'ia')) { if (isPlanet(a) && isPlanet(b)) planetImpact(a, b); else mergeStars(a, b); return true; }
   }
   return false;
 }
@@ -987,12 +1589,15 @@ function mergeStars(a, b) {
   big.R = big.R * Math.pow(M / big.m, 0.5); big.R0 = big.R; big.m = M; big.m0 = M;
   big.mBirth = Math.max(big.mBirth || 0, M); if (big.core) big.core = Math.max(big.core, 0.36 * M);
   bodies = bodies.filter(o => o !== small);
+  if (followId === small.id) followId = big.id;
+  regrade(big);
   if (big.sn && big.sn.mode !== 'ia') big.sn.mode = snMode(big); // still gaining mass while it collapses
   if (M >= 140 && !big.sn && (big.type.kind === 'ms' || big.type.kind === 'giant')) {
     startSupernova(big);
     toast('Too massive to survive', [`Collisions built a ${fmtM(M)} M☉ star, far past the ~150 M☉ that stars can hold together`,
       big.sn.mode === 'pi' ? 'It is heading for a pair-instability supernova' : 'It is heading for direct collapse into a black hole'], 'w');
-  } else toast('Stellar collision', [`${small.type.name} merged into the ${big.type.name} · now ${fmtM(M)} M☉`]);
+  } else if (isPlanet(small)) toast(isPlanet(big) ? 'Worlds merge' : 'Planet swallowed', [`${cap(bodyName(small))} fell into ${bodyName(big)}`]);
+  else toast('Stellar collision', [`${small.type.name} merged into the ${big.type.name} · now ${fmtM(M)} M☉`]);
 }
 
 // White dwarfs are held up by electron pressure, which fails at the Chandrasekhar limit (1.44 Msun).
@@ -1343,6 +1948,7 @@ function massBounds(b) {
   if (b.kind === 'bh') return [0.5, 1e10];
   if (isNS(b)) return [1.1, 3];
   const k = b.type.kind;
+  if (k === 'planet') return [1e-14, 0.0124];
   return k === 'bd' ? [0.01, 0.08] : k === 'wd' ? [0.1, 1.6] : k === 'giant' ? [0.3, 300] : [0.08, 300];
 }
 function applyEdit(b, m, chi) {
@@ -1352,6 +1958,7 @@ function applyEdit(b, m, chi) {
     if (b.kind === 'star' && b.type.kind === 'ms' && !isNS(b)) b.R = b.R0 = b.R * Math.pow(m / b.m, 0.8);
     if (b.kind === 'star' && b.type.kind === 'giant' && b.core) b.core *= m / b.m;
     b.m = b.m0 = m; if (b.kind === 'star') b.mBirth = m;
+    if (isPlanet(b)) { const lab = b.label; b.label = ''; regrade(b); b.label = b.type.kind === 'planet' ? lab : ''; }
     if (b.kind === 'star' && b.type.kind === 'wd') { b.R = b.R0 = sized(b, wdRadius(Math.min(m, M_CH * 0.99)), TYPE.WD); if (m >= M_CH && !b.sn) { b.sn = { t0: wallNow, mode: 'ia' }; toast('Over the Chandrasekhar limit', [`At ${fmtM(m)} M☉ the white dwarf can't hold itself up`, 'Carbon is about to ignite']); } }
     if (b.kind === 'star' && (b.type.kind === 'ms' || b.type.kind === 'giant') && m >= 140 && !b.sn) { startSupernova(b); toast('Too massive to survive', [`A ${fmtM(m)} M☉ star is far past the ~150 M☉ that stars can hold together`]); }
   }
@@ -1671,12 +2278,12 @@ precision highp float;
 uniform sampler2D uSky, uScene;
 uniform vec2 uRes;
 uniform vec4 uSkyT;      // cos yaw, sin yaw, tile offset
-uniform float uHasScene;
+uniform float uHasScene, uSkyK;
 out vec4 o;
 void main(){
   vec2 q = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y) - 0.5 * uRes;
   vec2 t = vec2(uSkyT.x * q.x + uSkyT.y * q.y, -uSkyT.y * q.x + uSkyT.x * q.y) - uSkyT.zw;
-  vec3 col = texture(uSky, t / 1024.0).rgb;
+  vec3 col = texture(uSky, t / 1024.0).rgb * uSkyK;
   if (uHasScene > 0.5) { vec4 s = texture(uScene, gl_FragCoord.xy / uRes); col = col * (1.0 - s.a) + s.rgb; }
   o = vec4(col, 1.0);
 }`;
@@ -1716,6 +2323,24 @@ void main(){
   float disc = 1.0 - smoothstep(1.0 - aw, 1.0 + aw, rho);
   float mu = sqrt(max(1.0 - rho * rho, 0.0));
   vec3 col = vB.rgb;
+  if (vD.y < 0.0) { // a planet: no light of its own. Shaded as a sphere lit from the direction of its star.
+    vec2 n2 = vL / R; float r2 = dot(n2, n2);
+    float dp = 1.0 - smoothstep(1.0 - aw, 1.0 + aw, sqrt(r2));
+    vec3 nrm = vec3(n2, sqrt(max(1.0 - r2, 0.0)));
+    vec3 Ld = normalize(vec3(ca * 0.92 * vD.w, sa * 0.92 * vD.w, 0.4 + 0.6 * (1.0 - vD.w)));
+    float lam = max(dot(nrm, Ld), 0.0);
+    float detail = smoothstep(4.0, 16.0, R), tex = 1.0;
+    if (vD.y < -1.5) tex = 0.84 + 0.16 * sin(n2.y * vD.x + 1.6 * vnoise(n2 * 2.5 + vD.z));
+    else tex = 0.72 + 0.56 * (vnoise(n2 * vD.x + vD.z) * 0.6 + vnoise(n2 * vD.x * 2.7 - vD.z) * 0.4);
+    vec3 alb = col * mix(1.0, tex, detail);
+    vec3 shade = alb * mix(1.0, 0.045 + 1.1 * lam, smoothstep(2.5, 7.0, R));   // a world only a few pixels across is drawn as a plain bright dot
+    float crust = vnoise(n2 * 5.0 + vD.z * 1.7);
+    shade += vec3(1.0, 0.36 + 0.3 * crust, 0.08) * vC.w * (0.35 + 0.6 * crust);       // molten after a giant impact
+    float t0 = d / vA.w;
+    float halo = (1.0 - smoothstep(0.55, 1.0, t0)) * (0.10 + 0.5 * vC.w);
+    o = vec4(shade * dp + mix(col, vec3(1.0, 0.5, 0.2), min(vC.w, 1.0)) * halo * (1.0 - dp) * max(lam + 0.25, 0.3), dp);
+    return;
+  }
   // limb darkening, then a hot white centre
   vec3 surf = col * (0.46 + 0.54 * mu);
   surf = mix(surf, vec3(1.0, 0.98, 0.93), pow(mu, 5.0) * 0.42);
@@ -2077,12 +2702,13 @@ if (gl) {
 // gas colours for the GPU path: the same ramp as the sprites, as floats
 const gasRGB = new Float32Array(24 * 3);
 for (let i = 0; i < 24; i++) { const t = i / 23, c = rampColor(t), b = (0.32 + 0.68 * t) / 255; gasRGB[i * 3] = c[0] * b; gasRGB[i * 3 + 1] = c[1] * b; gasRGB[i * 3 + 2] = c[2] * b; }
-let gasInst = new Float32Array(MAXG * 8), gasInstN = 0;
+let gasInst = new Float32Array((MAXG + MAXM) * 8), gasInstN = 0;
 let starInst = new Float32Array(64 * 16), starInstN = 0;
 let sceneUsed = false, sceneWasUsed = true;
 // how each kind of star's surface looks up close: [convection cells across the disc, contrast]
 function starSurface(t) {
   if (t.kind === 'ns' || t.kind === 'wd') return [0, 0];
+  if (t.kind === 'planet') return t.id === 'GAS' ? [11, -2] : t.id === 'ICE' ? [6, -2] : [3.2, -1];   // negative: a planet, lit from outside (-2 = banded)
   if (t.kind === 'bd') return [5, 0.22];
   if (t.kind === 'giant') return t.T < 5000 ? [4.5, 0.3] : t.T < 8000 ? [9, 0.16] : [14, 0.08];
   return t.T < 7000 ? [20, 0.14] : [28, 0.05];
@@ -2191,6 +2817,11 @@ function drawScene() {
     if (gf[i] === 3) sctx.globalAlpha = 1;
   }
   sctx.globalAlpha = 1;
+  for (let i = 0; i < qN; i++) {
+    const X = toSX(qx[i], qy[i]) * s, Y = toSY(qx[i], qy[i]) * s;
+    if (X < 0 || Y < 0 || X > W || Y > H) continue;
+    sctx.fillStyle = qT[i] > 0.1 ? 'rgba(255,150,70,0.8)' : 'rgba(150,140,128,0.7)'; sctx.fillRect(X - s, Y - s, 2 * s, 2 * s);
+  }
   // stars: glow
   for (const b of bodies) {
     if (b.kind !== 'star') continue;
@@ -2258,6 +2889,27 @@ function drawSceneGL(W, H, gsz, mg, tilted) {
     gi[o + 4] = gasRGB[c] * k; gi[o + 5] = gasRGB[c + 1] * k; gi[o + 6] = gasRGB[c + 2] * k; gi[o + 7] = ang;
     n++;
   }
+  // loose matter: small cold grains, or glowing ones fresh from an impact
+  const msz = clamp(1.2 * zoom, 2.6, 5) * s;
+  const occ = [];   // bodies big enough on screen to hide what is behind them when the view is tilted
+  if (tilted && qN) for (const b of bodies) { if (b.kind !== 'star') continue; const R = b.R * zoom * s; if (R > 4) occ.push(toSX(b.x, b.y) * s, toSY(b.x, b.y) * s, R * R); }
+  for (let i = 0; i < qN; i++) {
+    const X = toSX(qx[i], qy[i]) * s, Y = toSY(qx[i], qy[i]) * s;
+    if (X < -mg || Y < -mg || X > W + mg || Y > H + mg) continue;
+    let hidden = false;
+    for (let q = 0; q < occ.length; q += 3) { const dx = X - occ[q], dy = Y - occ[q + 1]; if (dy < 0 && dx * dx + dy * dy < occ[q + 2]) { hidden = true; break; } }   // the far side of the plane is toward the top of the screen
+    if (hidden) continue;
+    const T = qT[i], o = n * 8, sz = msz * (1 + 0.8 * T) * (qk[i] > 1 ? 1 + 0.28 * Math.log2(qk[i]) : 1);
+    let len = 1, ang = 0, k = 1;
+    if (qr[i]) { // ring debris: each grain stands for a streak of them strung along the orbit
+      const h = bodies[clHI[qc[i]]];
+      if (h) { const vx = qvx[i] - h.vx, vy = qvy[i] - h.vy; ang = Math.atan2(-(vx * sY + vy * cY) * cosI, vx * cY - vy * sY); len = 5; k = 0.3; }
+    }
+    const ice = qp[i] > 1.1 ? 1 : 0;
+    gi[o] = X; gi[o + 1] = H - Y; gi[o + 2] = sz * len; gi[o + 3] = sz;
+    gi[o + 4] = (0.42 + 0.14 * ice + 1.2 * T) * k; gi[o + 5] = (0.38 + 0.2 * ice + 0.4 * T) * k; gi[o + 6] = (0.34 + 0.28 * ice - 0.1 * T) * k; gi[o + 7] = ang;
+    n++;
+  }
   gasInstN = n;
   // stars: pulsar beams and collapsing stars stay hand-drawn; every other star goes to the star shader
   let m = 0;
@@ -2265,8 +2917,10 @@ function drawSceneGL(W, H, gsz, mg, tilted) {
   const si = starInst;
   for (const b of bodies) {
     if (b.kind !== 'star') continue;
-    const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, R = Math.max(b.R * zoom, 1.6) * s;
-    const g = R * 5 + (isNS(b) ? 7 : 12) * s;
+    const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, pl = b.type.kind === 'planet';
+    let R = Math.max(b.R * zoom, pl && b.label ? 2.3 : 1.6) * s;
+    let g = R * 5 + (isNS(b) ? 7 : 12) * s, far = false;
+    if (b.real && !pl && !isNS(b) && R < 3.5 * s) { R = Math.max(R, 2.4 * s); g = 34 * s; far = true; }   // a star seen from across its own planetary system: a point, but by far the brightest thing
     if (isNS(b)) {
       sceneUsed = true;
       const ang = b.beamPh, L = Math.max(R * 9, 22 * s);
@@ -2279,17 +2933,25 @@ function drawSceneGL(W, H, gsz, mg, tilted) {
       }
     }
     if (X < -g || Y < -g || X > W + g || Y > H + g) continue;
-    const t = b.type, o = m * 16, col = t.col;
-    let near = 1, far = 1, w = 1, pinch = 0, ang = 0, glow = g, disc = R;
-    if (b.sn) { disc = 0.001; }                 // drawn as a cutaway below; keep only its glow here
+    const t = b.type, o = m * 16;
+    let col = b.col || t.col;
+    let near = 1, far2 = 1, w = 1, pinch = 0, ang = 0, glow = g, disc = R, lit = (HDR ? t.glBright : 1) * (far ? (HDR ? 2.6 : 1) : 1);
+    if (t.kind === 'planet') { // lit by the nearest star (face-on if there is none); freshly struck worlds glow
+      let sun = null, bs = 0;
+      for (const o2 of bodies) { if (o2.kind !== 'star' || o2.type.kind === 'planet' || o2 === b) continue; const q = Math.pow(o2.m, 3) / ((o2.x - b.x) ** 2 + (o2.y - b.y) ** 2 + 1e-9); if (q > bs) { bs = q; sun = o2; } }
+      lit = sun ? 1 : 0;
+      if (sun) ang = Math.atan2(-(toSY(sun.x, sun.y) * s - Y), toSX(sun.x, sun.y) * s - X);
+      pinch = b.hot ? Math.max(0, 1 - (wallNow - b.hot) / 30000) : 0;
+      glow = R * 1.7 + 4 * s;
+    } else if (b.sn) { disc = 0.001; }                 // drawn as a cutaway below; keep only its glow here
     else {
       const td = tideShape(b);
-      if (td.str > 1.01 && b.hx != null) { near = td.near; far = td.far; w = td.w; pinch = td.pinch; ang = Math.atan2(-(toSY(b.hx, b.hy) * s - Y), toSX(b.hx, b.hy) * s - X); }
+      if (td.str > 1.01 && b.hx != null) { near = td.near; far2 = td.far; w = td.w; pinch = td.pinch; ang = Math.atan2(-(toSY(b.hx, b.hy) * s - Y), toSX(b.hx, b.hy) * s - X); }
     }
     si[o] = X; si[o + 1] = H - Y; si[o + 2] = disc; si[o + 3] = glow;
     si[o + 4] = col[0] / 255; si[o + 5] = col[1] / 255; si[o + 6] = col[2] / 255; si[o + 7] = ang;
-    si[o + 8] = near; si[o + 9] = far; si[o + 10] = w; si[o + 11] = pinch;
-    si[o + 12] = t.surf[0]; si[o + 13] = t.surf[1]; si[o + 14] = (b.id * 7.31) % 97; si[o + 15] = HDR ? t.glBright : 1;
+    si[o + 8] = near; si[o + 9] = far2; si[o + 10] = w; si[o + 11] = pinch;
+    si[o + 12] = t.surf[0]; si[o + 13] = t.surf[1]; si[o + 14] = (b.id * 7.31) % 97; si[o + 15] = lit;
     m++;
   }
   starInstN = m;
@@ -2461,6 +3123,7 @@ function composite() {
     bind(0, GLR.skyTex); bind(1, GLR.sceneTex);
     gl.uniform1i(P.u.uSky, 0); gl.uniform1i(P.u.uScene, 1);
     gl.uniform2f(P.u.uRes, W, H); gl.uniform4fv(P.u.uSkyT, GLR.skyT); gl.uniform1f(P.u.uHasScene, sceneUsed ? 1 : 0);
+    gl.uniform1f(P.u.uSkyK, realSizes && PRESETS[currentPreset] && PRESETS[currentPreset].orbits ? 0.5 : 1);   // planetary scenes: let the worlds outshine the backdrop
     tri();
     const instances = (I, data, n, stride) => {
       gl.bindVertexArray(I.vao); gl.bindBuffer(gl.ARRAY_BUFFER, I.buf);
@@ -2747,8 +3410,18 @@ function ghost(c, sx, sy) {
       const tx = -Math.sin(ae) * tdir, ty = Math.cos(ae) * tdir;
       c.beginPath(); c.moveTo(ex, ey); c.lineTo(ex - tx * 6 - ty * 4, ey - ty * 6 + tx * 4); c.moveTo(ex, ey); c.lineTo(ex - tx * 6 + ty * 4, ey - ty * 6 - tx * 4); c.stroke();
     }
+  } else if (tool === 'matter') {
+    c.setLineDash([2, 4]); c.strokeStyle = 'rgba(236,230,218,0.5)'; c.lineWidth = 1; c.beginPath(); c.arc(sx, sy, 26, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
   } else if (TYPE[tool]) {
-    const t = TYPE[tool], R = Math.max(t.R * zoom, 3);
+    if (TYPE[tool].kind === 'planet' && host && !isAccretor(host) && host.m > 3 * TYPE[tool].m) { // where tides would pull this world apart
+      const tm = TYPE[tool].m, dR = (tm < 1e-10 ? 1.5 : 2.0) * planetR(tm, realSizes) * Math.cbrt(host.m / tm) * zoom;
+      if (dR > 8) {
+        const HX = toSX(host.x, host.y), HY = toSY(host.x, host.y);
+        c.setLineDash([5, 4]); c.strokeStyle = 'rgba(255,120,90,0.6)'; c.lineWidth = 1; c.beginPath(); c.ellipse(HX, HY, dR, dR * cosI, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+        c.fillStyle = 'rgba(255,150,120,0.85)'; c.font = `400 10px ${MONO}`; c.textAlign = 'center'; c.fillText('Roche limit', HX, HY - dR * cosI - 5);
+      }
+    }
+    const t = TYPE[tool], R = Math.max((t.kind === 'planet' ? planetR(t.m, realSizes) : t.R) * zoom, 3);
     c.fillStyle = `rgba(${t.col},0.55)`; c.beginPath(); c.arc(sx, sy, R, 0, Math.PI * 2); c.fill();
   }
 }
@@ -2756,9 +3429,12 @@ function drawOverlay() {
   const c = octx;
   c.setTransform(OD, 0, 0, OD, 0, 0); c.clearRect(0, 0, vw, vh);
   if (opt.jets) drawJets(c);
+  if (opt.trails && PRESETS[currentPreset] && PRESETS[currentPreset].orbits) drawOrbits(c);
+  if (opt.labels) drawLandmarks(c);
+  const taken = [];
   if (opt.labels) {
     c.textAlign = 'center'; c.textBaseline = 'alphabetic';
-    for (const b of bodies) {
+    for (const b of bodies.length > 12 ? bodies.slice().sort((p, q) => q.m - p.m) : bodies) {
       const X = toSX(b.x, b.y), Y = toSY(b.x, b.y);
       if (X < -60 || Y < -60 || X > vw + 60 || Y > vh + 60) continue;
       if (b.kind === 'bh') {
@@ -2766,9 +3442,14 @@ function drawOverlay() {
         c.font = `500 11px ${MONO}`; c.fillStyle = 'rgba(236,230,218,0.78)';
         c.fillText(`${b.label ? b.label + ' · ' : ''}${fmtM(b.m)} M☉`, X, Y + R + 15);
         if (Math.abs(b.chi) > 0.005) { c.font = `400 10px ${MONO}`; c.fillStyle = 'rgba(143,147,168,0.9)'; c.fillText(`χ ${fmtChi(b.chi)} ${b.chi > 0 ? '↺' : '↻'}`, X, Y + R + 28); }
-      } else if (isNS(b) || zoom * b.R > 1.2 || bodies.length < 14) {
+      } else if (isNS(b) || zoom * b.R > 1.2 || bodies.length < 14 || b.label) {
         const R = Math.max(b.R * zoom, 1.6);
-        c.font = `400 10px ${MONO}`; c.fillStyle = `rgba(${b.type.col},0.8)`;
+        if (b.moonOf) { const h = bodies.find(o => o.id === b.moonOf); if (h && Math.hypot(toSX(h.x, h.y) - X, toSY(h.x, h.y) - Y) < 22) continue; }
+        c.font = `400 10px ${MONO}`; c.fillStyle = `rgba(${b.col || b.type.col},0.8)`;
+        if (bodies.length > 12) { // crowded scene: heavier bodies get their label first, and a label that would sit on another is skipped
+          if (taken.some(q => Math.abs(q[0] - X) < 64 && Math.abs(q[1] - Y) < 12)) continue;
+          taken.push([X, Y]);
+        }
         c.textAlign = 'left'; c.fillText(isNS(b) ? `NS ${fmtM(b.m)} · ${b.spinHz >= 100 ? (1000 / b.spinHz).toFixed(1) + ' ms' : Math.round(b.spinHz) + '/s'}` : b.label || b.type.id, X + R + 6, Y - R - 2); c.textAlign = 'center';
       }
     }
@@ -2926,6 +3607,7 @@ $('sound').addEventListener('click', () => {
 const TOOLS = [
   { id:'move', label:'Move', icon:'<svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>' },
   { id:'bh', label:'Black hole' },
+  { id:'matter', label:'Matter', icon:'<svg viewBox="0 0 24 24"><circle cx="7" cy="8" r="1.6"/><circle cx="14" cy="6" r="1.1"/><circle cx="17" cy="12" r="1.8"/><circle cx="9" cy="15" r="1.3"/><circle cx="14" cy="18" r="1"/></svg>' },
   ...STAR_TYPES.filter(t => !t.hidden).flatMap((t, i, a) => (i === 0 || a[i - 1].g !== t.g ? [{ sep: true }] : []).concat([{ id:t.id, label:t.short, col:t.col }])),
 ];
 const toolsEl = $('tools');
@@ -2951,15 +3633,20 @@ function setTool(id) {
       + `<span class="hint">Tap: orbit · Drag: throw</span>`;
     $('bhMass').addEventListener('input', e => { bhMass = +e.target.value; $('bhMassOut').textContent = bhMass + ' M☉'; });
     $('bhSpin').addEventListener('input', e => { bhSpin = +e.target.value; if (Math.abs(bhSpin) < 0.03) bhSpin = 0; $('bhSpinOut').textContent = spinText(); });
+  } else if (id === 'matter') {
+    const txt = () => `${massStr(Math.pow(10, matterRate))} a second`;
+    ctx.innerHTML = `<b>Raw matter</b><span class="grp"><label for="mRate"><b>Flow</b></label><input id="mRate" type="range" min="-10" max="1.5" step="0.1" value="${matterRate}"><output id="mRateOut" class="mono">${txt()}</output></span>`
+      + `<span class="hint">Hold and drag to pour it out. Near a body it goes into orbit. Enough of it falls together into moons, planets or stars</span>`;
+    $('mRate').addEventListener('input', e => { matterRate = +e.target.value; $('mRateOut').textContent = txt(); });
   } else if (id === 'move') {
     renderMoveCtx(true);
   } else if (id === 'NS') {
     ctx.innerHTML = `<span class="sw ns"></span><b>Neutron star</b><span class="mono dim">1.4 M☉ · 12 km · true size</span><span class="hint">Pair two up to hear them merge</span>`;
   } else {
     const t = TYPE[id];
-    ctx.innerHTML = `<span class="sw" style="background:rgb(${t.col});color:rgba(${t.col},.55)"></span><b>${t.name}</b>${t.eg ? `<span class="dim">${t.eg}</span>` : ''}<span class="mono dim">${t.m} M☉ · ${t.T.toLocaleString('en-US')} K</span><span class="hint">Tap: orbit · Drag: throw</span>`;
+    ctx.innerHTML = `<span class="sw" style="background:rgb(${t.col});color:rgba(${t.col},.55)"></span><b>${t.name}</b>${t.eg ? `<span class="dim">${t.eg}</span>` : ''}<span class="mono dim">${t.kind === 'planet' ? massStr(t.m) : t.m + ' M☉'} · ${t.T.toLocaleString('en-US')} K</span><span class="hint">${t.kind === 'planet' ? 'Tap: orbit · Drag: throw · Inside the dashed Roche limit it is torn into a ring' : 'Tap: orbit · Drag: throw'}</span>`;
   }
-  if (id !== 'move') {
+  if (id !== 'move' && id !== 'matter') {
     const u = document.createElement('button'); u.className = 'follow-x'; u.type = 'button'; u.textContent = 'Undo';
     u.title = 'Remove the last object you placed (Ctrl+Z)'; u.addEventListener('click', undoPlace); ctx.appendChild(u);
   }
@@ -3029,7 +3716,8 @@ function kindName(b) { return (b.label ? b.label + ' · ' : '') + (b.kind === 'b
 function swatchHTML(b) {
   if (b.kind === 'bh') return '<span class="sw bh"></span>';
   if (isNS(b)) return '<span class="sw ns"></span>';
-  return `<span class="sw" style="background:rgb(${b.type.col});color:rgba(${b.type.col},.55)"></span>`;
+  const col = b.col || b.type.col;
+  return `<span class="sw" style="background:rgb(${col});color:rgba(${col},.55)"></span>`;
 }
 function fmtSec(t) {
   if (t < 1) return `${(t * 1000).toFixed(t < 0.01 ? 2 : 0)} ms`;
@@ -3049,7 +3737,7 @@ function orbitText(b) {
   const o = partnerOf(b); if (!o) return 'alone';
   const r = Math.hypot(o.x - b.x, o.y - b.y), GM = G * (o.m + b.m);
   const E = 0.5 * ((o.vx - b.vx) ** 2 + (o.vy - b.vy) ** 2) - GM / r;
-  const who = o.kind === 'bh' ? `${fmtM(o.m)} M☉ hole` : o.type.lc;
+  const who = o.kind === 'bh' ? `${fmtM(o.m)} M☉ hole` : o.label || o.type.lc;
   if (E >= 0) return `passing a ${who} · ${fmtDist(r * KM_PER_UNIT)}`;
   const a = -GM / (2 * E), P = 2 * Math.PI * Math.sqrt(a * a * a / GM) * SIM2REAL;
   return `${who} · ${fmtDist(r * KM_PER_UNIT)} · ${fmtSec(P)}`;
@@ -3073,6 +3761,18 @@ function inspectRows(b) {
     ['Blown out by its disk', () => `${(b.windM || 0).toFixed(4)} M☉`],
     ['Nearest partner', () => orbitText(b)],
   ];
+  if (isPlanet(b)) {
+    const re = () => planetRsun(b.m) / REARTH_SUN, rk = () => b.real ? b.R * KM_PER_UNIT : planetRsun(b.m) * 696000;
+    return [
+      ...(b.type.eg && !b.label ? [['Real example', () => b.type.eg.replace(/^like /, '')]] : []),
+      ['Radius', () => `${fmtKm(rk())} km${b.real ? '' : ' (drawn larger here)'}`],
+      ['Surface gravity', () => { const g = (b.m / MEARTH) / Math.pow(rk() / 6371, 2); return `${g >= 0.1 ? g.toFixed(2) : g.toPrecision(2)} g`; }],
+      ['Escape speed', () => `${(11.186 * Math.sqrt((b.m / MEARTH) / (rk() / 6371))).toFixed(2)} km/s`],
+      ['Roche limit of what it orbits', () => b.roche ? `${fmtDist(b.roche * KM_PER_UNIT)} · it is ${(1 / Math.max(b.f, 1e-9)).toFixed(1)}× that far out` : '—'],
+      ['Gathered so far', () => b.fedTotal ? massStr(b.fedTotal) : '—'],
+      ['Nearest partner', () => orbitText(b)],
+    ];
+  }
   const tr = lifeTrack(b);
   const rows = [
     ...(tr && tr.stages.length > 1 ? [['Life ahead', () => tr.stages.slice(1).map(s => STAGE_NAME[s]).join(' → ')]] : []),
@@ -3094,13 +3794,14 @@ function statusOf(b) {
     if (b.ring && b.kind === 'bh') return ['Ringing down after a merger', 'feed'];
     return (b.feedRate || 0) > 1e-4 ? ['Feeding on infalling gas', 'feed'] : ['Quiet', ''];
   }
+  if (isPlanet(b)) return b.hot && wallNow - b.hot < 30000 ? ['Molten from an impact', 'hot'] : b.f > 0.75 ? [`Close to being pulled apart (${Math.round(b.f * 100)}% of the way to the Roche limit)`, 'hot'] : ['Stable', ''];
   if (b.f > 1) return [b.passes ? `Close pass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)` : `Losing mass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)`, 'hot'];
   if (b.f > 0.85) return [`Close to overflowing (Roche lobe ${Math.round(b.f * 100)}% full)`, ''];
   if (b.m < b.mBirth * 0.999) return ['Stripped, now stable', ''];
   return ['Stable', ''];
 }
 function actionsHTML(b) {
-  if (b.kind !== 'star' || isNS(b)) return '';
+  if (b.kind !== 'star' || isNS(b) || isPlanet(b)) return '';
   const tr = lifeTrack(b), hasHole = bodies.some(o => o.kind === 'bh');
   const next = tr && tr.stages.length > 1 ? tr.stages[1] : null;
   const btns = [];
@@ -3120,13 +3821,13 @@ function updateInspect() {
     insKey = key;
     const rows = inspectRows(b);
     insEl.innerHTML = `<div class="ins-head">${swatchHTML(b)}<h2></h2><button class="ins-x" type="button" aria-label="Close and go back to auto focus"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-      <div class="ins-mass"><span class="lbl">Mass</span><span class="big"><span class="mv"></span><small>M☉</small></span><span class="ins-rate"></span></div>
+      <div class="ins-mass"><span class="lbl">Mass</span><span class="big"><span class="mv"></span><small class="mu">M☉</small></span><span class="ins-rate"></span></div>
       <div class="ins-status"></div>
       ${actionsHTML(b)}
       <dl class="ins-rows">${rows.map(r => `<dt>${r[0]}</dt><dd></dd>`).join('')}</dl>
       <details class="ins-edit"><summary>Edit</summary>
         <div class="ins-form">
-          <label for="insMass">Mass (M☉)<input id="insMass" type="number" step="any" min="${massBounds(b)[0]}" max="${massBounds(b)[1]}" value="${+b.m.toPrecision(4)}"></label>
+          <label for="insMass">Mass (${massUnit(b).u})<input id="insMass" type="number" step="any" min="${massBounds(b)[0] / massUnit(b).k}" max="${massBounds(b)[1] / massUnit(b).k}" value="${+(b.m / massUnit(b).k).toPrecision(4)}"></label>
           ${b.kind === 'bh' ? `<label for="insSpin">Spin χ<input id="insSpin" type="number" step="0.01" min="-0.99" max="0.99" value="${b.chi.toFixed(2)}"></label>` : ''}
           <button class="follow-x" type="button" data-act="set">Set</button>
         </div>
@@ -3138,7 +3839,7 @@ function updateInspect() {
     on('.ins-act.age', () => { ageStar(b); updateInspect(); });
     on('.ins-act.cu', () => { toggleCloseUp(b); updateInspect(); });
     on('[data-act=set]', () => {
-      const m = parseFloat($('insMass').value), sp = $('insSpin') ? parseFloat($('insSpin').value) : NaN;
+      const m = parseFloat($('insMass').value) * insRefs.k, sp = $('insSpin') ? parseFloat($('insSpin').value) : NaN;
       applyEdit(b, m, sp); insKey = ''; updateInspect();
     });
     const del = insEl.querySelector('.ins-del'); let armed = 0;
@@ -3148,15 +3849,16 @@ function updateInspect() {
       setTimeout(() => { if (del.isConnected) { del.classList.remove('arm'); del.textContent = 'Delete'; } }, 3000);
     });
     insEl.querySelector('.ins-x').addEventListener('click', () => { followId = null; opt.follow = true; syncToggles(); renderMoveCtx(true); updateInspect(); });
-    insRefs = { mv: insEl.querySelector('.mv'), rate: insEl.querySelector('.ins-rate'), st: insEl.querySelector('.ins-status'), dd: [...insEl.querySelectorAll('dd')], rows };
+    const mu0 = massUnit(b); insEl.querySelector('.mu').textContent = mu0.u;
+    insRefs = { k: mu0.k, mv: insEl.querySelector('.mv'), rate: insEl.querySelector('.ins-rate'), st: insEl.querySelector('.ins-status'), dd: [...insEl.querySelectorAll('dd')], rows };
     insEl.hidden = false;
   }
-  insRefs.mv.textContent = fmtMass(b.m);
+  insRefs.mv.textContent = insRefs.k === 1 ? fmtMass(b.m) : (b.m / insRefs.k).toPrecision(5);
   const r = b.mRate || 0, mag = Math.abs(r);
-  if (mag < 2e-6) { insRefs.rate.textContent = 'steady'; insRefs.rate.className = 'ins-rate'; }
+  if (mag < (insRefs.k === 1 ? 2e-6 : 1e-4 * b.m)) { insRefs.rate.textContent = 'steady'; insRefs.rate.className = 'ins-rate'; }
   else {
     const digits = mag >= 0.01 ? 4 : mag >= 0.001 ? 5 : 6;
-    insRefs.rate.textContent = `${r < 0 ? '▼ −' : '▲ +'}${mag.toFixed(digits)} M☉ per ${warp > 1 ? 'screen' : 'sim'} second`;
+    insRefs.rate.textContent = `${r < 0 ? '▼ −' : '▲ +'}${insRefs.k === 1 ? mag.toFixed(digits) + ' M☉' : massStr(mag)} per ${warp > 1 ? 'screen' : 'sim'} second`;
     insRefs.rate.className = 'ins-rate ' + (r < 0 ? 'down' : 'up');
   }
   const [txt, cls] = statusOf(b);
@@ -3228,6 +3930,7 @@ ui.addEventListener('pointerdown', e => {
   const p = { lx: e.clientX, ly: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
   if (e.button === 2 || e.shiftKey || e.ctrlKey) { drag = { mode:'orbit', ...p }; ui.style.cursor = 'move'; }
   else if (tool === 'move' || e.button === 1) { drag = { mode:'pan', ...p }; ui.style.cursor = 'grabbing'; }
+  else if (tool === 'matter') drag = { mode:'spray', x: e.clientX, y: e.clientY };
   else drag = { mode:'place', sx: e.clientX, sy: e.clientY, ex: e.clientX, ey: e.clientY };
 });
 ui.addEventListener('pointermove', e => {
@@ -3244,6 +3947,7 @@ ui.addEventListener('pointermove', e => {
     return;
   }
   if (drag.mode === 'place') { drag.ex = e.clientX; drag.ey = e.clientY; return; }
+  if (drag.mode === 'spray') { drag.x = e.clientX; drag.y = e.clientY; return; }
   const dx = e.clientX - drag.lx, dy = e.clientY - drag.ly; drag.lx = e.clientX; drag.ly = e.clientY;
   if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 5) {
     drag.moved = true;
@@ -3355,6 +4059,7 @@ function frameBody(now) {
   if (!$('slow').hidden) $('slow').textContent = `slow-mo ${slow < 0.1 ? '1/' + Math.round(1 / slow) : slow.toFixed(2)}×`;
 
   const tWork = performance.now();
+  if (drag && drag.mode === 'spray') sprayMatter(drag.x, drag.y, wallDt);
   if (paused) frameSim = 0;
   if (!paused) {
     for (const b of bodies) { b.fedFrame = 0; if (b.kind === 'bh') updateKerr(b); }
@@ -3367,10 +4072,14 @@ function frameBody(now) {
     frameSim = 0;
     for (let k = 0; k < K; k++) {
       const d = stepBodies(want / K);
-      stepGas(d); stellarProcesses(d); simDt += d;
+      stepGas(d); stepMatter(d); stellarProcesses(d); simDt += d;
       if (breakFrame) { breakFrame = false; break; }
     }
     frameSim = simDt;
+    // the matter's own gravity and sticking are slow processes: every third frame is plenty
+    mcDt += simDt; mcWall += wallDt;
+    if (frameN % 3 === 0) { matterCollective(mcDt, mcWall); mcDt = 0; mcWall = 0; }
+    planetTides(simDt);
     // smoothed rate of mass change for the inspector (per second of sim time)
     for (const b of bodies) {
       if (b.mPrev == null || simDt <= 0) { b.mPrev = b.m; b.mRate = b.mRate || 0; continue; }
@@ -3392,7 +4101,7 @@ function frameBody(now) {
         updateKerr(b);
         if (b.ring && simTime - b.ring.t0 > 12 * b.ring.tau) b.ring = null;
       }
-      if (opt.trails && frameN % trailEvery === 0) { b.trail.push([b.x, b.y]); if (b.trail.length > 260) b.trail.shift(); }
+      if (opt.trails && frameN % trailEvery === 0 && !(landmarks && b.label)) { b.trail.push([b.x, b.y]); if (b.trail.length > 260) b.trail.shift(); }
     }
   }
   updateGW();
@@ -3432,7 +4141,7 @@ function frameBody(now) {
     let nb = 0, ns = 0, mb = 0;
     for (const b of bodies) { if (b.kind === 'bh') { nb++; mb += b.m; } else ns++; }
     $('fgw').textContent = fgwText;
-    $('readouts').innerHTML = `<span><b>${nb}</b> holes · <b>${ns}</b> stars · <b>${gN}</b> gas</span><span>M<sub>BH</sub> <b>${fmtM(mb)}</b> M☉</span><span>fed <b>${totalFed.toFixed(3)}</b> · blown out <b>${totalWind.toFixed(3)}</b> M☉</span><span>view <b>${fmtDist(vw / zoom * KM_PER_UNIT)}</b></span><span>1 s = <b>${fmtSec(SPEEDS[speedIdx] * slow * warp * SIM2REAL)}</b> real</span>`;
+    $('readouts').innerHTML = `<span><b>${nb}</b> holes · <b>${ns}</b> stars · <b>${gN}</b> gas${qN ? ` · <b>${qN}</b> matter` : ''}</span><span>M<sub>BH</sub> <b>${fmtM(mb)}</b> M☉</span><span>fed <b>${totalFed.toFixed(3)}</b> · blown out <b>${totalWind.toFixed(3)}</b> M☉</span><span>view <b>${fmtDist(vw / zoom * KM_PER_UNIT)}</b></span><span>1 s = <b>${fmtSec(SPEEDS[speedIdx] * slow * warp * SIM2REAL)}</b> real</span>`;
   }
 }
 
@@ -3451,23 +4160,24 @@ function snapshot() {
     f: followId != null ? bodies.findIndex(b => b.id === followId) : -1,
     b: bodies.map(b => b.kind === 'bh'
       ? ['h', num(b.m), num(b.x), num(b.y), num(b.vx), num(b.vy), num(b.chi), b.label || '']
-      : ['s', b.type.id, num(b.m), num(b.x), num(b.y), num(b.vx), num(b.vy), num(b.R), num(b.mBirth || b.m), num(b.core || 0), b.label || '', b.real ? 1 : 0, num(b.spinHz || 0)]) };
+      : ['s', b.type.id, num(b.m), num(b.x), num(b.y), num(b.vx), num(b.vy), num(b.R), num(b.mBirth || b.m), num(b.core || 0), b.label || '', b.real ? 1 : 0, num(b.spinHz || 0), b.col || 0]) };
 }
 function restore(st) {
   toastsEl.replaceChildren();
-  bodies = []; gN = 0; gwSrc = null; flashes.length = 0; totalFed = 0; totalWind = 0; closeUpId = null; closeUpDrift = null;
+  bodies = []; gN = 0; qN = 0; gwSrc = null; flashes.length = 0; totalFed = 0; totalWind = 0; closeUpId = null; closeUpDrift = null;
   scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); xrBuf.fill(0);
   warp = st.w || 1; realSizes = !!st.rs; trailEvery = st.te || 2; tdeSlowUntil = -1e9;
   for (const a of st.b || []) {
     if (a[0] === 'h') { const b = makeBH(a[2], a[3], a[4], a[5], a[1], a[6]); if (a[7]) b.label = a[7]; bodies.push(b); continue; }
     if (!TYPE[a[1]]) continue;
     const b = makeStar(a[1], a[3], a[4], a[5], a[6], a[2]);
-    b.R = b.R0 = a[7]; b.mBirth = a[8]; b.core = a[9]; if (a[10]) b.label = a[10]; b.real = !!a[11]; if (isNS(b) && a[12]) b.spinHz = a[12];
+    b.R = b.R0 = a[7]; b.mBirth = a[8]; b.core = a[9]; if (a[10]) b.label = a[10]; b.real = !!a[11]; if (isNS(b) && a[12]) b.spinHz = a[12]; if (Array.isArray(a[13])) b.col = a[13];
     bodies.push(b);
   }
   setTilt(st.t || 0); setYaw(st.y || 0); zoom = st.z || 1; camX = st.c ? st.c[0] : 0; camY = st.c ? st.c[1] : 0;
   followId = st.f >= 0 && bodies[st.f] ? bodies[st.f].id : null; opt.follow = true; syncToggles();
   if (PRESETS[st.p]) { currentPreset = st.p; presetSel.value = st.p; }
+  setLandmarks(st.p);
   computeAccel(); renderMoveCtx(true);
 }
 function toB32(bytes) {
