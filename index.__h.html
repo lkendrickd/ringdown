@@ -361,7 +361,7 @@ html.phone .toast li:nth-child(n+3){display:none}
     <li>G and c are scaled together, so 1 grid unit is 11.8 km. Horizon sizes, orbital speeds, inspiral timing and GW frequencies line up with real values; on-screen time runs about 23× slower than real.</li>
     <li>Inspiral comes from Peters’ quadrupole energy loss, for any pair of black holes or neutron stars. Remnant spin uses the Rezzolla et al. fit for aligned spins, radiated energy follows the remnant’s ISCO binding energy, and the ringdown uses the Berti fits for the l = m = 2 mode. 36 + 29 M☉ gives about 62 M☉, roughly GW150914.</li>
     <li>Spin (χ) moves the innermost stable orbit using the Bardeen–Press–Teukolsky formula, drags nearby gas with a gravitomagnetic force, and gets spun up by accreted gas toward the 0.998 Thorne limit. Aligned spins merge later and radiate more.</li>
-    <li>Each hole’s shadow is the exact Kerr outline (Bardeen 1973) for its spin and your viewing angle. It is nearly round at moderate spin and only flattens noticeably on the approaching side as spin nears 1 and the view goes edge-on. The disk is brighter and bluer on the side moving toward you (beaming ∝ δ³). Lensing is still a flat point-lens approximation.</li>
+    <li>Each hole’s shadow is the exact Kerr outline (Bardeen 1973) for its spin and your viewing angle. It is nearly round at moderate spin and only flattens noticeably on the approaching side as spin nears 1 and the view goes edge-on. The disk is brighter and bluer on the side moving toward you (beaming ∝ δ³). The disk is ray traced: each pixel near a hole follows its light back along a Schwarzschild geodesic to where it crosses the orbital plane, which is why the far side of the disk arcs over and under the shadow. The background sky is still bent with a flat point lens, and the tracing ignores spin.</li>
     <li>Jet power scales with feeding rate × spin² (Blandford–Znajek). Each jet has a fast spine (0.92c) that is strongly beamed, inside a slower sheath (0.3c) that glows in every direction, so jets show from any angle and the one aimed at you is brighter. Knots move at the apparent speed for your viewing angle; on the near jet that can look faster than light, the superluminal-motion illusion seen in M87 and 3C 279. Jet length and width are drawn schematically.</li>
     <li>Neutron stars are the one thing at true size: 12 km radius, 1 grid unit. Two of them merging make a kilonova; above about 2.3 M☉ the remnant collapses to a hole (in reality, after a short-lived hypermassive phase). A real kilonova fades over days; here it takes about 9 seconds.</li>
     <li>Listen plays the GW frequency one octave up. The real 36 + 29 chirp lasts about 0.2 s; here it is stretched out.</li>
@@ -370,6 +370,12 @@ html.phone .toast li:nth-child(n+3){display:none}
     <li>Black holes, neutron stars and white dwarfs all accept gas. A star feeding a white dwarf builds up a hydrogen layer that ignites as a nova every so often; each one throws most of the layer off, so the white dwarf grows slowly and can eventually pass 1.44 M☉ and explode as a Type Ia. Real novae eject about 0.00001 M☉; here the layer is scaled up so they come every few seconds.</li>
     <li>Mass transfer is only stable when the star giving mass isn't much heavier than the one taking it. Past about 1.5×, the orbit shrinks as mass moves, the overflow grows, and it runs away into a common envelope: the companion spirals inside the star, and either throws the envelope off (leaving the bare core in an orbit many times tighter) or merges with it. Most merging black-hole and neutron-star pairs are thought to have gone through this.</li>
     <li>Not all the stolen gas gets eaten. Near the hole, part of it is blown back out by its own light, 15–65% here and more when the hole is feeding hard, as in ultraluminous X-ray sources. The purple band on the scope tracks how fast gas is falling in.</li>
+    <li>A magnetar is a neutron star with a field near 10¹¹ tesla. Its giant flares here come every 15–30 seconds; real ones are decades apart. The 2004 flare of SGR 1806−20 released more energy in a fifth of a second than the Sun does in about 100,000 years.</li>
+    <li>Planets, moons and asteroids get their size from their mass, on a curve through Ceres, the Moon, Earth, Neptune, Saturn and Jupiter. Past about 13 Jupiter masses a body becomes a brown dwarf, and past 0.075 M☉ it ignites as a star.</li>
+    <li>Loose matter feels every body’s gravity and its own. It gathers into a body only where that body could hold itself together against the tide of whatever it orbits, which is outside the Roche limit (about 2.4 planet radii for matter as dense as the planet). Inside it, matter stays a ring. A moon that orbits inside the limit is pulled apart after about one of its own free-fall times.</li>
+    <li>Two worlds that meet slowly or head-on merge. A fast, glancing blow throws part of the smaller one off as molten debris; what stays in orbit outside the Roche limit gathers into moons. The giant-impact scene uses the standard picture: a Mars-sized Theia, about 45° off head-on, just above escape speed.</li>
+    <li>The Solar System scene uses each planet’s real mass, radius and orbit (J2000 elements run forward to late 2026), with everything flattened into one plane. Dwarf-planet positions are approximate. Belts are a few thousand sample bodies, not a census. The nearest stars are markers at their true distances, not simulated.</li>
+    <li>Sticking and clumping run on a coarse grid with a few thousand particles, far faster than the real thing: a planet here gathers in a minute, not a few million years.</li>
     <li>Stars above about 8 M☉ can go supernova from the inspector. The iron core collapses, bounces at nuclear density, and the shock stalls until neutrinos reheat it; then it blows the envelope off at thousands of km/s. Stars born above about 20 M☉ leave a black hole here, the rest a neutron star with a kick of a few hundred km/s. Collisions can build stars no galaxy makes on its own: from about 140 to 260 M☉ the star ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ it collapses straight into an intermediate-mass black hole. A real star like that would live a couple of million years first; here it ends at once. In reality the collapse takes a fraction of a second and the shock needs hours to reach a supergiant's surface; here the sequence takes about 5 seconds. Because stars here are drawn far smaller than real ones, ejecta is launched fast enough to escape their exaggerated surface gravity and then coasts away at a realistic 5,000–20,000 km/s. In a tight binary it is launched faster still, to keep the real ratio of ejecta speed to orbital speed (about 50 to 1 in nature), since binaries here are compressed to about 1,000 km.</li>
     <li>White dwarfs are held up by electron pressure, which fails at 1.44 M☉ (the Chandrasekhar limit), and they shrink as they gain mass. Two carbon–oxygen white dwarfs that merge below the limit make one smaller, heavier white dwarf; two helium white dwarfs reignite as a helium-burning hot subdwarf, and a helium plus a carbon–oxygen white dwarf swell into an R Coronae Borealis giant. Past the limit, carbon ignites in a runaway and the whole star explodes as a Type Ia supernova, leaving nothing (some may instead collapse quietly into a neutron star; that outcome isn't modeled). A white dwarf that hits an ordinary star sinks into it.</li>
     <li>Star types follow real classes, each with a real example. Red giants are Sun-like stars in old age and end as white dwarfs; red supergiants like Betelgeuse are massive stars in old age and are the most common supernova progenitors. A supernova's class (II-P, II, IIb, IIn, Ib/c) follows from how much hydrogen envelope the star kept.</li>
@@ -419,6 +425,7 @@ const MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
 // but thousands of times smaller than life (except neutron stars, which are true size).
 const STAR_TYPES = [
   { g:1, id:'NS', Rsun:1.72e-05,  name:'Neutron star',     short:'Neutron star', m:1.4, R:1.0, T:1e6, col:[200,230,255], kind:'ns' },
+  { g:1, id:'MAG', Rsun:1.72e-05, name:'Magnetar', eg:'like SGR 1806−20', short:'Magnetar', m:1.4, R:1.0, T:1e6, col:[226,186,255], kind:'ns' },
   { g:2, id:'BD', Rsun:0.1,  name:'Brown dwarf',      short:'Brown dwarf', m:0.05, R:0.9, T:1800, col:[176,84,60], kind:'bd' },
   { g:2, id:'M', Rsun:0.3,   name:'M dwarf', eg:'like Proxima Centauri',          short:'M dwarf',   m:0.3, R:2.0, T:3200,  col:[255,132,88],  kind:'ms' },
   { g:2, id:'K', Rsun:0.75,   name:'K dwarf',          short:'K dwarf',   m:0.7, R:2.8, T:4400,  col:[255,188,118], kind:'ms' },
@@ -507,9 +514,11 @@ function makeStar(tid, x, y, vx, vy, m) {
   const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:R0, R0, real: realSizes, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false,
     core: t.core ? t.core * mm / t.m : 0, ep: null, passes: 0, mBirth: mm };
   if (t.kind === 'ns') { s.spinHz = 1 + 3 * Math.random(); s.beamPh = Math.random() * 6.28; s.msp = false; }
+  if (tid === 'MAG') { s.spinHz = 0.1 + 0.2 * Math.random(); s.flareAt = wallNow + 5000 + 6000 * Math.random(); s.flares = 0; }   // magnetars spin slowly: their field has braked them
   return s;
 }
 const isNS = b => b.kind === 'star' && b.type.kind === 'ns';
+const isMag = b => b.kind === 'star' && b.type.id === 'MAG';
 const isWD = b => b.kind === 'star' && b.type.kind === 'wd';
 // compact objects radiate gravitational waves strongly enough to inspiral; holes and neutron stars can also accrete gas
 const isCompact = b => b.kind === 'bh' || isNS(b) || isWD(b);
@@ -565,6 +574,15 @@ function typeForMass(m) {
   if (m < 0.075) return TYPE.BD;
   return TYPE[m < 0.45 ? 'M' : m < 0.8 ? 'K' : m < 1.04 ? 'G' : m < 1.6 ? 'F' : m < 3 ? 'A' : m < 16 ? 'B' : 'O'];
 }
+/* True sizes, for tidal physics. In the compressed scenes bodies are drawn at made-up sizes, so anything that depends
+   on density (the Roche limit, whether a clump can hold together) is worked out from real radii and then expressed
+   in units of the host's drawn radius. In true-scale scenes the two are the same thing. */
+function realRsun(b) {
+  if (b.kind !== 'star') return 1;
+  if (b.type.kind === 'planet') return planetRsun(b.m) * (b.puff || 1);
+  return b.real ? b.R / RSUN_U : b.type.Rsun * (b.type.kind === 'ms' ? Math.pow(b.m / b.type.m, 0.8) : 1);
+}
+function sizeScale(host) { return host && host.kind === 'star' ? host.R / realRsun(host) : realSizes ? RSUN_U : 3.4; }   // sim units per solar radius
 function bodyName(b) { return b.label || (b.kind === 'bh' ? 'the black hole' : 'the ' + b.type.lc); }
 // A cold body's mass decides what it is. Past 13 Jupiters it fuses deuterium (a brown dwarf); past 0.075 Suns, hydrogen.
 function regrade(b) {
@@ -762,7 +780,7 @@ function matterCollective(dt, wallDt) {
     if (Math.random() > 0.45 * clN[c] * w * tau * dt) continue;
     const m = qm[A] + qm[B];
     const hill = hM > 0 ? hR * Math.cbrt(m / (3 * hM)) : Infinity;
-    if (planetR(m, realSizes) * Math.max(qp[A], qp[B]) > 0.55 * hill) continue;
+    if (planetRsun(m) * Math.max(qp[A], qp[B]) * sizeScale(clHI[c] >= 0 ? bodies[clHI[c]] : null) > 0.55 * hill) continue;
     qx[A] = (qx[A] * qm[A] + qx[B] * qm[B]) / m; qy[A] = (qy[A] * qm[A] + qy[B] * qm[B]) / m;
     qvx[A] = (qvx[A] * qm[A] + qvx[B] * qm[B]) / m; qvy[A] = (qvy[A] * qm[A] + qvy[B] * qm[B]) / m;
     qT[A] = Math.max(qT[A], qT[B]); qp[A] = Math.max(qp[A], qp[B]); qk[A] = Math.min(60000, qk[A] + qk[B]); qm[A] = m; qm[B] = 0;
@@ -790,7 +808,7 @@ function matterCollective(dt, wallDt) {
     if (clN[c] < 8) continue;
     const m = clM[c], s = Math.sqrt(clS2[c] / m), sig2 = clSV[c] / m;
     const t = typeForMass(m);
-    const Rb = t.kind === 'planet' ? planetR(m, realSizes) : realSizes ? t.Rsun * RSUN_U : t.R;
+    const Rb = (t.kind === 'planet' ? planetRsun(m) : t.Rsun) * sizeScale(clHI[c] >= 0 ? bodies[clHI[c]] : null);
     const hill = clHM[c] > 0 ? clHR[c] * Math.cbrt(m / (3 * clHM[c])) : Infinity;
     if (s < 0.3 * clH[c] && s < 0.5 * hill && Rb < 0.55 * hill && sig2 < 2 * G * m / Math.max(s, Rb)) { clForm[c] = 1; formed++; room--; }
   }
@@ -831,11 +849,11 @@ function planetTides(dt) {
     if (!host) { p.f = 0; continue; }
     if (isAccretor(host)) continue;   // compact objects shred things their own way (stellarProcesses)
     const r = Math.hypot(host.x - p.x, host.y - p.y);
-    const dR = (p.m < 1e-10 ? 1.5 : 2.0) * p.R * Math.cbrt(host.m / p.m);
+    const dR = (p.m < 1e-10 ? 1.5 : 2.0) * realRsun(p) * sizeScale(host) * Math.cbrt(host.m / p.m);
     p.f = dR / r; p.hx = host.x; p.hy = host.y; p.roche = dR;
     // Coming apart takes time: about one of the body's own free-fall times spent well inside the limit.
     // So a moon orbiting inside it is doomed, while something plunging straight through to an impact arrives whole.
-    const wp = Math.sqrt(G * p.m / (p.R * p.R * p.R));
+    const Rp = realRsun(p) * sizeScale(host), wp = Math.sqrt(G * p.m / (Rp * Rp * Rp));
     if (r < dR) p.tidal = (p.tidal || 0) + Math.min(dt * wp * (Math.pow(dR / r, 3) - 1), 0.4);
     else if (p.tidal) p.tidal *= Math.exp(-dt * wp * 0.05);
     if (p.tidal > 1 && r > host.R + p.R) ringFrom(p, host, r);
@@ -895,6 +913,25 @@ function planetImpact(a, b) {
     toast('Giant impact', [`${names[0]} struck ${names[1]} at ${kms >= 1 && big.real ? kms.toFixed(1) + ' km/s' : (vc / vesc).toFixed(1) + '× escape speed'}, ${Math.round(Math.asin(sinT) * 57.3)}° off head-on`,
       `${Math.round(f * 100)}% of it was thrown off as molten debris. What falls back rejoins the planet; what stays in orbit beyond the Roche limit can gather into a moon.`], 'w');
   } else toast('Worlds merge', [`${names[0]} merged into ${names[1]} · now ${massStr(Mn)}`]);
+}
+/* Magnetars. A neutron star with a field near 10^11 tesla, a thousand times a pulsar's. The field strains the crust
+   until it cracks (a starquake) and the field snaps into a new shape: a giant flare. The 2004 flare of SGR 1806-20
+   put out more energy in a fifth of a second than the Sun does in about 100,000 years, and it was 50,000 light-years away. */
+function magnetarFlare(b) {
+  b.flares = (b.flares || 0) + 1; b.flareAt = wallNow + 14000 + 16000 * Math.random(); b.flashT = wallNow;
+  flashes.push({ x: b.x, y: b.y, t0: wallNow, dur: 2200, scale: 0.9 });
+  flashes.push({ x: b.x, y: b.y, t0: wallNow, dur: 5000, kind: 'sn', R: 3, power: 0.55, st: simTime });
+  if (!reduceMotion) shake = wallNow;
+  // the burst of gamma rays shoves nearby gas and dust outward and scorches any world close by
+  const reach = 160, push = (x, y) => { const dx = x - b.x, dy = y - b.y, r = Math.hypot(dx, dy); return r < reach && r > 1e-6 ? [dx / r, dy / r, 0.08 * C / (1 + r / 12)] : null; };
+  if (!b.real) {
+    for (let i = 0; i < gN; i++) { const k = push(gx[i], gy[i]); if (k) { gvx[i] += k[0] * k[2]; gvy[i] += k[1] * k[2]; } }
+    for (let i = 0; i < qN; i++) { const k = push(qx[i], qy[i]); if (k) { qvx[i] += k[0] * k[2]; qvy[i] += k[1] * k[2]; qT[i] = 1; } }
+  }
+  let hitWorld = null;
+  for (const o of bodies) if (isPlanet(o) && Math.hypot(o.x - b.x, o.y - b.y) < (b.real ? 2e9 : reach * 2)) { o.hot = wallNow; hitWorld = o; }
+  if (b.flares === 1 || hitWorld) toast('Giant flare', [b.flares === 1 ? 'The magnetar’s crust cracked and its magnetic field snapped into a new shape' : `Flare ${b.flares} from the magnetar`,
+    hitWorld ? `${cap(bodyName(hitWorld))} was close enough to have its surface scorched and its atmosphere stripped` : 'In a fraction of a second it released more energy than the Sun does in 100,000 years. Nearby gas is blown outward.'], 'w');
 }
 // the matter brush
 let matterRate = -5.5;   // log10 of solar masses sprayed per second
@@ -1126,6 +1163,14 @@ const PRESETS = {
       for (let k = 0; k < N; k++) {
         const r = (0.45 + 2.6 * Math.pow(rnd(), 0.8)) * AU, a = 2 * Math.PI * rnd(), v = Math.sqrt(G * sun.m / r) * (1 + 0.03 * (rnd() - 0.5));
         addMatter(r * Math.cos(a), r * Math.sin(a), Math.sin(a) * v, -Math.cos(a) * v, Md / N, 0);
+      }
+    } },
+  magnetar: { name:'Magnetar · starquakes and giant flares', extent: 190, tilt: 35, build() {
+      const mg = makeStar('MAG', 0, 0, 0, 0); mg.flareAt = wallNow + 4000; bodies.push(mg);
+      const pl = makeStar('ROCK', 0, 0, 0, 0); bodies.push(pl); orbitAround(mg, pl, 150, 0.6);
+      for (let k = 0; k < 520; k++) { // a ring of rubble left over from the supernova that made it
+        const r = 60 + 50 * Math.random(), a = Math.random() * Math.PI * 2, v = Math.sqrt(G * mg.m / r);
+        addMatter(r * Math.cos(a), r * Math.sin(a), Math.sin(a) * v, -Math.cos(a) * v, 2e-9, 0);
       }
     } },
   zoo:      { name:'Stellar zoo', extent:3500, build() {
@@ -2829,6 +2874,7 @@ function drawScene() {
     const g = R * 5 + (isNS(b) ? 7 : 12) * s;
     sctx.drawImage(starGlow[b.type.id], X - g, Y - g, 2 * g, 2 * g);
     if (isNS(b)) { // pulsar beams
+      if (isMag(b)) drawMagField(X, Y, R, b);
       const ang = b.beamPh, L = Math.max(R * 9, 22 * s);
       sctx.lineWidth = Math.max(1, 1.2 * s);
       for (const sg of [1, -1]) {
@@ -2853,6 +2899,24 @@ function drawScene() {
   }
 }
 
+// a magnetar's dipole field: loops r = L sin^2(theta) about the magnetic axis, flaring bright after a starquake
+function drawMagField(X, Y, R, b) {
+  const s = RS, ax = b.beamPh, ca = Math.cos(ax), sa = Math.sin(ax), fl = b.flashT ? Math.max(0, 1 - (wallNow - b.flashT) / 2500) : 0;
+  sctx.lineWidth = Math.max(1, s);
+  for (let k = 1; k <= 4; k++) {
+    const L = Math.max(R * 4, 12 * s) * k * (1 + 0.5 * fl);
+    sctx.strokeStyle = `rgba(214,150,255,${(0.34 - 0.06 * k) * (1 + 2 * fl)})`;
+    for (const sg of [1, -1]) {
+      sctx.beginPath();
+      for (let i = 0; i <= 28; i++) {
+        const th = i / 28 * Math.PI, r = L * Math.sin(th) ** 2, u = r * Math.cos(th), v = r * Math.sin(th) * sg;
+        const px = X + u * ca - v * sa, py = Y + (u * sa + v * ca) * cosI;
+        i ? sctx.lineTo(px, py) : sctx.moveTo(px, py);
+      }
+      sctx.stroke();
+    }
+  }
+}
 // GPU path: instead of drawing gas and stars here, pack them into instance buffers for composite() to draw.
 function drawSceneGL(W, H, gsz, mg, tilted) {
   const s = RS, C2 = C * C, top = HDR ? 2.2 : 1, gain = 0.5;
@@ -2918,11 +2982,12 @@ function drawSceneGL(W, H, gsz, mg, tilted) {
   for (const b of bodies) {
     if (b.kind !== 'star') continue;
     const X = toSX(b.x, b.y) * s, Y = toSY(b.x, b.y) * s, pl = b.type.kind === 'planet';
-    let R = Math.max(b.R * zoom, pl && b.label ? 2.3 : 1.6) * s;
+    let R = Math.max(b.R * zoom, pl && b.label ? 3 : 1.6) * s;
     let g = R * 5 + (isNS(b) ? 7 : 12) * s, far = false;
     if (b.real && !pl && !isNS(b) && R < 3.5 * s) { R = Math.max(R, 2.4 * s); g = 34 * s; far = true; }   // a star seen from across its own planetary system: a point, but by far the brightest thing
     if (isNS(b)) {
       sceneUsed = true;
+      if (isMag(b)) drawMagField(X, Y, R, b);
       const ang = b.beamPh, L = Math.max(R * 9, 22 * s);
       sctx.lineWidth = Math.max(1, 1.2 * s);
       for (const sg of [1, -1]) {
@@ -3414,7 +3479,7 @@ function ghost(c, sx, sy) {
     c.setLineDash([2, 4]); c.strokeStyle = 'rgba(236,230,218,0.5)'; c.lineWidth = 1; c.beginPath(); c.arc(sx, sy, 26, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
   } else if (TYPE[tool]) {
     if (TYPE[tool].kind === 'planet' && host && !isAccretor(host) && host.m > 3 * TYPE[tool].m) { // where tides would pull this world apart
-      const tm = TYPE[tool].m, dR = (tm < 1e-10 ? 1.5 : 2.0) * planetR(tm, realSizes) * Math.cbrt(host.m / tm) * zoom;
+      const tm = TYPE[tool].m, dR = (tm < 1e-10 ? 1.5 : 2.0) * planetRsun(tm) * sizeScale(host) * Math.cbrt(host.m / tm) * zoom;
       if (dR > 8) {
         const HX = toSX(host.x, host.y), HY = toSY(host.x, host.y);
         c.setLineDash([5, 4]); c.strokeStyle = 'rgba(255,120,90,0.6)'; c.lineWidth = 1; c.beginPath(); c.ellipse(HX, HY, dR, dR * cosI, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
@@ -3450,7 +3515,7 @@ function drawOverlay() {
           if (taken.some(q => Math.abs(q[0] - X) < 64 && Math.abs(q[1] - Y) < 12)) continue;
           taken.push([X, Y]);
         }
-        c.textAlign = 'left'; c.fillText(isNS(b) ? `NS ${fmtM(b.m)} · ${b.spinHz >= 100 ? (1000 / b.spinHz).toFixed(1) + ' ms' : Math.round(b.spinHz) + '/s'}` : b.label || b.type.id, X + R + 6, Y - R - 2); c.textAlign = 'center';
+        c.textAlign = 'left'; c.fillText(isNS(b) ? `${isMag(b) ? 'Magnetar' : 'NS'} ${fmtM(b.m)} · ${b.spinHz >= 100 ? (1000 / b.spinHz).toFixed(1) + ' ms' : b.spinHz < 1 ? (1 / b.spinHz).toFixed(1) + ' s' : Math.round(b.spinHz) + '/s'}` : b.label || b.type.id, X + R + 6, Y - R - 2); c.textAlign = 'center';
       }
     }
   }
@@ -3754,8 +3819,9 @@ function inspectRows(b) {
     ['Nearest partner', () => orbitText(b)],
   ];
   if (isNS(b)) return [
-    ['Spin', () => b.spinHz >= 100 ? `${Math.round(b.spinHz)}/s · ${(1000 / b.spinHz).toFixed(2)} ms` : `${b.spinHz.toFixed(1)}/s`],
+    ['Spin', () => b.spinHz >= 100 ? `${Math.round(b.spinHz)}/s · ${(1000 / b.spinHz).toFixed(2)} ms` : b.spinHz < 1 ? `one turn every ${(1 / b.spinHz).toFixed(1)} s` : `${b.spinHz.toFixed(1)}/s`],
     ['Radius', () => '12 km'],
+    ...(isMag(b) ? [['Magnetic field', () => 'about 10¹¹ tesla · 1,000× a pulsar'], ['Giant flares', () => String(b.flares || 0)]] : []),
     ['Collapse limit', () => `${fmtM(b.m)} of ~2.3 M☉ (${Math.round(b.m / 2.3 * 100)}%)`],
     ['Eaten so far', () => `${(b.fedTotal || 0).toFixed(4)} M☉`],
     ['Blown out by its disk', () => `${(b.windM || 0).toFixed(4)} M☉`],
@@ -3768,7 +3834,7 @@ function inspectRows(b) {
       ['Radius', () => `${fmtKm(rk())} km${b.real ? '' : ' (drawn larger here)'}`],
       ['Surface gravity', () => { const g = (b.m / MEARTH) / Math.pow(rk() / 6371, 2); return `${g >= 0.1 ? g.toFixed(2) : g.toPrecision(2)} g`; }],
       ['Escape speed', () => `${(11.186 * Math.sqrt((b.m / MEARTH) / (rk() / 6371))).toFixed(2)} km/s`],
-      ['Roche limit of what it orbits', () => b.roche ? `${fmtDist(b.roche * KM_PER_UNIT)} · it is ${(1 / Math.max(b.f, 1e-9)).toFixed(1)}× that far out` : '—'],
+      ['Roche limit', () => b.roche ? `${fmtDist(b.roche * KM_PER_UNIT)} (it orbits ${(1 / Math.max(b.f, 1e-9)).toFixed(1)}× farther out)` : '—'],
       ['Gathered so far', () => b.fedTotal ? massStr(b.fedTotal) : '—'],
       ['Nearest partner', () => orbitText(b)],
     ];
@@ -4063,6 +4129,7 @@ function frameBody(now) {
   if (paused) frameSim = 0;
   if (!paused) {
     for (const b of bodies) { b.fedFrame = 0; if (b.kind === 'bh') updateKerr(b); }
+    for (const b of bodies) if (isMag(b) && wallNow > (b.flareAt || 0) && !b.sn) magnetarFlare(b);
     for (const b of bodies) if (isNS(b)) b.beamPh += (1.5 + 3.2 * Math.log10(1 + b.spinHz)) * wallDt;
     // advance bodies and gas together in short chunks so fast-moving accretors (neutron stars) never outrun their own gas
     const want = wallDt * SPEEDS[speedIdx] * slow * warp;

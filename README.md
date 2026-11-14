@@ -27,6 +27,7 @@ It's a single self-contained `index.html` with no build step and no dependencies
 - **The Solar System.** All eight planets on their real orbits, the Moon, the Galilean moons and Titan, Ceres, Pluto, Orcus, Haumea, Quaoar, Makemake, Gonggong, Eris and Sedna, the asteroid belt, Jupiter's Trojans and the Kuiper belt. Click a world to follow it and zoom in. Zoom out past the heliopause and the Oort cloud to the fourteen nearest star systems.
 - **How the Moon formed.** A Mars-sized world strikes the young Earth off-centre. Part of it is thrown into orbit, and the debris beyond the Roche limit gathers into moonlets that merge.
 - **A solar nebula.** A disk of dust round a young star sticks together into a family of planets.
+- **Magnetars.** A neutron star with a field a thousand times a pulsar's. Every so often its crust cracks in a starquake and it lets off a giant flare that blows nearby gas and rubble outward and scorches any planet close by.
 - **Tilt the view.** Seen from the side, the disk is brighter on the side coming toward you (Doppler beaming), spinning holes show their exact Kerr shadow, and jets show up.
 
 ## Controls
