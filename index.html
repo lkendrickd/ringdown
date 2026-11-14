@@ -192,11 +192,13 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
   font:600 11.5px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
 .follow-x:hover{background:rgba(255,255,255,.09)}
 .ctx .tgt{color:var(--accent)}
-.toasts{position:fixed;z-index:8;left:50%;transform:translateX(-50%);bottom:calc(var(--dock-h,120px) + 10px);width:min(440px,calc(100% - 32px));
+/* event messages stack up the left edge, clear of whatever is in the middle of the view */
+.toasts{position:fixed;z-index:8;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(var(--dock-h,120px) + 10px);width:min(300px,calc(100% - 32px));
   display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .toast{background:var(--glass-hi);border:1px solid var(--line);border-radius:12px;padding:10px 13px 11px;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
   animation:tin .35s ease-out both}
 .toast.out{animation:tout .5s ease-in both}
+@media (max-height:620px){.toast:not(:last-child){display:none}}   /* short window: only the newest, so the stack never climbs over the readout */
 .toast h3{margin:0 0 5px;font:600 11.5px/1 var(--f-ui);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
 .toast h3.w{color:var(--wave)}
 .toast ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink)}
@@ -277,8 +279,8 @@ html.phone .inspect:not(.full) .ins-rows,html.phone .inspect:not(.full) .ins-edi
 html.phone .panel{top:auto;bottom:calc(var(--dock-h,100px) + 8px);left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));
   width:auto;max-width:460px;margin:0 auto;max-height:min(62vh,calc(100% - var(--dock-h,100px) - 120px));overscroll-behavior:contain;padding:12px 14px 14px}
 html.phone .sharepop{top:calc(env(safe-area-inset-top,0px) + 52px);right:max(10px,env(safe-area-inset-right,0px))}
-/* toasts: just the newest one, small, at the top under the strip; tap to dismiss */
-html.phone .toasts{top:calc(var(--scope-b,120px) + 8px);bottom:auto;width:min(420px,calc(100% - 24px))}
+/* toasts: just the newest one, small, at the top left under the strip; tap to dismiss */
+html.phone .toasts{top:calc(var(--scope-b,120px) + 8px);bottom:auto;left:max(12px,env(safe-area-inset-left,0px));width:min(270px,68vw)}
 html.phone .toast{pointer-events:auto;padding:7px 10px 8px;border-radius:10px;cursor:pointer}
 html.phone .toast:not(:last-child){display:none}
 html.phone .toast h3{font-size:10.5px;margin-bottom:3px}
