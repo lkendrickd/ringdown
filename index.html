@@ -609,7 +609,7 @@ function regrade(b) {
 const MAXM = 7000, BODY_CAP = 96;
 const qx = new Float64Array(MAXM), qy = new Float64Array(MAXM), qvx = new Float64Array(MAXM), qvy = new Float64Array(MAXM);
 const qm = new Float64Array(MAXM), qT = new Float32Array(MAXM), qc = new Int32Array(MAXM), qk = new Uint16Array(MAXM), qp = new Float32Array(MAXM), qr = new Uint8Array(MAXM); // qr: 1 = ring debris; qk: how many grains have stuck together; qp: size for its mass, relative to rock (ice is puffier)
-let qN = 0, matterFull = false, mcDt = 0, mcWall = 0;
+let qN = 0, matterFull = false, mcDt = 0, mcWall = 0, mcHeavy = true;
 function addMatter(x, y, vx, vy, m, heat, puff) {
   if (qN >= MAXM) return false;
   qx[qN] = x; qy[qN] = y; qvx[qN] = vx; qvy[qN] = vy; qm[qN] = m; qT[qN] = heat || 0; qk[qN] = 1; qp[qN] = puff || 1; qr[qN] = 0; qN++;
@@ -641,6 +641,7 @@ function matterLands(b, m, vx, vy) {
 // Move the matter under the gravity of every body. Each particle takes as many substeps as its tightest orbit needs.
 const _bx = new Float64Array(BODY_CAP + 64), _by = new Float64Array(BODY_CAP + 64), _bvx = new Float64Array(BODY_CAP + 64), _bvy = new Float64Array(BODY_CAP + 64);
 const _bm = new Float64Array(BODY_CAP + 64), _br = new Float64Array(BODY_CAP + 64), _bhot = new Float64Array(BODY_CAP + 64);
+const _maj = new Int32Array(BODY_CAP + 64), _min = new Int32Array(BODY_CAP + 64), _act = new Int32Array(BODY_CAP + 64), _inf2 = new Float64Array(BODY_CAP + 64);
 function stepMatter(simDt) {
   if (!qN || simDt <= 0) return;
   const nb = Math.min(bodies.length, _bx.length);
@@ -662,17 +663,32 @@ function stepMatter(simDt) {
       }
     }
   }
+  /* Which bodies each particle has to feel. The heavy ones (within a millionth of the heaviest), always. The light
+     ones (moons, dwarf planets) only from close by, a few Hill radii: farther out their pull is lost in the heavy
+     bodies' and not worth the arithmetic. In the Solar System that is 7 bodies per particle instead of 24. */
+  let gmMax = 0; for (let j = 0; j < nb; j++) if (_bm[j] > gmMax) gmMax = _bm[j];
+  let nMaj = 0, nMin = 0;
+  for (let j = 0; j < nb; j++) {
+    if (_bm[j] >= 1e-6 * gmMax) { _maj[nMaj++] = j; continue; }
+    let tide = 0;
+    for (let k = 0; k < nb; k++) { if (k === j || _bm[k] <= _bm[j]) continue; const dx = _bx[k] - _bx[j], dy = _by[k] - _by[j], r2 = dx * dx + dy * dy, t = _bm[k] / (r2 * Math.sqrt(r2)); if (t > tide) tide = t; }
+    const reach = Math.max(3 * Math.cbrt(_bm[j] / (3 * tide)), 4 * _br[j], 4 * _bhot[j]);
+    _min[nMin] = j; _inf2[nMin++] = reach * reach;
+  }
   for (let i = 0; i < qN; i++) {
     let x = qx[i], y = qy[i], vx = qvx[i], vy = qvy[i];
+    let na = nMaj;
+    for (let q = 0; q < nMaj; q++) _act[q] = _maj[q];
+    for (let q = 0; q < nMin; q++) { const j = _min[q], dx = _bx[j] - x, dy = _by[j] - y; if (dx * dx + dy * dy < _inf2[q]) _act[na++] = j; }
     let t2 = Infinity;
-    for (let j = 0; j < nb; j++) { const dx = _bx[j] - x, dy = _by[j] - y, r2 = dx * dx + dy * dy; const t = r2 * Math.sqrt(r2) / _bm[j]; if (t < t2) t2 = t; }
+    for (let q = 0; q < na; q++) { const j = _act[q], dx = _bx[j] - x, dy = _by[j] - y, r2 = dx * dx + dy * dy; const t = r2 * Math.sqrt(r2) / _bm[j]; if (t < t2) t2 = t; }
     const n = clamp(Math.ceil(simDt / (0.07 * Math.sqrt(t2))), 1, 60), dt = simDt / n;
     let hit = -1, hot = false;
     for (let s = 0; s < n && hit < 0; s++) {
       const back = simDt - (s + 0.5) * dt;   // the bodies have already been moved to the end of this step: wind them back
       let ax = 0, ay = 0;
-      for (let j = 0; j < nb; j++) {
-        const dx = _bx[j] - _bvx[j] * back - x, dy = _by[j] - _bvy[j] * back - y, r2 = dx * dx + dy * dy, r = Math.sqrt(r2);
+      for (let q = 0; q < na; q++) {
+        const j = _act[q], dx = _bx[j] - _bvx[j] * back - x, dy = _by[j] - _bvy[j] * back - y, r2 = dx * dx + dy * dy, r = Math.sqrt(r2);
         if (r < _br[j]) { hit = j; break; }
         if (r < _bhot[j]) { hit = j; hot = true; break; }
         const k = _bm[j] / (r2 * r);
@@ -747,7 +763,7 @@ function matterCollective(dt, wallDt) {
   for (let c = 0; c < nc; c++) { const m = clM[c]; clX[c] /= m; clY[c] /= m; clVX[c] /= m; clVY[c] /= m; clHR[c] /= m; clT[c] /= m; }
   // cell-on-cell gravity (skipped for very large clouds, where the pull of the bodies dominates anyway)
   let Mq = 0, Mb = 0; for (let c = 0; c < nc; c++) Mq += clM[c]; for (const b of bodies) if (b.m > Mb) Mb = b.m;
-  const heavy = Mq > 1e-5 * Mb;   // light belts and rings: their own gravity is nothing next to what they orbit
+  const heavy = Mq > 1e-5 * Mb; mcHeavy = heavy || !nb;   // light belts and rings: their own gravity is nothing next to what they orbit
   if (heavy && nc <= 1100) for (let a = 0; a < nc; a++) for (let b = a + 1; b < nc; b++) {
     const dx = clX[b] - clX[a], dy = clY[b] - clY[a], e = 0.5 * (clH[a] + clH[b]), r2 = dx * dx + dy * dy + e * e, k = G / (r2 * Math.sqrt(r2));
     clAX[a] += k * clM[b] * dx; clAY[a] += k * clM[b] * dy; clAX[b] -= k * clM[a] * dx; clAY[b] -= k * clM[a] * dy;
@@ -1478,23 +1494,37 @@ function stepBodies(simDt) {
    every pair feels plain softened Newtonian gravity. One tight pass finds the forces, the step size and any
    collision together, which is what lets a whole planetary system with moons run at speed. */
 let pbN = 0, pbX = new Float64Array(64), pbY = new Float64Array(64), pbVX = new Float64Array(64), pbVY = new Float64Array(64);
-let pbAX = new Float64Array(64), pbAY = new Float64Array(64), pbGM = new Float64Array(64), pbR = new Float64Array(64);
+let pbAX = new Float64Array(64), pbAY = new Float64Array(64), pbGM = new Float64Array(64), pbR = new Float64Array(64), pbInf = new Float64Array(64);
+let plainBudget = 1600;   // steps a frame may spend here; past that, time runs slower instead of the picture stuttering
 function stepBodiesPlain(simDt) {
   let n = 0, tmin2 = Infinity, hit = false;
   const load = () => {
     n = bodies.length;
-    if (n > pbX.length) { const g = () => new Float64Array(n * 2); pbX = g(); pbY = g(); pbVX = g(); pbVY = g(); pbAX = g(); pbAY = g(); pbGM = g(); pbR = g(); }
+    if (n > pbX.length) { const g = () => new Float64Array(n * 2); pbX = g(); pbY = g(); pbVX = g(); pbVY = g(); pbAX = g(); pbAY = g(); pbGM = g(); pbR = g(); pbInf = g(); }
     for (let i = 0; i < n; i++) { const b = bodies[i]; pbX[i] = b.x; pbY[i] = b.y; pbVX[i] = b.vx; pbVY[i] = b.vy; pbGM[i] = G * b.m; pbR[i] = b.R; }
+    // Light bodies (under a millionth of the heaviest) only matter to each other from close by. pbInf is how close,
+    // squared: a few Hill radii. Zero marks a heavy body, which every pair still counts.
+    let gmMax = 0; for (let i = 0; i < n; i++) if (pbGM[i] > gmMax) gmMax = pbGM[i];
+    for (let i = 0; i < n; i++) {
+      pbInf[i] = 0;
+      if (pbGM[i] >= 1e-6 * gmMax) continue;
+      let tide = 0;
+      for (let k = 0; k < n; k++) { if (k === i || pbGM[k] <= pbGM[i]) continue; const dx = pbX[k] - pbX[i], dy = pbY[k] - pbY[i], r2 = dx * dx + dy * dy, t = pbGM[k] / (r2 * Math.sqrt(r2)); if (t > tide) tide = t; }
+      const reach = Math.max(4 * Math.cbrt(pbGM[i] / (3 * tide)), 6 * pbR[i]);
+      pbInf[i] = reach * reach;
+    }
   };
   const store = () => { for (let i = 0; i < n; i++) { const b = bodies[i]; b.x = pbX[i]; b.y = pbY[i]; b.vx = pbVX[i]; b.vy = pbVY[i]; b.ax = pbAX[i]; b.ay = pbAY[i]; } };
   const accel = () => {
     tmin2 = Infinity; hit = false;
     for (let i = 0; i < n; i++) { pbAX[i] = 0; pbAY[i] = 0; }
     for (let i = 0; i < n; i++) {
-      const xi = pbX[i], yi = pbY[i], gi = pbGM[i], ri = pbR[i];
+      const xi = pbX[i], yi = pbY[i], gi = pbGM[i], ri = pbR[i], fi = pbInf[i];
       let ax = 0, ay = 0;
       for (let j = i + 1; j < n; j++) {
-        const dx = pbX[j] - xi, dy = pbY[j] - yi, r2 = dx * dx + dy * dy, r = Math.sqrt(r2) || 1e-6, rr = ri + pbR[j];
+        const dx = pbX[j] - xi, dy = pbY[j] - yi, r2 = dx * dx + dy * dy;
+        if (fi > 0 && pbInf[j] > 0 && r2 > fi + pbInf[j]) continue;   // two light bodies far apart
+        const r = Math.sqrt(r2) || 1e-6, rr = ri + pbR[j];
         const e = rr * 0.5, k = 1 / (r * (r2 + e * e)), gj = pbGM[j];
         ax += k * gj * dx; ay += k * gj * dy; pbAX[j] -= k * gi * dx; pbAY[j] -= k * gi * dy;
         // time for this pair to move appreciably: a sixth of that when they are about to touch, so impacts are resolved
@@ -1507,7 +1537,8 @@ function stepBodiesPlain(simDt) {
   };
   load(); accel();
   let left = simDt, steps = 0;
-  while (left > simDt * 1e-9 && steps < 900) {
+  while (left > simDt * 1e-9 && steps < 900 && plainBudget > 0) {
+    plainBudget--;
     const dt = Math.min(left, 0.12 * Math.sqrt(tmin2));
     for (let i = 0; i < n; i++) { pbVX[i] += 0.5 * dt * pbAX[i]; pbVY[i] += 0.5 * dt * pbAY[i]; pbX[i] += dt * pbVX[i]; pbY[i] += dt * pbVY[i]; }
     accel();
@@ -4168,7 +4199,10 @@ function frameBody(now) {
     for (const b of bodies) if (isNS(b)) b.beamPh += (1.5 + 3.2 * Math.log10(1 + b.spinHz)) * wallDt;
     // advance bodies and gas together in short chunks so fast-moving accretors (neutron stars) never outrun their own gas
     const want = wallDt * SPEEDS[speedIdx] * slow * warp;
-    const chunk = (gN > 0 && bodies.some(b => isNS(b) || isWD(b)) ? 0.004 : 0.02) * warp;
+    // (a scene of only stars, planets and loose matter needs far fewer: its integrator takes its own substeps)
+    const plain = gN === 0 && bodies.length > 3 && bodies.every(b => b.kind === 'star' && !isCompact(b));
+    const chunk = (plain ? 0.25 : gN > 0 && bodies.some(b => isNS(b) || isWD(b)) ? 0.004 : 0.02) * warp;
+    plainBudget = 1600;
     const K = clamp(Math.ceil(want / chunk), 1, 40);
     let simDt = 0;
     frameSim = 0;
@@ -4180,7 +4214,7 @@ function frameBody(now) {
     frameSim = simDt;
     // the matter's own gravity and sticking are slow processes: every third frame is plenty
     mcDt += simDt; mcWall += wallDt;
-    if (frameN % 3 === 0) { matterCollective(mcDt, mcWall); mcDt = 0; mcWall = 0; }
+    if (frameN % (mcHeavy ? 3 : 12) === 0) { matterCollective(mcDt, mcWall); mcDt = 0; mcWall = 0; }   // light belts: less often still
     planetTides(simDt); planetPairs(); if (frameN % 30 === 0) nameTheMoon();
     // smoothed rate of mass change for the inspector (per second of sim time)
     for (const b of bodies) {
