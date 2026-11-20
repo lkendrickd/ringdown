@@ -3034,7 +3034,7 @@ let vw = innerWidth, vh = innerHeight, RS = 1, OD = 1;
 const GLR = { tg: {}, bloom: [] };   // programs, vertex arrays and render targets of the GPU pipeline
 
 /* ---- GPU pipeline --------------------------------------------------------------------------------------------
-   sky + 2D effects canvas + stars  ->  base    (what the sky lens bends and the shadows cover)
+   sky + 2D effects canvas + explosions (HDR) + stars  ->  base    (what the sky lens bends and the shadows cover)
    gas, as instanced sprites        ->  gas     (kept apart so the disk can be ray traced around each hole)
    base + gas, lensed               ->  lens    (float target when the device allows: brightness above 1 survives)
    lens -> bloom pyramid -> tone map -> screen
@@ -3461,8 +3461,57 @@ void main(){
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
   o = vec4(c + (n - 0.5) / 255.0, 1.0);
 }`;
-// Quality switches, one per costly stage, for a quality setting to turn off: edge anti-aliasing, surface detail.
-const GFX = { aa: true, surface: true };
+// Explosions (supernovae, novae, flares, kilonovae) as light on the GPU: drawn into the base layer before the lens,
+// so a hole in front bends and hides them like everything else, and in HDR, so their cores stay far brighter than
+// white and bloom instead of clipping as the 8-bit canvas did. Each is a few instanced quads: a soft radial glow
+// whose colour stops are the canvas gradient's (kind 0) or a thin ring, the light front (kind 1). The hot core is
+// boosted above what the canvas could hold; the fireball carries turbulent filaments when fine detail is on.
+const VS_FX = `#version 300 es
+in vec2 q;
+in vec4 iA;   // x, y, radius across and up the screen (px)
+in vec4 iB;   // light at the centre (colour × opacity), offset of the next stop; a ring: its colour, its width (px)
+in vec4 iC;   // light at that stop, offset of the next
+in vec4 iD;   // light at that stop (fading to none at the edge), kind: 0 glow, 1 ring
+in vec4 iE;   // HDR core: gain, its radius (fraction of the glow's), turbulence, seed
+uniform vec2 uRes;
+out vec2 vL; flat out vec4 vA; flat out vec4 vB; flat out vec4 vC; flat out vec4 vD; flat out vec4 vE;
+void main(){
+  vec2 ext = iA.zw + (iD.w > 0.5 ? 2.0 * iB.w + 2.0 : 0.0);
+  vL = q * ext; vA = iA; vB = iB; vC = iC; vD = iD; vE = iE;
+  gl_Position = vec4((iA.xy + vL) / uRes * 2.0 - 1.0, 0.0, 1.0);
+}`;
+const FS_FX = `#version 300 es
+precision highp float;
+in vec2 vL; flat in vec4 vA; flat in vec4 vB; flat in vec4 vC; flat in vec4 vD; flat in vec4 vE;
+uniform float uT, uDetail, uHDR;
+out vec4 o;
+float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p){ return vnoise(p) * 0.55 + vnoise(p * 2.1 + 3.7) * 0.3 + vnoise(p * 4.3 - 1.3) * 0.15; }
+void main(){
+  vec3 c;
+  if (vD.w > 0.5) {   // the ring: distance to the ellipse in px (elliptical radius over its gradient), a soft line of that width
+    vec2 e = vL / vA.zw; float d = length(e), g = length(e / vA.zw) / max(d, 1e-4), dist = (d - 1.0) / max(g, 1e-6);
+    c = vB.rgb * exp(-2.77 * dist * dist / (vB.w * vB.w)) * (1.0 + vE.x * uHDR);
+  } else {
+    float t = length(vL) / vA.z;
+    if (t >= 1.0) discard;
+    c = t < vB.w ? mix(vB.rgb, vC.rgb, t / vB.w) : t < vC.w ? mix(vC.rgb, vD.rgb, (t - vB.w) / (vC.w - vB.w)) : vD.rgb * (1.0 - t) / max(1.0 - vC.w, 1e-4);
+    c *= 1.0 + vE.x * uHDR * exp(-t * t / (vE.y * vE.y));   // the hot core
+    if (vE.z > 0.0 && uDetail > 0.5) {   // clumps and filaments that expand with the fireball and slowly boil (the same light on average)
+      float n = fbm(vL / vA.z * 6.0 + vE.w + uT * vec2(0.05, -0.04)) * 0.7 + fbm(vL / vA.z * 13.0 - vE.w - uT * vec2(0.03, 0.06)) * 0.3;
+      c *= mix(1.0, 0.45 + 1.1 * n, vE.z * smoothstep(0.1, 0.55, t));
+    }
+  }
+  o = vec4(c, 0.0);
+}`;
+// Quality switches, one per costly stage, for a quality setting to turn off: edge anti-aliasing, surface detail (star
+// and planet surfaces, explosion filaments). fx: explosions on the GPU; off draws them on the 2D canvas as the
+// fallback does (kept to compare against).
+const GFX = { aa: true, surface: true, fx: true };
 
 function initGL() {
   try { gl = view.getContext('webgl2', { antialias:false, alpha:false, premultipliedAlpha:false, powerPreference:'high-performance' }); } catch (e) { gl = null; }
@@ -3491,6 +3540,7 @@ function buildGL() {
     GLR.up = program(VS_TRI, FS_UP, ['p']);
     GLR.fin = program(VS_TRI, FS_FINAL, ['p']);
     GLR.fxaa = program(VS_TRI, FS_FXAA, ['p']);
+    GLR.fx = program(VS_FX, FS_FX, ['q', 'iA', 'iB', 'iC', 'iD', 'iE']);
   } catch (e) { console.warn('WebGL2 shaders failed, using 2D fallback', e); return false; }
   HDR = !!gl.getExtension('EXT_color_buffer_float');
   // full-screen triangle
@@ -3498,7 +3548,7 @@ function buildGL() {
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-  // instanced quads: one vertex array for stars (16 floats each), one for gas (8 floats each)
+  // instanced quads: one vertex array for stars (16 floats each), one for gas (8 floats each), one for explosions (20)
   const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const instanced = (stride, sizes) => {
@@ -3511,6 +3561,7 @@ function buildGL() {
   };
   GLR.starI = instanced(16, [4, 4, 4, 4]);
   GLR.gasI = instanced(8, [4, 4]);
+  GLR.fxI = instanced(20, [4, 4, 4, 4, 4]);
   gl.bindVertexArray(null);
   // textures: the tiled sky (uploaded once) and the 2D effects canvas (uploaded only on frames that draw to it)
   const texture = (wrap) => {
@@ -3711,13 +3762,17 @@ function drawScene() {
     }
   }
 
-  // kilonovae
+  // explosions: supernovae, novae and flares (kind 'sn'), kilonovae, impacts and flare glows. With WebGL2 they go to
+  // the GPU's explosion pass instead (packFlash), newest first, so past FX_MAX the oldest are the ones left out.
   sctx.globalCompositeOperation = 'lighter';
-  if (flashes.length) sceneUsed = true;
+  const fxGL = gl && GFX.fx;
+  if (flashes.length && !fxGL) sceneUsed = true;
+  fxN = fxF = 0;
   for (let i = flashes.length - 1; i >= 0; i--) {
     const f = flashes[i], a = Math.max(0, (wallNow - f.t0) / f.dur);
     if (a > 1) { flashes.splice(i, 1); continue; }
     const X = toSX(f.x, f.y) * s, Y = toSY(f.x, f.y, f.z) * s;
+    if (fxGL) { packFlash(f, a, X, Y, W, H); continue; }
     if (f.kind === 'sn') { drawSupernovaFlash(f, a, X, Y, W, H); continue; }
     const R = Math.max((4 + 90 * Math.pow(a, 0.55)) * f.scale * zoom, 6) * s;
     const k = clamp((a - 0.12) / 0.55, 0, 1);
@@ -3959,6 +4014,45 @@ function drawSupernovaFlash(f, a, X, Y, W, H) {
     sctx.beginPath(); sctx.ellipse(X, Y, rl, rl * Math.max(cosI, 0.15), 0, 0, Math.PI * 2); sctx.stroke();
   }
 }
+// GPU path: the same explosions as instances of the explosion shader (FS_FX), with the canvas version's timing, sizes and
+// colours. The light is not clipped at 1 any more, so the hot cores get a gain (HDR only) the canvas could not show.
+const FX_MAX = 12;   // explosions drawn at once
+const fxInst = new Float32Array(FX_MAX * 3 * 20);
+let fxN = 0, fxF = 0;
+// stops: [offset, r, g, b, opacity] as on the canvas (colour 0-255), up to three, fading to nothing at 1. A ring (kind 1)
+// takes one stop whose offset is its width in px.
+function fxPut(X, Y, rx, ry, kind, stops, hot, hr, turb, seed) {
+  const f = fxInst, o = fxN++ * 20;
+  f.fill(0, o, o + 20);
+  f[o] = X; f[o + 1] = scene.height - Y; f[o + 2] = rx; f[o + 3] = ry;
+  stops.forEach((s, j) => { const k = s[4] / 255; f[o + 4 + 4 * j] = s[1] * k; f[o + 5 + 4 * j] = s[2] * k; f[o + 6 + 4 * j] = s[3] * k; });
+  f[o + 7] = kind ? stops[0][0] : stops.length > 1 ? stops[1][0] : 1; f[o + 11] = stops.length > 2 ? stops[2][0] : 1;
+  f[o + 15] = kind; f[o + 16] = hot; f[o + 17] = hr; f[o + 18] = turb; f[o + 19] = seed;
+}
+function packFlash(f, a, X, Y, W, H) {
+  if (fxF >= FX_MAX) return;
+  fxF++;
+  const s = RS, seed = (f.t0 * 0.0137) % 61, tw = (wallNow - f.t0) / 1000, hot = Math.exp(-tw / 0.8);   // the cores blaze for the first second
+  if (f.kind === 'sn') {   // drawSupernovaFlash: the bloom, the fireball, the light front
+    const P = f.power;
+    if (tw < 0.6) {
+      const k = (1 - tw / 0.6) ** 2 * Math.min(1, P), r = Math.max(W, H) * (0.35 + 0.45 * P);
+      fxPut(X, Y, r, r, 0, [[0, 255, 255, 255, 0.95 * k], [0.25, 235, 240, 255, 0.45 * k]], 12 * k, 0.06, 0, seed);
+    }
+    const base = Math.max(f.R * zoom * s * 3, Math.min(W, H) * 0.09 * P);
+    const r = base * (1 + 3 * Math.pow(a, 0.6)), k = Math.pow(1 - a, 1.1) * Math.min(1, 0.5 + P), cool = clamp(a * 1.8, 0, 1);
+    const c1 = [255, 200 - 120 * cool, 120 - 90 * cool];
+    fxPut(X, Y, r, r, 0, [[0, 255, 255 - 30 * cool, 245 - 170 * cool, 0.95 * k], [0.3, ...c1, 0.55 * k], [0.7, ...c1, 0.18 * k]], 4 * k * hot * Math.min(1, P), 0.18, 0.5, seed);
+    const rl = (simTime - f.st) * C * zoom * s, D = Math.hypot(W, H) * 1.2;
+    if (rl > 2 && rl < D && P > 0.5) fxPut(X, Y, rl, rl * Math.max(cosI, 0.15), 1, [[Math.max(1.5, 3 * s), 255, 248, 230, 0.5 * (1 - rl / D)]], 2, 0, 0, 0);
+    return;
+  }
+  // kilonovae, giant impacts, a magnetar flare's glow: blue-white cooling to orange, and a white flash at the start
+  const R = Math.max((4 + 90 * Math.pow(a, 0.55)) * f.scale * zoom, 6) * s, k = clamp((a - 0.12) / 0.55, 0, 1);
+  const col = [180 + 75 * k, 205 - 110 * k, 255 - 210 * k], al = Math.pow(1 - a, 1.6) * 0.9;
+  fxPut(X, Y, R, R, 0, [[0, ...col, al], [0.45, ...col, al * 0.45]], 3 * hot, 0.25, 0, seed);
+  if (a < 0.06) { const w = 1 - a / 0.06, R2 = R * 0.6; fxPut(X, Y, R2, R2, 0, [[0, 255, 255, 255, w]], 8 * w, 0.3, 0, seed); }
+}
 // cutaway of a collapsing star: the envelope turns translucent so the core is visible
 function drawCollapse(b, X, Y, R, p) {
   const s = RS, coreMax = Math.max(R * 0.32, 5 * s), mode = b.sn.mode;
@@ -4089,7 +4183,7 @@ function composite() {
     const target = (t) => { gl.bindFramebuffer(gl.FRAMEBUFFER, t ? t.fbo : null); gl.viewport(0, 0, t ? t.w : W, t ? t.h : H); };
     const bind = (unit, tex) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); };
     const T = GLR.tg;
-    // 1. base: sky, then the 2D effects canvas (only uploaded on frames that drew something), then stars
+    // 1. base: sky, then the 2D effects canvas (only uploaded on frames that drew something), then explosions and stars
     if (sceneUsed) {
       bind(1, GLR.sceneTex);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
@@ -4110,6 +4204,11 @@ function composite() {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, n);
     };
     gl.enable(gl.BLEND);
+    if (fxN) {   // explosions, added as light under the stars (as the canvas was): in HDR their cores go far above 1, before the lens and bloom
+      P = GLR.fx; gl.useProgram(P.p); gl.blendFunc(gl.ONE, gl.ONE);
+      gl.uniform2f(P.u.uRes, W, H); gl.uniform1f(P.u.uT, wallNow / 1000); gl.uniform1f(P.u.uDetail, GFX.surface ? 1 : 0); gl.uniform1f(P.u.uHDR, HDR ? 1 : 0);
+      instances(GLR.fxI, fxInst, fxN, 20);
+    }
     if (starInstN) {
       P = GLR.star; gl.useProgram(P.p); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.uniform2f(P.u.uRes, W, H); gl.uniform1f(P.u.uT, wallNow / 1000); gl.uniform1f(P.u.uDetail, GFX.surface ? 1 : 0);
@@ -5703,10 +5802,10 @@ const storeOff = (() => { try { localStorage.getItem(KEYS.prefs); return false; 
 
 // Quality levels. High is the renderer as it always was; Auto starts there and steps the resolution down while frames run slow.
 const QUALITY = {
-  low:    { rs: 0.5,  bloom: 3, gas: 1800, mat: 3000, note: 'Half resolution, a tighter glow, less gas and loose matter' },
-  medium: { rs: 0.75, bloom: 4, gas: 3000, mat: 5000, note: 'Three-quarter resolution, a little less glow, gas and matter' },
-  high:   { rs: 1, bloom: 5, gas: MAXG - 800, mat: MAXM, note: 'Full resolution, glow and budgets, always' },
-  auto:   { rs: 1, bloom: 5, gas: MAXG - 800, mat: MAXM, note: 'Full quality; the resolution steps down while frames run slow and back up when they recover' },
+  low:    { rs: 0.5,  bloom: 3, gas: 1800, mat: 3000, aa: false, surface: false, note: 'Half resolution, a tighter glow, less gas and loose matter, no anti-aliasing or surface detail' },
+  medium: { rs: 0.75, bloom: 4, gas: 3000, mat: 5000, aa: true, surface: false, note: 'Three-quarter resolution, a little less glow, gas and matter, no surface detail' },
+  high:   { rs: 1, bloom: 5, gas: MAXG - 800, mat: MAXM, aa: true, surface: true, note: 'Full resolution, glow, detail and budgets, always' },
+  auto:   { rs: 1, bloom: 5, gas: MAXG - 800, mat: MAXM, aa: true, surface: true, note: 'Full quality; the resolution steps down while frames run slow and back up when they recover' },
 };
 const AUTO_RS = [1, 0.85, 0.7, 0.55];
 let autoK = 0;
@@ -5746,7 +5845,7 @@ function autoStep(ms, w, now) {
 function setAutoRS(k, now) { autoK = k; Q.rs = AUTO_RS[k]; pf.slow = pf.slowMs = pf.fast = 0; pf.hold = now + 1000; resize(); syncQuality(); }
 function setQuality(mode, save) {
   Q.mode = QUALITY[mode] ? mode : 'auto';
-  const L = QUALITY[Q.mode]; Q.rs = L.rs; Q.bloom = L.bloom; Q.gas = L.gas; Q.mat = L.mat;
+  const L = QUALITY[Q.mode]; Q.rs = L.rs; Q.bloom = L.bloom; Q.gas = L.gas; Q.mat = L.mat; GFX.aa = L.aa; GFX.surface = L.surface;
   autoK = 0; Object.assign(pf, { slow: 0, slowMs: 0, fast: 0, chk: null, lock: 0, lockMs: 30000, upWait: 6, hold: performance.now() + 1000 });
   gasCap = Math.min(Q.gas, Math.max(gasCap, 3200));
   resize(); syncQuality();
@@ -5754,7 +5853,7 @@ function setQuality(mode, save) {
 }
 function syncQuality() {
   for (const r of document.querySelectorAll('input[name=quality]')) r.checked = r.value === Q.mode;
-  const glow = !gl ? 'no glow without WebGL2' : opt.bloom ? `glow ${Q.bloom} levels` : 'glow off';
+  const glow = (!gl ? 'no glow without WebGL2' : opt.bloom ? `glow ${Q.bloom} levels` : 'glow off') + (gl ? ` · anti-aliasing ${GFX.aa ? 'on' : 'off'} · surface detail ${GFX.surface ? 'on' : 'off'}` : '');
   const out = `${view.width}×${view.height}`, note = `${QUALITY[Q.mode].note}. Now: ${Math.round(Q.rs * 100)}% resolution · ${glow} · up to ${Q.gas.toLocaleString('en-US')} gas and ${Q.mat.toLocaleString('en-US')} matter particles.`;
   if ($('qOut').textContent !== out) $('qOut').textContent = out;
   if ($('qNote').textContent !== note) $('qNote').textContent = note;
@@ -5909,6 +6008,7 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
   get seed() { return rngS; },
   get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; }, get glLost() { return glLost; },
   get opt() { return opt; }, get glr() { return GLR; }, get gfx() { return GFX; }, get wallNow() { return wallNow; }, kerrShadow, addGas,
+  explode, nova, magnetarFlare, addKilonova, flashes, scene, get fxN() { return fxN; },   // explosions: set one off, those in flight, the 2D effects canvas
   add(...bs) { bodies.push(...bs); computeAccel(); },
   // camera for the rendering tests: { x, y, zoom, tilt, yaw, follow: body id }; without follow the camera stays put
   view(o) {
