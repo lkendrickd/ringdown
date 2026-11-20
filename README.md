@@ -50,6 +50,7 @@ It's a single self-contained `index.html` with no build step and no dependencies
 | Record a clip (up to 60 s) | Record button; with sound when Listen is on | Camera menu → Record |
 | Photo mode | Photo button: pauses, hides everything, the camera stays free; Esc exits | Camera menu → Photo mode |
 | Fullscreen | F, or the fullscreen button | Camera menu → Fullscreen (not on iPhone) |
+| Help, the tour and things to try | ?, or the ? button | ? button |
 
 On a phone (or a narrow window) the screenshot, record, photo-mode and fullscreen buttons fold into one camera menu in the top bar. On a phone the layout also tightens up on its own: the strain scope folds into a one-line strip (tap it to open), the inspector and settings become sheets above the object bar (tap an inspected object's name for the full readout), and only the newest notice shows, small, at the top (tap to dismiss). It also works held sideways.
 
