@@ -730,8 +730,8 @@ function rand() {
   return ((t ^ t >>> 14) >>> 0) / 4294967296;
 }
 
-const MAXG = 5000;
-let gasCap = 3200;       // soft budget for streamed gas; the frame-time governor moves it
+const MAXG = 20000;
+let gasCap = 3200;       // soft budget for streamed gas; the frame-time governor moves it, up to Q.gas
 const gx = new Float64Array(MAXG), gy = new Float64Array(MAXG), gvx = new Float64Array(MAXG), gvy = new Float64Array(MAXG);
 const gm = new Float64Array(MAXG), gage = new Float64Array(MAXG); const gb = new Uint8Array(MAXG), gf = new Uint8Array(MAXG), gsrc = new Int32Array(MAXG);
 let gN = 0;
@@ -852,8 +852,11 @@ function regrade(b) {
   b.m0 = b.m; b.mBirth = Math.max(b.mBirth || 0, b.m);
 }
 
-const MAXM = 7000, BODY_CAP = 96;
+const MAXM = 28000, BODY_CAP = 96, MAT0 = 7000;
 const Q = { mode:'auto', rs:1, bloom:5, gas:MAXG - 800, mat:MAXM };   // graphics quality: render-scale factor, bloom levels, gas and matter budgets (settings panel)
+let matCap = MAT0;       // loose matter a scene may hold: the frame-time governor moves it between MAT0 and Q.mat
+let qScale = 1;          // grains per grain of a scene built on a budget of MAT0: scenes built on a bigger one use more, lighter grains
+const grainScale = () => clamp(Math.floor(Math.min(matCap, Q.mat) / MAT0), 1, 4);   // fixed when a scene is built
 const qx = new Float64Array(MAXM), qy = new Float64Array(MAXM), qvx = new Float64Array(MAXM), qvy = new Float64Array(MAXM);
 const qm = new Float64Array(MAXM), qT = new Float32Array(MAXM), qc = new Int32Array(MAXM), qk = new Uint16Array(MAXM), qp = new Float32Array(MAXM), qr = new Uint8Array(MAXM); // qr: 1 = ring debris; qk: how many grains have stuck together; qp: size for its mass, relative to rock (ice is puffier)
 let qN = 0, matterFull = false, mcDt = 0, mcWall = 0, mcHeavy = true;
@@ -961,13 +964,78 @@ let clCap = 1024;
 let clM = new Float64Array(clCap), clX = new Float64Array(clCap), clY = new Float64Array(clCap), clVX = new Float64Array(clCap), clVY = new Float64Array(clCap);
 let clAX = new Float64Array(clCap), clAY = new Float64Array(clCap), clH = new Float64Array(clCap), clHM = new Float64Array(clCap), clHR = new Float64Array(clCap);
 let clS2 = new Float64Array(clCap), clSV = new Float64Array(clCap), clT = new Float64Array(clCap), clN = new Int32Array(clCap), clForm = new Int32Array(clCap);
-let clA = new Int32Array(clCap), clB = new Int32Array(clCap), clHI = new Int32Array(clCap);
-const cellOf = new Map();
+let clA = new Int32Array(clCap), clB = new Int32Array(clCap), clHI = new Int32Array(clCap), clW = new Float64Array(clCap), clNx = new Int32Array(clCap);
 function growCells() {
   clCap *= 2;
   const g = a => { const b = new a.constructor(clCap); b.set(a); return b; };
   clM = g(clM); clX = g(clX); clY = g(clY); clVX = g(clVX); clVY = g(clVY); clAX = g(clAX); clAY = g(clAY); clH = g(clH); clHM = g(clHM); clHR = g(clHR);
-  clS2 = g(clS2); clSV = g(clSV); clT = g(clT); clN = g(clN); clForm = g(clForm); clA = g(clA); clB = g(clB); clHI = g(clHI);
+  clS2 = g(clS2); clSV = g(clSV); clT = g(clT); clN = g(clN); clForm = g(clForm); clA = g(clA); clB = g(clB); clHI = g(clHI); clW = g(clW); clNx = g(clNx);
+}
+// cell lookup: an open-addressing hash table on the cell key, stamped per pass so it never needs clearing
+const CH = 1 << Math.ceil(Math.log2(2 * MAXM + 2)), chKey = new Float64Array(CH), chVal = new Int32Array(CH), chGen = new Uint32Array(CH);
+let chNow = 0, mbCap = 0, mbX = null, mbY = null, mbM = null;
+/* Cell-on-cell gravity for clouds with many cells: a Barnes–Hut quadtree over the cell centres. A tree node far enough
+   away (its size under 0.6 of its distance) pulls as one mass at its centre of mass, softened by its mass-weighted cell
+   size. Up to NC_DIRECT cells every pair is still summed exactly. */
+const NC_DIRECT = 1100, BH_TH2 = 0.36;
+let tnCap = 0, tnM, tnX, tnY, tnH, tnX0, tnY0, tnS, tnLeaf, tnKid, tnStack = new Int32Array(256);
+function treeNode(n, x0, y0, s) {
+  if (n >= tnCap) {
+    tnCap = Math.max(1024, tnCap * 2);
+    const g = (a, T, k = 1) => { const b = new T(tnCap * k); if (a) b.set(a); return b; };
+    tnM = g(tnM, Float64Array); tnX = g(tnX, Float64Array); tnY = g(tnY, Float64Array); tnH = g(tnH, Float64Array);
+    tnX0 = g(tnX0, Float64Array); tnY0 = g(tnY0, Float64Array); tnS = g(tnS, Float64Array); tnLeaf = g(tnLeaf, Int32Array); tnKid = g(tnKid, Int32Array, 4);
+  }
+  tnM[n] = 0; tnX[n] = 0; tnY[n] = 0; tnH[n] = 0; tnX0[n] = x0; tnY0[n] = y0; tnS[n] = s; tnLeaf[n] = -1;
+}
+function cellTree(nc) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let c = 0; c < nc; c++) { const x = clX[c], y = clY[c]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  let nn = 1; treeNode(0, x0, y0, Math.max(x1 - x0, y1 - y0) * 1.000001 + 1e-30);
+  for (let c = 0; c < nc; c++) {
+    const x = clX[c], y = clY[c], m = clM[c];
+    let nd = 0, depth = 0;
+    for (;;) {
+      tnM[nd] += m; tnX[nd] += m * x; tnY[nd] += m * y; tnH[nd] += m * clH[c];
+      const lf = tnLeaf[nd];
+      if (lf === -1) { tnLeaf[nd] = c; clNx[c] = -1; break; }
+      if (lf >= 0 && depth > 40) { clNx[c] = lf; tnLeaf[nd] = c; break; }   // coincident centres share a leaf
+      const h = tnS[nd] / 2, X0 = tnX0[nd], Y0 = tnY0[nd];
+      if (lf >= 0) { // split: the cell living here moves down a level
+        tnLeaf[nd] = -2;
+        for (let k = 0; k < 4; k++) { treeNode(nn, X0 + (k & 1) * h, Y0 + (k >> 1) * h, h); tnKid[nd * 4 + k] = nn++; }
+        const p = lf, pk = tnKid[nd * 4 + (clX[p] >= X0 + h ? 1 : 0) + (clY[p] >= Y0 + h ? 2 : 0)], pm = clM[p];
+        tnM[pk] = pm; tnX[pk] = pm * clX[p]; tnY[pk] = pm * clY[p]; tnH[pk] = pm * clH[p]; tnLeaf[pk] = p;
+      }
+      nd = tnKid[nd * 4 + (x >= X0 + h ? 1 : 0) + (y >= Y0 + h ? 2 : 0)]; depth++;
+    }
+  }
+  for (let n = 0; n < nn; n++) if (tnM[n] > 0) { tnX[n] /= tnM[n]; tnY[n] /= tnM[n]; tnH[n] /= tnM[n]; }
+  for (let a = 0; a < nc; a++) {
+    const xa = clX[a], ya = clY[a], ha = clH[a];
+    let ax = 0, ay = 0, sp = 0; tnStack[sp++] = 0;
+    while (sp) {
+      const nd = tnStack[--sp], lf = tnLeaf[nd];
+      if (tnM[nd] === 0) continue;
+      if (lf >= 0) {
+        for (let b = lf; b >= 0; b = clNx[b]) {
+          if (b === a) continue;
+          const dx = clX[b] - xa, dy = clY[b] - ya, e = 0.5 * (ha + clH[b]), r2 = dx * dx + dy * dy + e * e, k = G * clM[b] / (r2 * Math.sqrt(r2));
+          ax += k * dx; ay += k * dy;
+        }
+        continue;
+      }
+      const dx = tnX[nd] - xa, dy = tnY[nd] - ya, d2 = dx * dx + dy * dy;
+      if (tnS[nd] * tnS[nd] < BH_TH2 * d2) {
+        const e = 0.5 * (ha + tnH[nd]), r2 = d2 + e * e, k = G * tnM[nd] / (r2 * Math.sqrt(r2));
+        ax += k * dx; ay += k * dy;
+      } else {
+        if (sp + 4 > tnStack.length) { const s = new Int32Array(tnStack.length * 2); s.set(tnStack); tnStack = s; }
+        for (let k = 0; k < 4; k++) tnStack[sp++] = tnKid[nd * 4 + k];
+      }
+    }
+    clAX[a] = ax; clAY[a] = ay;
+  }
 }
 function matterCollective(dt, wallDt) {
   if (!qN) return;
@@ -981,21 +1049,28 @@ function matterCollective(dt, wallDt) {
     let s = 0; for (let i = 0; i < qN; i++) s += qm[i] * ((qx[i] - ox) ** 2 + (qy[i] - oy) ** 2);
     free = Math.max(Math.sqrt(s / M) / 8, 1e-9);
   }
-  cellOf.clear(); let nc = 0;
+  if (nb > mbCap) { mbCap = nb * 2; mbX = new Float64Array(mbCap); mbY = new Float64Array(mbCap); mbM = new Float64Array(mbCap); }
+  for (let j = 0; j < nb; j++) { const b = bodies[j]; mbX[j] = b.x; mbY[j] = b.y; mbM[j] = b.m; }
+  if (++chNow > 4e9) { chGen.fill(0); chNow = 1; }
+  let nc = 0;
   for (let i = 0; i < qN; i++) {
     const x = qx[i], y = qy[i];
     let hM = 0, hR = 0, hx = ox, hy = oy, hid = 0, h = free;
     if (nb) {
-      let best = -1;
-      for (let j = 0; j < nb; j++) { const b = bodies[j], dx = b.x - x, dy = b.y - y, r2 = dx * dx + dy * dy, t = b.m / (r2 * Math.sqrt(r2) + 1e-30); if (t > best) { best = t; hM = b.m; hR = Math.sqrt(r2); hx = b.x; hy = b.y; hid = j + 1; } }
+      let best = -1, r2b = 0;
+      for (let j = 0; j < nb; j++) { const dx = mbX[j] - x, dy = mbY[j] - y, r2 = dx * dx + dy * dy, t = mbM[j] / (r2 * Math.sqrt(r2) + 1e-30); if (t > best) { best = t; r2b = r2; hid = j + 1; } }
+      if (hid) { hM = mbM[hid - 1]; hR = Math.sqrt(r2b); hx = mbX[hid - 1]; hy = mbY[hid - 1]; }
       h = 0.12 * hR;
     }
-    const L = Math.round(Math.log2(h)), hs = Math.pow(2, L);
-    const key = ((hid * 4096 + (L + 2048)) * 65536 + clamp(Math.floor((x - hx) / hs), -32768, 32767) + 32768) * 65536 + clamp(Math.floor((y - hy) / hs), -32768, 32767) + 32768;
-    let c = cellOf.get(key);
-    if (c === undefined) {
+    const L = Math.round(Math.log2(h)), hs = Math.pow(2, L), kh = hid * 4096 + (L + 2048);
+    const kx = clamp(Math.floor((x - hx) / hs), -32768, 32767) + 32768, ky = clamp(Math.floor((y - hy) / hs), -32768, 32767) + 32768;
+    const key = (kh * 65536 + kx) * 65536 + ky;
+    let s = Math.imul(kx ^ Math.imul(ky, 0x27d4eb2d) ^ Math.imul(kh, 0x165667b1), 0x9e3779b1); s = (s ^ s >>> 15) & (CH - 1);
+    let c = -1;
+    while (chGen[s] === chNow) { if (chKey[s] === key) { c = chVal[s]; break; } s = (s + 1) & (CH - 1); }
+    if (c < 0) {
       if (nc >= clCap) growCells();
-      c = nc++; cellOf.set(key, c);
+      c = nc++; chGen[s] = chNow; chKey[s] = key; chVal[s] = c;
       clM[c] = 0; clX[c] = 0; clY[c] = 0; clVX[c] = 0; clVY[c] = 0; clAX[c] = 0; clAY[c] = 0; clN[c] = 0; clS2[c] = 0; clSV[c] = 0; clT[c] = 0; clForm[c] = 0; clA[c] = -1; clB[c] = -1;
       clH[c] = hs; clHM[c] = hM; clHR[c] = 0; clHI[c] = hid - 1;
     }
@@ -1007,13 +1082,19 @@ function matterCollective(dt, wallDt) {
     else if (m > qm[clA[c]]) { clB[c] = clA[c]; clA[c] = i; }
     else if (clB[c] < 0 || rand() * clN[c] < 1) clB[c] = i;
   }
-  for (let c = 0; c < nc; c++) { const m = clM[c]; clX[c] /= m; clY[c] /= m; clVX[c] /= m; clVY[c] /= m; clHR[c] /= m; clT[c] /= m; }
-  // cell-on-cell gravity (skipped for very large clouds, where the pull of the bodies dominates anyway)
+  for (let c = 0; c < nc; c++) { const m = clM[c]; clX[c] /= m; clY[c] /= m; clVX[c] /= m; clVY[c] /= m; clHR[c] /= m; clT[c] /= m; clW[c] = clHM[c] > 0 ? Math.sqrt(G * clHM[c] / Math.pow(clHR[c], 3)) : 0; }
+  // cell-on-cell gravity: every pair up to NC_DIRECT cells; past that (where it used to be skipped) the tree
   let Mq = 0, Mb = 0; for (let c = 0; c < nc; c++) Mq += clM[c]; for (const b of bodies) if (b.m > Mb) Mb = b.m;
   const heavy = Mq > 1e-5 * Mb; mcHeavy = heavy || !nb;   // light belts and rings: their own gravity is nothing next to what they orbit
-  if (heavy && nc <= 1100) for (let a = 0; a < nc; a++) for (let b = a + 1; b < nc; b++) {
-    const dx = clX[b] - clX[a], dy = clY[b] - clY[a], e = 0.5 * (clH[a] + clH[b]), r2 = dx * dx + dy * dy + e * e, k = G / (r2 * Math.sqrt(r2));
-    clAX[a] += k * clM[b] * dx; clAY[a] += k * clM[b] * dy; clAX[b] -= k * clM[a] * dx; clAY[b] -= k * clM[a] * dy;
+  if (heavy && nc > NC_DIRECT) cellTree(nc);
+  else if (heavy) for (let a = 0; a < nc; a++) {
+    const xa = clX[a], ya = clY[a], ha = clH[a], ma = clM[a];
+    let ax = clAX[a], ay = clAY[a];
+    for (let b = a + 1; b < nc; b++) {
+      const dx = clX[b] - xa, dy = clY[b] - ya, e = 0.5 * (ha + clH[b]), r2 = dx * dx + dy * dy + e * e, k = G / (r2 * Math.sqrt(r2));
+      ax += k * clM[b] * dx; ay += k * clM[b] * dy; clAX[b] -= k * ma * dx; clAY[b] -= k * ma * dy;
+    }
+    clAX[a] = ax; clAY[a] = ay;
   }
   for (let i = 0; i < qN; i++) {
     const c = qc[i], m = qm[i];
@@ -1023,7 +1104,7 @@ function matterCollective(dt, wallDt) {
       const d2 = dx * dx + dy * dy, e = 0.2 * clH[c], Min = G * (clM[c] - m);
       clS2[c] += m * d2; clSV[c] += m * (dvx * dvx + dvy * dvy);
       const r2 = d2 + e * e, k = Min / (r2 * Math.sqrt(r2));
-      const wSelf = Math.sqrt(Min / (e * e * e)), wHost = clHM[c] > 0 ? Math.sqrt(G * clHM[c] / Math.pow(clHR[c], 3)) : 0;
+      const wSelf = Math.sqrt(Min / (e * e * e)), wHost = clW[c];
       tdt = Math.min(dt, 0.35 / Math.max(wSelf, 1e-30));         // never kick harder than the clump's own free-fall allows
       qvx[i] += k * dx * tdt; qvy[i] += k * dy * tdt;
       const kd = 1 - Math.exp(-dt * 0.35 * Math.max(wSelf, wHost));   // inelastic collisions within the cell
@@ -1052,7 +1133,7 @@ function matterCollective(dt, wallDt) {
   }
   for (let i = qN - 1; i >= 0; i--) {
     if (qm[i] === 0) { removeMatter(i); continue; }
-    if (qk[i] >= 24 && room > 0) { // enough has stuck together to count as a body of its own, if it has a zone to itself
+    if (qk[i] >= 24 * qScale && room > 0) { // enough has stuck together to count as a body of its own, if it has a zone to itself
       const c = qc[i], rH = clHM[c] > 0 ? clHR[c] * Math.cbrt(qm[i] / (3 * clHM[c])) : 0;
       let crowded = false;
       const host = clHI[c] >= 0 ? bodies[clHI[c]] : null;
@@ -1158,7 +1239,7 @@ function nameTheMoon() {
     'The real one is thought to have gathered at 3 to 5 Earth radii within months to years, and has been drifting outward ever since, 3.8 cm a year today.'], 'w');
 }
 function ringFrom(p, host, r) {
-  const N = Math.min(Math.round(clamp(500 + 160 * Math.log10(p.m / 1e-12), 300, 1500)), Q.mat - qN);
+  const N = Math.min(Math.round(clamp(500 + 160 * Math.log10(p.m / 1e-12), 300, 1500)) * qScale, Q.mat - qN);
   bodies = bodies.filter(o => o !== p);
   if (followId === p.id) followId = host.id;
   if (N < 8) { matterLands(host, p.m, p.vx, p.vy); return; }
@@ -1186,7 +1267,7 @@ function planetImpact(a, b) {
   const kms = vc * KM_PER_UNIT / SIM2REAL;
   let f = clamp(sinT * (0.3 + 0.5 * x) + 0.1 * x * x, 0, 0.9);
   f *= big.real ? clamp((kms - 3) / 4, 0, 1) : 0.5;   // gentle bumps between small bodies just stick
-  let N = Math.min(Math.round(80 + 900 * f), Q.mat - qN);
+  let N = Math.min(Math.round(80 + 900 * f), Q.mat - qN);   // never more grains on a bigger budget: four times as many gather into a smaller Moon
   const md = f * small.m;
   if (md < 2e-4 * M || N < 12) { N = 0; }
   const keep = small.m - (N ? md : 0), Mn = big.m + keep;
@@ -1207,7 +1288,7 @@ function planetImpact(a, b) {
       const ang = phi + sg * (-0.3 + 2.6 * rand());
       const ux = Math.cos(ang), uy = Math.sin(ang), vc = Math.sqrt(GM / rho);
       const vt = vc * (0.82 + 0.36 * rand()) * sg, vr = vc * 0.2 * (rand() - 0.3);
-      addMatter(cx + ux * rho, cy + uy * rho, cvx - uy * vt + ux * vr, cvy + ux * vt + uy * vr, md / N, 1);
+      if (addMatter(cx + ux * rho, cy + uy * rho, cvx - uy * vt + ux * vr, cvy + ux * vt + uy * vr, md / N, 1)) qk[qN - 1] = qScale;   // each counts as qScale grains
     }
     flashes.push({ x: cx, y: cy, t0: wallNow, dur: 2600, scale: big.R / 30 });
     shake = wallNow;
@@ -1238,9 +1319,9 @@ function magnetarFlare(b) {
 // the matter brush
 let matterRate = -5.5;   // log10 of solar masses sprayed per second
 function sprayMatter(sx, sy, wallDt) {
-  if (matterFull && qN > Q.mat - 16) return;
+  if (matterFull && qN > matCap - 16) return;
   matterFull = false;
-  const n = 8, m = Math.pow(10, matterRate) * Math.min(wallDt, 0.05) / n;
+  const n = 8 * qScale, m = Math.pow(10, matterRate) * Math.min(wallDt, 0.05) / n;
   for (let k = 0; k < n; k++) {
     const a = rand() * Math.PI * 2, d = 26 * Math.sqrt(rand());
     const [wx, wy] = toW(sx + Math.cos(a) * d, sy + Math.sin(a) * d * Math.max(cosI, 0.2));
@@ -1250,7 +1331,7 @@ function sprayMatter(sx, sy, wallDt) {
       const dx = wx - host.x, dy = wy - host.y, r = Math.hypot(dx, dy) || 1, v = Math.sqrt(G * host.m / r) * (1 + 0.04 * (rand() - 0.5));
       vx = host.vx + dy / r * v; vy = host.vy - dx / r * v;
     }
-    if (!addMatter(wx, wy, vx, vy, m, 0)) { matterFull = true; toast('That is all the loose matter the sandbox can track', ['Let some of it settle into bodies, then spray more']); return; }
+    if (qN >= matCap || !addMatter(wx, wy, vx, vy, m, 0)) { matterFull = true; toast('That is all the loose matter the sandbox can track', ['Let some of it settle into bodies, then spray more']); return; }
   }
 }
 
@@ -1426,12 +1507,13 @@ const PRESETS = {
       let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
       const tmp = { m: 0, x: 0, y: 0, vx: 0, vy: 0 };
       const put = (a, e, peri, M, m) => { keplerPlace(sun, tmp, a, e, peri, -1, M); addMatter(tmp.x, tmp.y, tmp.vx, tmp.vy, m, 0); };
-      for (let k = 0; k < 650; k++) put(2.12 + 1.15 * rnd(), 0.02 + 0.16 * rnd(), T * rnd(), T * rnd(), 1.5e21 / 1.989e30 / 650);          // main belt
+      const s = qScale, kb = 3e-11 / s;   // on a bigger matter budget: more grains, same mass in each belt
+      for (let k = 0; k < 650 * s; k++) put(2.12 + 1.15 * rnd(), 0.02 + 0.16 * rnd(), T * rnd(), T * rnd(), 1.5e21 / 1.989e30 / (650 * s));          // main belt
       const LJ = (34.396 + 360 * yr / Math.pow(5.2029, 1.5)) * D;
-      for (let k = 0; k < 140; k++) { const w = T * rnd(), L = LJ + (k % 2 ? 1 : -1) * (60 + 26 * (rnd() - 0.5)) * D; put(5.2029 + 0.1 * (rnd() - 0.5), 0.07 * rnd(), w, L - w, 1e20 / 1.989e30 / 140); } // Jupiter's Trojans
-      for (let k = 0; k < 160; k++) put(39.4 + 0.5 * (rnd() - 0.5), 0.1 + 0.2 * rnd(), T * rnd(), T * rnd(), 3e-11);                           // plutinos
-      for (let k = 0; k < 620; k++) put(42 + 6 * rnd(), 0.12 * rnd(), T * rnd(), T * rnd(), 3e-11);                                            // classical Kuiper belt
-      for (let k = 0; k < 220; k++) { const a = 50 + 70 * rnd(), q = 33 + 7 * rnd(); put(a, 1 - q / a, T * rnd(), T * rnd(), 3e-11); }         // scattered disc
+      for (let k = 0; k < 140 * s; k++) { const w = T * rnd(), L = LJ + (k % 2 ? 1 : -1) * (60 + 26 * (rnd() - 0.5)) * D; put(5.2029 + 0.1 * (rnd() - 0.5), 0.07 * rnd(), w, L - w, 1e20 / 1.989e30 / (140 * s)); } // Jupiter's Trojans
+      for (let k = 0; k < 160 * s; k++) put(39.4 + 0.5 * (rnd() - 0.5), 0.1 + 0.2 * rnd(), T * rnd(), T * rnd(), kb);                           // plutinos
+      for (let k = 0; k < 620 * s; k++) put(42 + 6 * rnd(), 0.12 * rnd(), T * rnd(), T * rnd(), kb);                                            // classical Kuiper belt
+      for (let k = 0; k < 220 * s; k++) { const a = 50 + 70 * rnd(), q = 33 + 7 * rnd(); put(a, 1 - q / a, T * rnd(), T * rnd(), kb); }         // scattered disc
       let px = 0, py = 0; for (const b of bodies) if (b !== sun) { px += b.m * b.vx; py += b.m * b.vy; }
       sun.vx = -px / sun.m; sun.vy = -py / sun.m;
     } },
@@ -1461,7 +1543,7 @@ const PRESETS = {
     build() {
       const AU = 1.496e8 / KM_PER_UNIT, sun = makeStar('G', 0, 0, 0, 0, 1); sun.label = 'Young star'; bodies.push(sun);
       let seed = 5; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-      const N = Math.min(4200, Q.mat), Md = 0.004;   // a lower quality setting makes fewer, heavier grains of the same disk
+      const N = Math.min(4200 * qScale, Q.mat), Md = 0.004;   // a bigger matter budget makes more, lighter grains of the same disk; a lower quality setting fewer, heavier ones
       for (let k = 0; k < N; k++) {
         const r = (0.45 + 2.6 * Math.pow(rnd(), 0.8)) * AU, a = 2 * Math.PI * rnd(), v = Math.sqrt(G * sun.m / r) * (1 + 0.03 * (rnd() - 0.5));
         addMatter(r * Math.cos(a), r * Math.sin(a), Math.sin(a) * v, -Math.cos(a) * v, Md / N, 0);
@@ -1470,9 +1552,9 @@ const PRESETS = {
   magnetar: { name:'Magnetar · starquakes and giant flares', extent: 190, tilt: 35, build() {
       const mg = makeStar('MAG', 0, 0, 0, 0); mg.flareAt = wallNow + 4000; bodies.push(mg);
       const pl = makeStar('ROCK', 0, 0, 0, 0); bodies.push(pl); orbitAround(mg, pl, 150, 0.6);
-      for (let k = 0; k < 520; k++) { // a ring of rubble left over from the supernova that made it
+      for (let k = 0; k < 520 * qScale; k++) { // a ring of rubble left over from the supernova that made it
         const r = 60 + 50 * rand(), a = rand() * Math.PI * 2, v = Math.sqrt(G * mg.m / r);
-        addMatter(r * Math.cos(a), r * Math.sin(a), Math.sin(a) * v, -Math.cos(a) * v, 2e-9, 0);
+        addMatter(r * Math.cos(a), r * Math.sin(a), Math.sin(a) * v, -Math.cos(a) * v, 2e-9 / qScale, 0);
       }
     } },
   zoo:      { name:'Stellar zoo', extent:3500, build() {
@@ -1572,7 +1654,7 @@ function keplerPlace(host, b, aAU, e, omega, sense, meanAnom) {
   b.x = host.x + x * c - y * s; b.y = host.y + x * s + y * c; b.vx = host.vx + vx * c - vy * s; b.vy = host.vy + vx * s + vy * c;
 }
 function loadPreset(id, seed) {
-  currentPreset = id; reseed(seed == null ? newSeed() : seed);
+  currentPreset = id; reseed(seed == null ? newSeed() : seed); qScale = grainScale();
   warp = PRESETS[id].warp || 1; realSizes = !!PRESETS[id].real; tdeSlowUntil = -1e9; trailEvery = PRESETS[id].trailEvery || 2;
   if (typeof toastsEl !== 'undefined') toastsEl.replaceChildren();
   bodies = []; gN = 0; qN = 0; gwSrc = null; slow = 1; slowHoldUntil = -1; totalFed = 0; totalWind = 0; simTime = 0; flashes.length = 0; if (typeof xrBuf !== 'undefined') xrBuf.fill(0);
@@ -2525,7 +2607,7 @@ function stepGas(simDt) {
       }
       if (dead || far) { dead = true; break; }
       if (gf[i] === 0) { // first time this gas reaches the inner disk: some of it is blown back out
-        const ex = x - hb.x, ey = y - hb.y, er = Math.hypot(ex, ey);
+        const ex = x - hb.x, ey = y - hb.y, er = Math.sqrt(ex * ex + ey * ey);
         if (er < 15 * hrp) {
           const fOut = hb.kind === 'bh' ? 0.15 + 0.5 * clamp(hb.feedRate * 160, 0, 1) : isWD(hb) ? 0.1 : 0.4;
           if (rand() < fOut) {
@@ -2537,7 +2619,7 @@ function stepGas(simDt) {
         }
       }
       vx += ax * dt; vy += ay * dt;
-      const px = x - hb.x, py = y - hb.y, r = Math.hypot(px, py), d = Math.max(r - hrp, 0.3 * hrp);
+      const px = x - hb.x, py = y - hb.y, r = Math.sqrt(px * px + py * py), d = Math.max(r - hrp, 0.3 * hrp);   // (Math.hypot is several times slower)
       let rvx = vx - hb.vx, rvy = vy - hb.vy;
       const eps = 0.5 * (rvx * rvx + rvy * rvy) - G * hb.m / d;
       if (eps < 0 && gf[i] < 2) {
@@ -2550,7 +2632,7 @@ function stepGas(simDt) {
         vx = rvx + hb.vx; vy = rvy + hb.vy;
       }
       { // nothing outruns light: cap speed relative to the hole at 0.9 c
-        const ux = vx - hb.vx, uy = vy - hb.vy, sp = Math.hypot(ux, uy);
+        const ux = vx - hb.vx, uy = vy - hb.vy, sp = Math.sqrt(ux * ux + uy * uy);
         if (sp > VMAX) { const k = VMAX / sp; vx = hb.vx + ux * k; vy = hb.vy + uy * k; }
       }
       x += vx * dt; y += vy * dt; rh = r;
@@ -3648,7 +3730,7 @@ function drawSceneGL(W, H, gsz, mg, tilted) {
     let hidden = false;
     for (let q = 0; q < occ.length; q += 3) { const dx = X - occ[q], dy = Y - occ[q + 1]; if (dy < 0 && dx * dx + dy * dy < occ[q + 2]) { hidden = true; break; } }   // the far side of the plane is toward the top of the screen
     if (hidden) continue;
-    const T = qT[i], o = n * 8, sz = msz * (1 + 0.8 * T) * (qk[i] > 1 ? 1 + 0.28 * Math.log2(qk[i]) : 1);
+    const T = qT[i], o = n * 8, sz = msz * (1 + 0.8 * T) * (qk[i] > qScale ? 1 + 0.28 * Math.log2(qk[i] / qScale) : 1);
     let len = 1, ang = 0, k = 1;
     if (qr[i]) { // ring debris: each grain stands for a streak of them strung along the orbit
       const h = bodies[clHI[qc[i]]];
@@ -5092,7 +5174,15 @@ try {
 
 /* ================= loop ================= */
 let last = performance.now(), frameN = 0, workMs = 8, frameSim = 0;
-let loopErr = false, manual = false;   // manual: the test hook is stepping frames itself
+let loopErr = false, manual = false, simOnly = false;   // manual: the test hook is stepping frames itself (simOnly: without drawing them)
+// Frame-time governor: shrink the gas and matter budgets on slow devices, grow them back when there is headroom.
+// Between 10 and 20 ms of work a frame both hold still, so they settle instead of hunting.
+function govern(ms) {
+  workMs += (ms - workMs) * 0.1;
+  if (workMs > 20) { gasCap = Math.max(900, gasCap * 0.985); matCap = Math.max(MAT0, matCap * 0.985); }
+  else if (workMs < 10) { gasCap += 8; matCap += 16; }
+  gasCap = Math.min(gasCap, Q.gas); matCap = Math.min(matCap, Q.mat);   // the quality setting's ceilings
+}
 function frame(now) {
   if (!manual) try { frameBody(now); }
   catch (err) { if (!loopErr) { loopErr = true; console.error('Ringdown frame error', err); toast('Something glitched', ['A frame hit an error and was skipped; the simulation keeps running']); } }
@@ -5194,14 +5284,11 @@ function frameBody(now) {
     camX += (c.x - camX) * k; camY += (c.y - camY) * k;
   }
   { const t = wallNow - shake; const amp = reduceMotion || t > 700 ? 0 : 7 * (1 - t / 700) ** 2; shX = (Math.random() - 0.5) * 2 * amp; shY = (Math.random() - 0.5) * 2 * amp; }
-  drawScene(); composite(); drawOverlay(); drawScope();
+  if (!simOnly) { drawScene(); composite(); drawOverlay(); drawScope(); }
   if (shotWant || rec) capFrame();   // same task as the draw: the view's buffer is still there to read
   renderMoveCtx(false);
   updateInspect();
-  // frame-time governor: shrink the gas budget on slow devices, grow it back when there is headroom
-  workMs += (performance.now() - tWork - workMs) * 0.1;
-  if (workMs > 20) gasCap = Math.max(900, gasCap * 0.985);
-  else if (workMs < 10) gasCap = Math.min(Q.gas, gasCap + 8);
+  govern(performance.now() - tWork);
   perfTick(now);   // frame-rate readout, and Auto quality's render-scale steps
   if (frameN % 8 === 0) {
     let nb = 0, ns = 0, mb = 0;
@@ -5232,7 +5319,7 @@ function restore(st) {
   toastsEl.replaceChildren();
   bodies = []; gN = 0; qN = 0; gwSrc = null; flashes.length = 0; totalFed = 0; totalWind = 0; closeUpId = null; closeUpDrift = null;
   scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); xrBuf.fill(0);
-  warp = st.w || 1; realSizes = !!st.rs; trailEvery = st.te || 2; tdeSlowUntil = -1e9;
+  warp = st.w || 1; realSizes = !!st.rs; trailEvery = st.te || 2; tdeSlowUntil = -1e9; qScale = grainScale();
   reseed(Number.isFinite(st.r) ? st.r : newSeed());   // links made before seeds existed get a fresh one
   for (const a of st.b || []) {
     if (a[0] === 'h') { const b = makeBH(a[2], a[3], a[4], a[5], a[1], a[6]); if (a[7]) b.label = a[7]; bodies.push(b); continue; }
@@ -5665,6 +5752,7 @@ loadFromHash();
 /* ---------- test hook ----------
    Only with ?rdtest in the address: the automated tests (tests/) reach the physics through window.__rd. load() and
    step() run a scene on a fixed clock with a fixed frame time, so the same calls play out the same scene. */
+const rdPin = [3200, MAT0];
 if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
   riscoM, eIsco, rocheFrac, ringFor, remnantFit, wdRadius, M_CH, KR, KM_PER_UNIT, SIM2REAL,
   presets: Object.keys(PRESETS), makeBH, makeStar, mergeWhiteDwarfs, snapshot, restore, encodeState, decodeState, rand, reseed,
@@ -5680,12 +5768,32 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
     return { zoom, W: view.width, H: view.height, RS };
   },
   render() { drawScene(); composite(); },   // draw the current state again without advancing the simulation
-  load(id, seed) { manual = true; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; loadPreset(id, seed); },
+  load(id, seed) { manual = true; speedIdx = 2; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; gasCap = rdPin[0]; matCap = rdPin[1]; loadPreset(id, seed); },
   open(st) { this.load('empty', 0); restore(st); },   // like a fresh page opening a share link
-  step(n, ms = 1000 / 60) {   // frame-time governor held still
-    manual = true; for (let i = 0; i < n; i++) { gasCap = 3200; frameBody(last + ms); }
+  step(n, ms = 1000 / 60, draw = true) {   // frame-time governor held still
+    manual = true; simOnly = !draw; try { for (let i = 0; i < n; i++) { gasCap = rdPin[0]; matCap = rdPin[1]; frameBody(last + ms); } } finally { simOnly = false; }
     // wait for the GPU to finish drawing them: otherwise a page opened next queues behind seconds of software rendering
-    if (gl && !gl.isContextLost()) gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+    if (draw && gl && !gl.isContextLost()) gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+  },
+  budget(g, m) { if (g != null) rdPin[0] = g; if (m != null) rdPin[1] = m; return rdPin.slice(); },   // the budgets load() and step() hold the governor at
+  get caps() { return { MAXG, MAXM, BODY_CAP, MAT0, gasMax: Q.gas, matMax: Q.mat, gasCap, matCap, qScale }; },
+  set speed(i) { speedIdx = i; },
+  govern(ms, n = 1) { for (let i = 0; i < n; i++) govern(ms); return [gasCap, matCap]; },   // feed the governor made-up frame times
+  addMatter, stepGas, stepMatter, matterCollective, ringFrom, planetImpact,
+  // n cells clumped like a disk: the tree's pull on each against the every-pair sum, and the time each took
+  treeCheck(n) {
+    let s = 7; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    while (clCap < n) growCells();
+    for (let c = 0; c < n; c++) { const d = 50 * Math.pow(r(), 2), a = 6.2832 * r(); clX[c] = d * Math.cos(a); clY[c] = d * Math.sin(a); clM[c] = 1e-6 * (0.1 + r()); clH[c] = 0.05 * (1 + d); clAX[c] = clAY[c] = 0; }
+    const t0 = performance.now();
+    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) { const dx = clX[b] - clX[a], dy = clY[b] - clY[a], e = 0.5 * (clH[a] + clH[b]), r2 = dx * dx + dy * dy + e * e, k = G / (r2 * Math.sqrt(r2)); clAX[a] += k * clM[b] * dx; clAY[a] += k * clM[b] * dy; clAX[b] -= k * clM[a] * dx; clAY[b] -= k * clM[a] * dy; }
+    const t1 = performance.now(), ex = clAX.slice(0, n), ey = clAY.slice(0, n);
+    cellTree(n);
+    const t2 = performance.now();
+    let e2 = 0, a2 = 0, dmax = 0; const rel = [];
+    for (let c = 0; c < n; c++) { const d = Math.hypot(clAX[c] - ex[c], clAY[c] - ey[c]), a = Math.hypot(ex[c], ey[c]); e2 += d * d; a2 += a * a; dmax = Math.max(dmax, d); rel.push(d / a); }
+    rel.sort((a, b) => a - b);
+    return { rms: Math.sqrt(e2 / a2), p99: rel[Math.floor(0.99 * n)], worst: dmax / Math.sqrt(a2 / n), direct: t1 - t0, tree: t2 - t1 };   // worst: largest error over the rms pull
   },
   state() {
     const f = (a, n) => Array.from(a.subarray(0, n));
