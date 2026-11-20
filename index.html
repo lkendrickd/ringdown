@@ -556,7 +556,7 @@ html.phone .resume{bottom:calc(var(--dock-h,100px) + 8px);width:min(460px,calc(1
     <li>Neutron stars are the one thing at true size: 12 km radius, 1 grid unit. Two of them merging make a kilonova; above about 2.3 M☉ the remnant collapses to a hole (in reality, after a short-lived hypermassive phase). A real kilonova fades over days; here it takes about 9 seconds.</li>
     <li>Listen plays the GW frequency one octave up. The real 36 + 29 chirp lasts about 0.2 s; here it is stretched out. The other sounds (explosions, mergers, flares, feeding) are synthesized for effect and placed left or right by where they happen on screen; only the chirp is data.</li>
     <li>A white dwarf that spirals into a neutron star gets torn into a disk. The neutron star feeds and spins up (about 0.1 M☉ takes it to millisecond periods), the usual story for millisecond pulsars; the fastest known spins 716 times a second. A neutron star that eats past about 2.3 M☉ collapses into a hole. A neutron star sinking into a giant makes a Thorne–Żytkow object.</li>
-    <li>A black hole rarely eats a star whole. Gas spills off through the Roche lobe and the star keeps going. A giant stays big until its envelope is gone, then its helium core is left orbiting, as a white dwarf for a red giant or a Wolf–Rayet star for a blue supergiant. A small star can be whittled down to a brown dwarf. On a stretched orbit, each close pass takes a little (like ASASSN-14ko, which flares every 115 days).</li>
+    <li>A black hole rarely eats a star whole. Gas spills off through the Roche lobe and the star keeps going. It starts as a thin wind once the lobe is about half full and becomes a steady stream when the star fills it; while you place a star, dashed rings round the nearest hole show where each begins and where the star would be torn apart. A giant stays big until its envelope is gone, then its helium core is left orbiting, as a white dwarf for a red giant or a Wolf–Rayet star for a blue supergiant. A small star can be whittled down to a brown dwarf. On a stretched orbit, each close pass takes a little (like ASASSN-14ko, which flares every 115 days).</li>
     <li>Black holes, neutron stars and white dwarfs all accept gas. A star feeding a white dwarf builds up a hydrogen layer that ignites as a nova every so often; each one throws most of the layer off, so the white dwarf grows slowly and can eventually pass 1.44 M☉ and explode as a Type Ia. Real novae eject about 0.00001 M☉; here the layer is scaled up so they come every few seconds.</li>
     <li>Mass transfer is only stable when the star giving mass isn't much heavier than the one taking it. Past about 1.5×, the orbit shrinks as mass moves, the overflow grows, and it runs away into a common envelope: the companion spirals inside the star, and either throws the envelope off (leaving the bare core in an orbit many times tighter) or merges with it. Most merging black-hole and neutron-star pairs are thought to have gone through this.</li>
     <li>Not all the stolen gas gets eaten. Near the hole, part of it is blown back out by its own light, 15–65% here and more when the hole is feeding hard, as in ultraluminous X-ray sources. The purple band on the scope tracks how fast gas is falling in.</li>
@@ -2228,6 +2228,18 @@ function updateRadius(s) {
   s.R = Math.max(s.R, 0.5);
 }
 
+/* A star doesn't wait until its Roche lobe is full to lose gas. Its loose outer layers and its wind already feel the
+   companion: from about half-full some of that gas slips through the inner Lagrange point (wind Roche-lobe overflow,
+   and Tout & Eggleton's tidally enhanced wind). Here that is a thin trickle growing as (fullness)², a few percent of
+   the stream a full lobe pours. White dwarfs and planets hold on to what they have until they overflow. */
+const WIND_F = 0.5, WIND_RATE = 0.004;
+const windyKind = k => k === 'ms' || k === 'giant' || k === 'bd';
+// where a star of type t dropped next to a compact object of mass hostM starts to leak, pours a stream, and is torn apart
+function feedRings(t, hostM) {
+  if (!t || t.kind === 'ns' || t.kind === 'planet' || !(hostM > 0)) return null;
+  const fill = (realSizes ? t.Rsun * RSUN_U : t.R) / rocheFrac(t.m / hostM);
+  return { leak: windyKind(t.kind) ? fill / WIND_F : null, stream: fill, tear: fill / 1.6 };
+}
 function stellarProcesses(simDt) {
   for (const st of bodies.slice()) {
     if (st.kind !== 'star' || isNS(st)) continue;
@@ -2255,8 +2267,9 @@ function stellarProcesses(simDt) {
     }
     // a donor much heavier than its accretor can't transfer stably: the orbit shrinks, overflow grows, and it runs away
     if (f > 1.02 && st.m > 1.5 * host.m && (st.type.kind === 'ms' || st.type.kind === 'giant') && !st.sn) { commonEnvelope(st, host, r); continue; }
-    if (f > 1 && simDt > 0) {
-      const rate = Math.min(Math.max(0.04, 0.03 * st.m), 0.12 * st.m * (f - 1));
+    const wx = windyKind(st.type.kind) && !st.sn ? clamp((f - WIND_F) / (1 - WIND_F), 0, 1) : 0;
+    if ((f > 1 || wx > 0) && simDt > 0) {
+      const rate = Math.max(WIND_RATE * st.m * wx * wx, Math.min(Math.max(0.04, 0.03 * st.m), 0.12 * st.m * (f - 1)));
       // fewer, heavier particles as the disk fills up: same mass flow, bounded particle count
       const target = 160 * clamp(1 - gN / gasCap, 0.04, 1);
       const pm = Math.max(0.00004, rate / target);
@@ -2265,7 +2278,8 @@ function stellarProcesses(simDt) {
       updateRadius(st);
       if (st.type.kind === 'giant' && st.m <= st.core * 1.01) { exposeCore(st); continue; }
       if (st.type.kind === 'ms' && st.m < 0.075 && st.type.id !== 'BD') { becomeBrownDwarf(st); continue; }
-      if (!st.noted) { st.noted = true; toast('Mass transfer', [`${st.type.name} is overflowing its Roche lobe onto the ${fmtM(host.m)} M☉ ${isNS(host) ? 'neutron star' : isWD(host) ? 'white dwarf' : 'hole'}`]); }
+      if (f <= 1) { if (!st.windNoted && !st.noted) { st.windNoted = true; toast('A thin wind', [`The ${fmtM(host.m)} M☉ ${isNS(host) ? 'neutron star' : isWD(host) ? 'white dwarf' : 'hole'} is drawing gas off the ${st.type.lc}'s outer layers`, 'Closer in, where the star fills its Roche lobe, the trickle becomes a steady stream']); } }
+      else if (!st.noted) { st.noted = true; toast('Mass transfer', [`${st.type.name} is overflowing its Roche lobe onto the ${fmtM(host.m)} M☉ ${isNS(host) ? 'neutron star' : isWD(host) ? 'white dwarf' : 'hole'}`]); }
     }
   }
 }
@@ -2592,7 +2606,7 @@ function tidePath(ctx, t, R) {
 }
 function retype(st, t, keepMass) {
   st.type = t; st.m0 = st.m; st.R = st.R0 = st.real ? t.Rsun * RSUN_U : t.R; st.core = 0;
-  st.noted = false; st.emitAcc = 0; st.ep = null; st.f = 0;
+  st.noted = false; st.windNoted = false; st.emitAcc = 0; st.ep = null; st.f = 0;
 }
 function exposeCore(st) {
   const from = st.type.lc, wr = st.type.id === 'BSG';
@@ -4511,6 +4525,17 @@ function ghost(c, sx, sy) {
         c.fillStyle = 'rgba(255,150,120,0.85)'; c.font = `400 10px ${MONO}`; c.textAlign = 'center'; c.fillText('Roche limit', HX, HY - dR * cosI - 5);
       }
     }
+    const acc = dominantAccretor(wx, wy), fr = acc && feedRings(TYPE[tool], acc.m);
+    if (fr) { // where this star would start to feed the compact object, and where it would be torn apart
+      const AX = toSX(acc.x, acc.y), AY = toSY(acc.x, acc.y, acc.z); let lastR = 1e9;
+      c.font = `400 10px ${MONO}`; c.textAlign = 'center'; c.lineWidth = 1;
+      for (const [rw, label, col, dash] of [[fr.leak, 'leaks gas inside here', '255,200,150', [2, 6]], [fr.stream, 'steady stream', '255,170,100', [5, 4]], [fr.tear, 'torn apart', '255,110,90', [5, 4]]]) {
+        const rp = rw * zoom; if (!(rp > 8) || rp > 4 * Math.max(vw, vh)) continue;
+        c.setLineDash(dash); c.strokeStyle = `rgba(${col},0.55)`; c.beginPath(); c.ellipse(AX, AY, rp, rp * cosI, 0, 0, Math.PI * 2); c.stroke();
+        if (lastR - rp * cosI > 13) { c.fillStyle = `rgba(${col},0.9)`; c.fillText(label, AX, AY - rp * cosI - 4); lastR = rp * cosI; }
+      }
+      c.setLineDash([]);
+    }
     const t = TYPE[tool], R = Math.max((t.kind === 'planet' ? planetR(t.m, realSizes) : t.R) * zoom, 3);
     c.fillStyle = `rgba(${t.col},0.55)`; c.beginPath(); c.arc(sx, sy, R, 0, Math.PI * 2); c.fill();
   }
@@ -4891,6 +4916,7 @@ function statusOf(b) {
   }
   if (isPlanet(b)) return b.hot && wallNow - b.hot < 30000 ? ['Molten from an impact', 'hot'] : b.f > 0.75 ? [`Close to being pulled apart (${Math.round(b.f * 100)}% of the way to the Roche limit)`, 'hot'] : ['Stable', ''];
   if (b.f > 1) return [b.passes ? `Close pass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)` : `Losing mass: overflowing its Roche lobe (${Math.round(b.f * 100)}%)`, 'hot'];
+  if (b.f > WIND_F && windyKind(b.type.kind)) return [`Leaking a thin wind to its companion (Roche lobe ${Math.round(b.f * 100)}% full)`, ''];
   if (b.f > 0.85) return [`Close to overflowing (Roche lobe ${Math.round(b.f * 100)}% full)`, ''];
   if (b.m < b.mBirth * 0.999) return ['Stripped, now stable', ''];
   return ['Stable', ''];
@@ -6029,7 +6055,8 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
   get caps() { return { MAXG, MAXM, BODY_CAP, MAT0, gasMax: Q.gas, matMax: Q.mat, gasCap, matCap, qScale }; },
   set speed(i) { speedIdx = i; },
   govern(ms, n = 1) { for (let i = 0; i < n; i++) govern(ms); return [gasCap, matCap]; },   // feed the governor made-up frame times
-  addMatter, stepGas, stepMatter, matterCollective, ringFrom, planetImpact,
+  addMatter, stepGas, stepMatter, matterCollective, ringFrom, planetImpact, setCircular,
+  feedRings: (tid, hostM) => feedRings(TYPE[tid], hostM),
   // n cells clumped like a disk: the tree's pull on each against the every-pair sum, and the time each took
   treeCheck(n) {
     let s = 7; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
