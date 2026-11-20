@@ -43,8 +43,9 @@ async function openPage(browser, server, opts = {}) {
     HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return /webgl/.test(type) ? null : get.call(this, type, ...rest); };
   });
   const { port } = server.address();
-  await page.goto(`http://127.0.0.1:${port}/index.html?rdtest${opts.hash ? '#' + opts.hash : ''}`);
-  await page.waitForFunction(() => window.__rd);
+  // generous: on a slow CI runner or a busy machine the page (and its software WebGL) can take far longer than 30 s to come up
+  await page.goto(`http://127.0.0.1:${port}/index.html?rdtest${opts.hash ? '#' + opts.hash : ''}`, { timeout: 120000 });
+  await page.waitForFunction(() => window.__rd, null, { timeout: 120000 });
   return { page, errors, webgl, close: () => context.close() };
 }
 

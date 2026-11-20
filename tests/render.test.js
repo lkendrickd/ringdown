@@ -9,7 +9,7 @@ let server, browser, p;
 before(async () => { server = await serve(); browser = await launch(); p = await openPage(browser, server); });
 after(async () => { await p.close(); await browser.close(); server.close(); });
 
-const PROGRAMS = ['base', 'star', 'gasP', 'lensP', 'down', 'up', 'fin', 'fxaa'];
+const PROGRAMS = ['base', 'star', 'gasP', 'lensP', 'down', 'up', 'fin', 'fxaa', 'fx'];
 
 test('every GPU program compiles and links', async () => {
   const r = await p.page.evaluate(names => {
