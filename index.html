@@ -2377,7 +2377,7 @@ let view = document.getElementById('view');
 const ui = document.getElementById('ui'), octx = ui.getContext('2d');
 const scopeCv = document.getElementById('scope'), scx = scopeCv.getContext('2d');
 const scene = document.createElement('canvas'), sctx = scene.getContext('2d');
-let gl = null, vctx = null, HDR = false;
+let gl = null, vctx = null, HDR = false, glLost = false;
 let vw = innerWidth, vh = innerHeight, RS = 1, OD = 1;
 const GLR = { tg: {}, bloom: [] };   // programs, vertex arrays and render targets of the GPU pipeline
 
@@ -2667,7 +2667,10 @@ void main(){
 
 function initGL() {
   try { gl = view.getContext('webgl2', { antialias:false, alpha:false, premultipliedAlpha:false, powerPreference:'high-performance' }); } catch (e) { gl = null; }
-  if (!gl) return false;
+  return !!gl && buildGL();
+}
+// programs, vertex arrays and textures: everything the GPU holds. Built again when a lost context comes back.
+function buildGL() {
   const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
     if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
   const program = (vs, fs, attribs) => {
@@ -2811,10 +2814,24 @@ function makeSkyTile() {
 }
 const skyTile = makeSkyTile();
 const skyPattern = sctx.createPattern(skyTile, 'repeat');
-if (gl) {
+function uploadSky() {
   gl.bindTexture(gl.TEXTURE_2D, GLR.skyTex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, skyTile);
+}
+if (gl) uploadSky();
+/* A GPU reset (a driver crash or update, too many pages using the GPU) takes the context away and blanks the canvas.
+   Cancelling the event asks the browser to give it back; until it does nothing is drawn with it, and when it does,
+   everything the GPU held is rebuilt. The simulation runs on meanwhile. */
+if (gl) {
+  view.addEventListener('webglcontextlost', e => {
+    e.preventDefault(); glLost = true;
+    toast('Graphics reset', ['The browser took the graphics card away from this page for a moment; the picture returns as soon as it is given back']);
+  });
+  view.addEventListener('webglcontextrestored', () => {
+    if (!buildGL()) { toast('Graphics lost', ['The picture could not be rebuilt after a graphics reset. Reload the page to get it back']); return; }
+    GLR.tg = {}; GLR.bloom = []; glTargets(); uploadSky(); glLost = false;   // the old targets belonged to the lost context: drop, don't delete
+  });
 }
 // gas colours for the GPU path: the same ramp as the sprites, as floats
 const gasRGB = new Float32Array(24 * 3);
@@ -2840,7 +2857,7 @@ function resize() {
   scene.width = view.width = Math.round(vw * RS); scene.height = view.height = Math.round(vh * RS);
   ui.width = Math.round(vw * OD); ui.height = Math.round(vh * OD);
   scopeCv.width = Math.round(scopeCv.clientWidth * OD); scopeCv.height = Math.round((scopeCv.clientHeight || 62) * OD);
-  if (gl) glTargets();
+  if (gl && !glLost) glTargets();
   const dk = document.getElementById('dock');
   document.documentElement.style.setProperty('--dock-h', dk.offsetHeight + 'px');
   const sc = document.querySelector('.scope');
@@ -3241,6 +3258,7 @@ function kerrShadow(chi, incDeg) {
   return res;
 }
 function composite() {
+  if (glLost) return;   // nothing to draw with until the browser restores the context
   const W = view.width, H = view.height, s = RS;
   const bh = bhList().slice(0, 16);
   if (gl) {
@@ -4389,7 +4407,7 @@ loadFromHash();
 if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
   riscoM, eIsco, rocheFrac, ringFor, remnantFit, wdRadius, M_CH, KR, KM_PER_UNIT, SIM2REAL,
   presets: Object.keys(PRESETS), makeBH, makeStar, mergeWhiteDwarfs, snapshot, restore, encodeState, decodeState,
-  get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; },
+  get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; }, get glLost() { return glLost; },
   add(...bs) { bodies.push(...bs); computeAccel(); },
   load(id, seed) { manual = true; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; loadPreset(id, seed); },
   open(st) { this.load('empty', 0); restore(st); },   // like a fresh page opening a share link
