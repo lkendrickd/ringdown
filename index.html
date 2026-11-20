@@ -73,6 +73,7 @@ canvas.full{position:fixed;inset:0;width:100%;height:100%;display:block}
   display:inline-flex;align-items:center;gap:5px;font:600 11px/1 var(--f-ui);letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
 .listen svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .listen[aria-pressed="true"]{color:#1a1208;background:var(--wave);border-color:var(--wave)}
+.vol{pointer-events:auto;flex:none;width:76px;height:26px;margin:0;accent-color:var(--wave);cursor:pointer}
 #scope{display:block;width:100%;height:62px}
 #readouts{font-size:11px;color:var(--dim);display:flex;flex-wrap:wrap;gap:2px 12px}
 #readouts b{font-weight:500;color:var(--ink)}
@@ -245,7 +246,12 @@ html.phone .scope .lbl i{font-size:13px}
 html.phone #fgw{font-size:10.5px}
 html.phone .scope-head::after{content:"";flex:none;width:6px;height:6px;margin:0 3px 2px 2px;border-right:1.5px solid var(--dim);border-bottom:1.5px solid var(--dim);transform:rotate(45deg)}
 html.phone .scope.open .scope-head::after{transform:rotate(-135deg);margin-bottom:-3px}
-html.phone .listen{height:24px}
+html.phone .listen,html.phone .vol{height:24px}
+/* volume: kept out of the one-line strip so the readout keeps its room; open the strip and it gets a row of its own */
+html.phone .scope:not(.open) .vol{display:none}
+html.phone .scope.open .scope-head{flex-wrap:wrap}
+html.phone .scope.open #fgw{flex:1 1 0;text-align:right}
+html.phone .scope.open .vol{order:1;width:100%}
 html.phone #scope{height:26px}
 html.phone .scope.open #scope{height:54px}
 html.phone .scope:not(.open) .legend,html.phone .scope:not(.open) #readouts{display:none}
@@ -390,9 +396,10 @@ html.photo-idle .photohint,html.photo-idle .gizmo{opacity:0;pointer-events:none}
   <div class="scope-head">
     <span class="lbl">Strain <i>h(t)</i></span><span class="slow" id="slow" hidden>slow-mo</span>
     <span id="fgw" class="mono">no source</span>
-    <button class="listen" id="sound" aria-pressed="false" aria-label="Listen to the gravitational waves">
+    <button class="listen" id="sound" aria-pressed="false" aria-label="Listen to the gravitational waves and every event">
       <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg><span>Listen</span>
     </button>
+    <input class="vol" id="vol" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Volume" title="Volume" hidden>
   </div>
   <canvas id="scope"></canvas>
   <div class="legend mono"><span>strain</span><span class="f">frequency (log)</span><span class="x">infall glow</span></div>
@@ -424,7 +431,7 @@ html.photo-idle .photohint,html.photo-idle .gizmo{opacity:0;pointer-events:none}
     <li>Each hole’s shadow is the exact Kerr outline (Bardeen 1973) for its spin and your viewing angle. It is nearly round at moderate spin and only flattens noticeably on the approaching side as spin nears 1 and the view goes edge-on. The disk is brighter and bluer on the side moving toward you (beaming ∝ δ³). The disk is ray traced: each pixel near a hole follows its light back along a Schwarzschild geodesic to where it crosses the orbital plane, which is why the far side of the disk arcs over and under the shadow. The background sky is still bent with a flat point lens, and the tracing ignores spin.</li>
     <li>Jet power scales with feeding rate × spin² (Blandford–Znajek). Each jet has a fast spine (0.92c) that is strongly beamed, inside a slower sheath (0.3c) that glows in every direction, so jets show from any angle and the one aimed at you is brighter. Knots move at the apparent speed for your viewing angle; on the near jet that can look faster than light, the superluminal-motion illusion seen in M87 and 3C 279. Jet length and width are drawn schematically.</li>
     <li>Neutron stars are the one thing at true size: 12 km radius, 1 grid unit. Two of them merging make a kilonova; above about 2.3 M☉ the remnant collapses to a hole (in reality, after a short-lived hypermassive phase). A real kilonova fades over days; here it takes about 9 seconds.</li>
-    <li>Listen plays the GW frequency one octave up. The real 36 + 29 chirp lasts about 0.2 s; here it is stretched out.</li>
+    <li>Listen plays the GW frequency one octave up. The real 36 + 29 chirp lasts about 0.2 s; here it is stretched out. The other sounds (explosions, mergers, flares, feeding) are synthesized for effect and placed left or right by where they happen on screen; only the chirp is data.</li>
     <li>A white dwarf that spirals into a neutron star gets torn into a disk. The neutron star feeds and spins up (about 0.1 M☉ takes it to millisecond periods), the usual story for millisecond pulsars; the fastest known spins 716 times a second. A neutron star that eats past about 2.3 M☉ collapses into a hole. A neutron star sinking into a giant makes a Thorne–Żytkow object.</li>
     <li>A black hole rarely eats a star whole. Gas spills off through the Roche lobe and the star keeps going. A giant stays big until its envelope is gone, then its helium core is left orbiting, as a white dwarf for a red giant or a Wolf–Rayet star for a blue supergiant. A small star can be whittled down to a brown dwarf. On a stretched orbit, each close pass takes a little (like ASASSN-14ko, which flares every 115 days).</li>
     <li>Black holes, neutron stars and white dwarfs all accept gas. A star feeding a white dwarf builds up a hydrogen layer that ignites as a nova every so often; each one throws most of the layer off, so the white dwarf grows slowly and can eventually pass 1.44 M☉ and explode as a Type Ia. Real novae eject about 0.00001 M☉; here the layer is scaled up so they come every few seconds.</li>
@@ -1020,6 +1027,7 @@ function planetImpact(a, b) {
   bodies = bodies.filter(o => o !== small);
   if (followId === small.id) followId = big.id;
   regrade(big);
+  sfx('impact', cx, cy, N ? 1 : 0.4);
   if (N) {
     big.hot = wallNow;
     const sg = Lz >= 0 ? 1 : -1, phi = Math.atan2(dy, dx), Rm = big.R, GM = G * Mn;
@@ -1043,6 +1051,7 @@ function magnetarFlare(b) {
   b.flares = (b.flares || 0) + 1; b.flareAt = wallNow + 14000 + 16000 * rand(); b.flashT = wallNow;
   flashes.push({ x: b.x, y: b.y, t0: wallNow, dur: 2200, scale: 0.9 });
   flashes.push({ x: b.x, y: b.y, t0: wallNow, dur: 5000, kind: 'sn', R: 3, power: 0.55, st: simTime });
+  sfx('flare', b.x, b.y);
   if (!reduceMotion) shake = wallNow;
   // the burst of gamma rays shoves nearby gas and dust outward and scorches any world close by
   const reach = 160, push = (x, y) => { const dx = x - b.x, dy = y - b.y, r = Math.hypot(dx, dy); return r < reach && r > 1e-6 ? [dx / r, dy / r, 0.08 * C / (1 + r / 12)] : null; };
@@ -1701,6 +1710,7 @@ function mergeBH(a, b) {
   bodies = bodies.filter(o => o !== a && o !== b);
   bodies.push(rem);
   const qn = startRing(rem, w, Math.abs(chiA));
+  sfx('bh', x, y, clamp(0.5 + M / 100, 0.5, 1.4), qn.fReal);
   const spinNote = (Math.abs(a.chi) > 0.02 || Math.abs(b.chi) > 0.02) ? ` (from ${fmtChi(c1)} and ${fmtChi(c2)} relative to the orbit)` : '';
   toast('Black holes merged', [
     `${fmtM(a.m)} + ${fmtM(b.m)} → ${fmtM(mf)} M☉, spin ${chiA.toFixed(2)}${spinNote}`,
@@ -1725,6 +1735,7 @@ function mergeNS(a, b) {
   const vx = (a.vx * a.m + b.vx * b.m) / M, vy = (a.vy * a.m + b.vy * b.m) / M;
   bodies = bodies.filter(o => o !== a && o !== b);
   addKilonova(x, y, 0.28, ej, vx, vy);
+  sfx('kn', x, y);
   if (mf > 2.3) {
     const rem = makeBH(x, y, vx, vy, mf, 0.68 * sL);
     rem.grbT = wallNow;
@@ -1757,6 +1768,7 @@ function mergeStars(a, b) {
     } else shred(st, ns, Math.hypot(st.x - ns.x, st.y - ns.y), 'ns');
     return;
   }
+  sfx('impact', (a.x + b.x) / 2, (a.y + b.y) / 2, 0.6);
   const wdA = a.type.kind === 'wd', wdB = b.type.kind === 'wd';
   if (wdA && wdB) { mergeWhiteDwarfs(a, b); return; }
   if (wdA !== wdB) { // a white dwarf hitting an ordinary star sinks into it and becomes part of its core
@@ -1895,6 +1907,7 @@ function commonEnvelope(st, host, r) {
     }
   };
   flashes.push({ x: cx, y: cy, t0: wallNow, dur: 7000, kind: 'sn', R: st.R, power: 0.45, st: simTime });
+  sfx('sn', cx, cy, 0.45);
   if (ratio < 0.01) { // no core to stop the spiral, or too little orbital energy: they merge
     if (host.kind === 'bh') {
       const eaten = 0.5 * md; host.m += eaten; host.fedTotal = (host.fedTotal || 0) + eaten; totalFed += eaten;
@@ -1966,6 +1979,7 @@ function escapeSpeed(x, y, skip, extra, ex, ey, extraHole) {
 }
 function explode(st) {
   const name = st.type.lc, mode = st.sn ? st.sn.mode : 'cc';
+  sfx('sn', st.x, st.y, mode === 'pi' ? 1.4 : mode === 'ia' ? 1.1 : mode === 'dc' ? 0.3 : 1);
   const toBH = mode === 'dc' || (mode === 'cc' && (st.type.id === 'WR' ? st.m >= 15 : st.mBirth >= 20));
   const mRem = mode === 'pi' || mode === 'ia' ? 0 : mode === 'dc' ? 0.9 * st.m : toBH ? clamp(0.3 * st.m, 5, 15) : 1.25 + 0.2 * rand();
   const ej = Math.max(0, st.m - mRem);
@@ -2240,6 +2254,7 @@ function shred(st, host, r, kind) {
     tdeSlowUntil = wallNow + 30000; slow = tdeSlow; breakFrame = true;
   }
   bodies = bodies.filter(o => o !== st);
+  sfx(kind === 'nsbh' ? 'kn' : 'tde', st.x, st.y, kind === 'ns' ? 0.6 : 1);
   if (kind === 'ns') {
     toast(`${st.type.name} shredded by a neutron star`, [`Torn apart ${fmtDist(r * KM_PER_UNIT)} from the ${fmtM(host.m)} M☉ neutron star`, 'Its debris forms a disk; the neutron star feeds on it and spins up'], 'w');
   } else if (kind === 'nsbh') {
@@ -2267,6 +2282,7 @@ function nova(wd) {
     if (addGas(x, y, wd.vx + Math.cos(a) * sp, wd.vy + Math.sin(a) * sp, out / Math.max(N, 1))) gf[gN - 1] = 3;
   }
   flashes.push({ x: wd.x, y: wd.y, t0: wallNow, dur: 4500, kind: 'sn', R: 6, power: 0.35, st: simTime });
+  sfx('nova', wd.x, wd.y);
   if (wd.novae <= 3 || wd.novae % 5 === 0)
     toast(`Nova${wd.novae > 1 ? ' #' + wd.novae : ''}`, [`Hydrogen piled up on the white dwarf's surface and ignited in a thermonuclear flash`,
       `Most of it blew off; the white dwarf kept a little and is now ${fmtM(wd.m)} of 1.44 M☉`]);
@@ -2422,25 +2438,201 @@ function updateGW() {
 }
 
 /* ================= sound ================= */
-let au = null, soundOn = false;
+/* All synthesized, no sound files. Each one-shot voice gets its own stereo panner (placed by where the event is on
+   screen) and feeds the simulation bus plus a shared reverb whose impulse is made from decaying noise. The sim bus
+   is muted while paused; UI clicks bypass it. Only the chirp is data: the GW frequency, one octave up.
+   voices → panner → sim bus (+ reverb) → master (volume) → compressor → speakers */
+let au = null, soundOn = false, vol = 0.7;
+const SND_MAX = 10;   // one-shots playing at once; past that the oldest, least important one is cut
+let ars = 0x2545f491; // the sound's own random numbers, so audio never draws on the simulation's
+const arnd = () => { ars ^= ars << 13; ars ^= ars >>> 17; ars ^= ars << 5; return (ars >>> 0) / 4294967296; };
+function noiseBuf(c, sec, brown) {
+  const n = Math.round(c.sampleRate * sec), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+  let b = 0;
+  for (let i = 0; i < n; i++) { const w = arnd() * 2 - 1; d[i] = brown ? (b = (b + 0.02 * w) / 1.02) * 3.5 : w; }
+  return buf;
+}
+function impulse(c, sec) { // a stereo reverb tail that darkens as it dies away
+  const n = Math.round(c.sampleRate * sec), buf = c.createBuffer(2, n, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch); let lp = 0;
+    for (let i = 0; i < n; i++) { const t = i / n; lp += (arnd() * 2 - 1 - lp) * (0.7 - 0.6 * t); d[i] = lp * (1 - t) ** 3; }
+  }
+  return buf;
+}
+const panNode = (c, v) => { if (!c.createStereoPanner) return Object.assign(c.createGain(), { pan: { value: 0, setTargetAtTime() {} } }); const p = c.createStereoPanner(); p.pan.value = v; return p; };
+// the fixed graph: buses, reverb, noise, and the continuous sounds (built once; works on an OfflineAudioContext too)
+function audioGraph(c) {
+  const a = { ctx: c, voices: [], last: {}, n: {}, drop: 0 };
+  const G = v => { const g = c.createGain(); g.gain.value = v; return g; }, link = (...ns) => { for (let i = 1; i < ns.length; i++) ns[i - 1].connect(ns[i]); };
+  const lfo = (f, depth, param) => { const o = c.createOscillator(), g = G(depth); o.frequency.value = f; link(o, g, param); o.start(); };
+  const loop = buf => { const s = c.createBufferSource(); s.buffer = buf; s.loop = true; s.start(); return s; };
+  a.master = G(0); a.comp = c.createDynamicsCompressor();
+  a.comp.threshold.value = -12; a.comp.knee.value = 6; a.comp.ratio.value = 10; a.comp.attack.value = 0.003; a.comp.release.value = 0.3;
+  link(a.master, a.comp, c.destination);
+  a.sim = G(0); a.sim.connect(a.master);
+  a.rvbIn = G(1); const cv = c.createConvolver(); cv.buffer = impulse(c, 2.8); link(a.rvbIn, cv, G(0.55), a.sim);
+  a.noise = noiseBuf(c, 2, false); a.brown = noiseBuf(c, 4, true);
+  const send = (from, v) => link(from, G(v), a.rvbIn);
+  // gravitational-wave chirp: sine, triangle an octave above, a faint third harmonic
+  a.o1 = c.createOscillator(); a.o2 = c.createOscillator(); a.o3 = c.createOscillator(); a.o2.type = 'triangle';
+  a.g = G(0); a.gp = panNode(c, 0);
+  a.o1.connect(a.g); link(a.o2, G(0.18), a.g); link(a.o3, G(0.05), a.g); link(a.g, a.gp, a.sim); send(a.gp, 0.25);
+  a.o1.start(); a.o2.start(); a.o3.start();
+  // accretion rumble: brown noise through a low-pass that opens as the feeding rate climbs
+  a.rf = c.createBiquadFilter(); a.rf.type = 'lowpass'; a.rf.frequency.value = 70; a.rf.Q.value = 0.8;
+  a.rg = G(0); a.rp = panNode(c, 0); link(loop(a.brown), a.rf, a.rg, a.rp, a.sim); send(a.rp, 0.3);
+  // ambient bed: a low open fifth and a breath of filtered noise, swelling slowly
+  const bed = c.createBiquadFilter(); bed.type = 'lowpass'; bed.frequency.value = 320;
+  const br = G(0.7); a.amb = G(0); link(bed, br, a.amb, a.sim); send(a.amb, 0.7); lfo(0.05, 0.3, br.gain);
+  for (const [f, ty] of [[55, 'sine'], [55.35, 'sine'], [82.4, 'triangle'], [110.2, 'sine']]) { const o = c.createOscillator(); o.type = ty; o.frequency.value = f; link(o, G(0.22), bed); o.start(); }
+  const air = c.createBiquadFilter(); air.type = 'bandpass'; air.frequency.value = 700; air.Q.value = 0.9;
+  link(loop(a.noise), air, G(0.25), br); lfo(0.031, 350, air.frequency);
+  return a;
+}
 function initAudio() {
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
-  const ctx = new AC();
-  const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(); o1.type = 'sine'; o2.type = 'triangle';
-  const g = ctx.createGain(), g2 = ctx.createGain(); g.gain.value = 0; g2.gain.value = 0.18;
-  const comp = ctx.createDynamicsCompressor();
-  o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(comp); comp.connect(ctx.destination);
-  o1.start(); o2.start();
-  au = { ctx, o1, o2, g, comp }; return true;
+  au = audioGraph(new AC()); return true;
 }
-function updateAudio() {
+// a one-shot voice: gain and panner into the sim bus with a reverb send. UI clicks go straight to master and,
+// being tiny and rate-limited, don't count against the cap (so a sky full of explosions never swallows them)
+function voice(kind, p, lvl, send, dur) {
+  const a = au, c = a.ctx, t = c.currentTime + 0.01, pri = SFX[kind].p, ui = !pri;
+  a.voices = a.voices.filter(v => v.end > t);
+  if (!ui && a.voices.length >= SND_MAX) {
+    let w = null; for (const v of a.voices) if (v.pri <= pri && (!w || v.pri < w.pri || (v.pri === w.pri && v.t0 < w.t0))) w = v;
+    if (!w) { a.drop++; return null; }
+    w.g.gain.cancelScheduledValues(t); w.g.gain.setTargetAtTime(0, t, 0.015); for (const s of w.src) try { s.stop(t + 0.08); } catch (e) {}
+    a.voices = a.voices.filter(v => v !== w);
+  }
+  const g = c.createGain(), pn = panNode(c, p); g.gain.value = lvl / Math.sqrt(1 + 0.25 * a.voices.length);
+  g.connect(pn); pn.connect(ui ? a.master : a.sim);
+  let s = null; if (send && !ui) { s = c.createGain(); s.gain.value = send; pn.connect(s); s.connect(a.rvbIn); }
+  const v = { t0: t, end: t + dur, pri, g, src: [], done() { g.disconnect(); pn.disconnect(); if (s) s.disconnect(); } };
+  if (!ui) a.voices.push(v);
+  a.n[kind] = (a.n[kind] || 0) + 1;
+  return v;
+}
+// building blocks. env: silent until `at`, up to `pk` in `atk` s, then falling ~30 dB over `dec` s
+function env(v, pk, atk, dec, at = 0) {
+  const g = au.ctx.createGain(), t = v.t0 + at;
+  g.gain.value = 0; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk, t + atk); g.gain.setTargetAtTime(0, t + atk, dec / 3.5);
+  g.connect(v.g); return g;
+}
+function sched(v, s, out, at = 0) { s.connect(out); s.start(v.t0 + at, s.buffer ? arnd() * 1.5 : undefined); s.stop(v.end); if (!v.src.length) s.onended = v.done; v.src.push(s); return s; }
+function osc(v, type, f0, f1, glide, out, at = 0) {
+  const o = au.ctx.createOscillator(); o.type = type;
+  o.frequency.setValueAtTime(f0, v.t0 + at); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, v.t0 + at + glide);
+  return sched(v, o, out, at);
+}
+function noise(v, out, brown) { const s = au.ctx.createBufferSource(); s.buffer = brown ? au.brown : au.noise; s.loop = true; return sched(v, s, out); }
+function filt(v, type, f0, f1, glide, q, out) {
+  const f = au.ctx.createBiquadFilter(); f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, v.t0); if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, v.t0 + glide);
+  f.connect(out); return f;
+}
+function crackle(v, pk, dec, at, r0, r1) { // a band of noise chopped by a square wave: sparks, grit
+  const c = au.ctx, cr = c.createGain(), lg = c.createGain(); cr.gain.value = 0.5; lg.gain.value = 0.5;
+  cr.connect(env(v, pk, 0.02, dec, at)); lg.connect(cr.gain);
+  noise(v, filt(v, 'bandpass', 3200, 3200, 0, 0.9, cr)); osc(v, 'square', r0, r1, dec, lg, at);
+}
+/* The one-shots. g: shortest gap between two of a kind (s), p: priority, l: level, d: length (s), s: reverb send.
+   f(voice, intensity, hz) builds the sound. */
+const SFX = {
+  // supernova: a falling boom, a blast of noise that darkens as it spreads, and a long low rumble
+  sn: { g: 0.15, p: 3, l: 0.55, d: 9, s: 0.6, f(v) {
+    osc(v, 'sine', 120, 28, 1.1, env(v, 0.9, 0.005, 2.6));
+    noise(v, filt(v, 'lowpass', 5000, 160, 3.5, 0.6, env(v, 0.5, 0.01, 3.8)));
+    noise(v, filt(v, 'lowpass', 180, 70, 6, 0.7, env(v, 0.8, 0.5, 6, 0.1)), true);
+  } },
+  // kilonova: a sharp crack and a thud, then a glittering inharmonic shimmer and a slow glow
+  kn: { g: 0.3, p: 3, l: 0.5, d: 7.5, s: 0.7, f(v) {
+    noise(v, filt(v, 'bandpass', 4000, 1500, 0.25, 0.7, env(v, 0.4, 0.002, 0.3)));
+    osc(v, 'sine', 95, 38, 0.6, env(v, 0.6, 0.004, 1));
+    [523, 791, 1109, 1480, 1973, 2642].forEach((f, i) => osc(v, 'sine', f * 1.015, f, 2, env(v, 0.12, 0.01, 1.8 + 0.6 * i + arnd(), 0.02 * i), 0.02 * i));
+    osc(v, 'triangle', 330, 330, 0, filt(v, 'lowpass', 400, 2400, 1.5, 1, env(v, 0.12, 1.2, 3.5)));
+  } },
+  // black holes merging: a deep thump, then the remnant rings at its ringdown pitch (one octave up, like the chirp)
+  bh: { g: 0.3, p: 3, l: 0.6, d: 3.6, s: 0.5, f(v, k, hz) {
+    osc(v, 'sine', 80, 24, 0.8, env(v, 1, 0.004, 1.8));
+    noise(v, filt(v, 'lowpass', 700, 90, 0.5, 1, env(v, 0.4, 0.003, 0.6)));
+    const f = hz > 0 ? clamp(hz * 2, 55, 2400) : 220;
+    osc(v, 'sine', f * 1.08, f, 0.12, env(v, 0.32, 0.01, 2.4, 0.04), 0.04);
+    osc(v, 'sine', f * 1.09, f * 1.006, 0.12, env(v, 0.16, 0.01, 2, 0.04), 0.04);
+    osc(v, 'triangle', f * 2.2, f * 2, 0.12, env(v, 0.06, 0.01, 1.2, 0.04), 0.04);
+  } },
+  // tidal disruption: noise through a resonant band that rises as the star stretches, then tears, with a groan and grit
+  tde: { g: 0.25, p: 2, l: 0.6, d: 4.5, s: 0.5, f(v) {
+    const bp = filt(v, 'bandpass', 220, 2400, 0.9, 4, env(v, 0.9, 0.35, 2.8)); bp.frequency.exponentialRampToValueAtTime(380, v.t0 + 3.2);
+    noise(v, bp);
+    osc(v, 'sawtooth', 120, 42, 3, filt(v, 'lowpass', 800, 160, 3, 1.5, env(v, 0.22, 0.25, 2.6)));
+    crackle(v, 0.3, 2.2, 0.3, 17, 31);
+  } },
+  // nova: a bright pop and a short rising ping
+  nova: { g: 0.2, p: 1, l: 0.5, d: 2.6, s: 0.65, f(v) {
+    noise(v, filt(v, 'bandpass', 2400, 800, 0.5, 1.2, env(v, 0.45, 0.003, 0.45)));
+    osc(v, 'sine', 600, 720, 0.25, env(v, 0.28, 0.004, 1.8));
+    osc(v, 'sine', 1203, 1446, 0.25, env(v, 0.09, 0.004, 1.1));
+  } },
+  // magnetar flare: an electric zap sweeping down, a jolt, and crackling sparks
+  flare: { g: 0.3, p: 2, l: 0.55, d: 3.4, s: 0.55, f(v) {
+    osc(v, 'sawtooth', 2800, 80, 0.4, filt(v, 'lowpass', 7000, 500, 0.45, 3, env(v, 0.3, 0.002, 0.5)));
+    osc(v, 'square', 1400, 60, 0.6, filt(v, 'bandpass', 2000, 300, 0.6, 2, env(v, 0.12, 0.002, 0.7)));
+    osc(v, 'sine', 85, 34, 0.5, env(v, 0.7, 0.004, 0.9));
+    crackle(v, 0.35, 2, 0.05, 40, 9);
+  } },
+  // impact: a dull thud and crunch; a giant impact (k near 1) rumbles on
+  impact: { g: 0.12, p: 1, l: 0.6, d: 3.2, s: 0.35, f(v, k) {
+    osc(v, 'sine', 100, 36, 0.35, env(v, 0.9, 0.003, 0.7));
+    noise(v, filt(v, 'lowpass', 1600, 180, 0.6, 0.8, env(v, 0.6, 0.002, 0.5 + 0.7 * Math.min(k, 1.5))));
+    if (k > 0.7) noise(v, filt(v, 'lowpass', 140, 70, 2, 0.7, env(v, 0.6, 0.15, 2, 0.05)), true);
+  } },
+  click: { g: 0.035, p: 0, l: 1, d: 0.1, s: 0, f(v) { osc(v, 'sine', 1700, 1000, 0.03, env(v, 0.06, 0.001, 0.045)); } },
+  place: { g: 0.06, p: 0, l: 1, d: 0.3, s: 0, f(v) { osc(v, 'sine', 540, 320, 0.09, env(v, 0.13, 0.002, 0.18)); osc(v, 'triangle', 1080, 640, 0.05, env(v, 0.03, 0.001, 0.08)); } },
+};
+let sPan = 0, sLvl = 1;
+// where a point in the world sounds: panned by its screen x, quieter the further off screen it is
+function sndAt(x, y) {
+  const sx = toSX(x, y), sy = toSY(x, y), ox = Math.max(0, Math.abs(sx / vw - 0.5) - 0.5), oy = Math.max(0, Math.abs(sy / vh - 0.5) - 0.5);
+  sPan = clamp(sx / vw * 2 - 1, -1, 1) * 0.8 || 0; sLvl = 1 / (1 + 3 * Math.hypot(ox, oy)) || 1;
+}
+// play a one-shot for an event at world (x, y); k scales it (0.3 faint … 1.4 huge), hz tunes the merger ring
+function sfx(kind, x, y, k = 1, hz = 0) {
+  const a = au, r = SFX[kind]; if (!a || !soundOn || a.ctx.state !== 'running' || !r) return;
+  const t = a.ctx.currentTime;
+  if (kind in a.last && t - a.last[kind] < r.g) { a.drop++; return; }
+  a.last[kind] = t;
+  if (x != null) sndAt(x, y); else { sPan = 0; sLvl = 1; }
+  const v = voice(kind, sPan, sLvl * Math.min(k, 1.5) * r.l, r.s, r.d); if (v) r.f(v, k, hz);
+}
+// move an audio parameter toward v, skipping the call when it is already headed there
+function ramp(p, v, t, tc) { if (p._v !== v) { p._v = v; p.setTargetAtTime(v, t, tc); } }
+// run the audio clock only while sound is on and the tab is visible
+function sndPower() {
   if (!au) return;
-  const t = au.ctx.currentTime;
-  const on = soundOn && !paused && audioF > 0;
+  const c = au.ctx;
+  ramp(au.master.gain, soundOn ? vol * vol : 0, c.currentTime, 0.05);
+  if (soundOn && !document.hidden) { if (c.state !== 'running') c.resume().catch(() => {}); }
+  else if (document.hidden) c.suspend().catch(() => {});
+  else setTimeout(() => { if (!soundOn && c.state === 'running') c.suspend().catch(() => {}); }, 300);
+}
+document.addEventListener('visibilitychange', sndPower);
+function updateAudio() {
+  const a = au; if (!a || a.ctx.state !== 'running') return;
+  const t = a.ctx.currentTime, live = soundOn && !paused;
+  ramp(a.sim.gain, live ? 1 : 0, t, 0.08);
+  // the chirp: frequency straight from the gravitational-wave source, one octave up
   const fr = clamp(audioF * 2, 40, 3000);
-  au.o1.frequency.setTargetAtTime(fr, t, 0.03); au.o2.frequency.setTargetAtTime(fr * 2, t, 0.03);
-  const amp = on ? clamp(audioEnv / scopeMax, 0, 1) : 0;
-  au.g.gain.setTargetAtTime(amp * 0.22, t, 0.04);
+  a.o1.frequency.setTargetAtTime(fr, t, 0.03); a.o2.frequency.setTargetAtTime(fr * 2, t, 0.03); a.o3.frequency.setTargetAtTime(fr * 3, t, 0.03);
+  const amp = live && audioF > 0 ? clamp(audioEnv / scopeMax, 0, 1) : 0;
+  a.g.gain.setTargetAtTime(amp * 0.4, t, 0.04);
+  if (gwSrc) { sndAt(gwSrc.cx, gwSrc.cy); ramp(a.gp.pan, sPan, t, 0.1); }
+  // accretion rumble: louder and brighter the faster everything feeds, placed between the feeders by how much each eats
+  let xr = 0, xp = 0;
+  for (const b of bodies) if (isAccretor(b) && b.feedRate > 0) { sndAt(b.x, b.y); xr += b.feedRate; xp += b.feedRate * sPan; }
+  const lv = live && xr > 3e-5 ? clamp((Math.log10(xr) + 4.5) / 3.5, 0, 1) : 0;
+  ramp(a.rg.gain, lv * lv * 0.4, t, 0.25); ramp(a.rf.frequency, 70 + 380 * lv, t, 0.3); if (xr > 0) ramp(a.rp.pan, xp / xr, t, 0.3);
+  ramp(a.amb.gain, live ? 0.05 : 0, t, 0.6);
 }
 
 /* ================= rendering setup ================= */
@@ -3816,7 +4008,7 @@ function setClean(on) {
 $('clean').addEventListener('click', () => setClean(!document.documentElement.classList.contains('clean')));
 // phone: tap the strain strip to open the full scope
 $('scope').closest('.scope').addEventListener('click', e => {
-  if (!document.documentElement.classList.contains('phone') || e.target.closest('.listen')) return;
+  if (!document.documentElement.classList.contains('phone') || e.target.closest('.listen,.vol')) return;
   e.currentTarget.classList.toggle('open'); requestAnimationFrame(resize);
 });
 $('gw').addEventListener('input', e => { gwBoost = +e.target.value; $('gwOut').textContent = gwBoost === 0 ? 'off' : gwBoost === 1 ? '1× real' : gwBoost + '×'; });
@@ -3826,9 +4018,13 @@ $('fit').addEventListener('click', () => { fitBodies(); renderMoveCtx(true); });
 $('clear').addEventListener('click', () => { bodies = []; gN = 0; gwSrc = null; totalFed = 0; totalWind = 0; xrBuf.fill(0); flashes.length = 0; scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); });
 $('sound').addEventListener('click', () => {
   if (!au && !initAudio()) { toast('No audio', ['This browser does not support Web Audio']); return; }
-  if (au.ctx.state === 'suspended') au.ctx.resume();
-  soundOn = !soundOn; $('sound').setAttribute('aria-pressed', String(soundOn));
+  soundOn = !soundOn; $('sound').setAttribute('aria-pressed', String(soundOn)); $('vol').hidden = !soundOn;
+  sndPower();
 });
+$('vol').addEventListener('input', e => { vol = +e.target.value; sndPower(); });
+// soft clicks for buttons, toggles and the scenario menu (the dispatch path, since a handler may have replaced the target)
+addEventListener('click', e => { if (e.composedPath().some(n => n.matches && n.matches('button,input[type=checkbox]'))) sfx('click'); });
+presetSel.addEventListener('change', () => sfx('click'));
 
 const TOOLS = [
   { id:'move', label:'Move', icon:'<svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>' },
@@ -4310,6 +4506,7 @@ function commitPlace(sx, sy, ex, ey) {
   if (pv.circular) { if (pv.host) setCircular(pv.host, body); }
   else { body.vx = pv.vx; body.vy = pv.vy; }
   bodies.push(body); placed.push(body.id);
+  sfx('place', wx, wy);
   computeAccel();
 }
 ui.addEventListener('contextmenu', e => e.preventDefault());
