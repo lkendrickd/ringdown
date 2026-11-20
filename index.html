@@ -388,6 +388,46 @@ html.clean .coach,html.clean .coach-ring,.coach.away,.coach-ring.away{display:no
 html.phone .coach{padding:9px 11px 10px;gap:6px}
 html.phone .coach p{font-size:13px}
 @media (prefers-reduced-motion: reduce){.coach,.coach-ring{animation:none}.g-meter i{transition:none}}
+/* ===== Graphics quality, frame-rate readout, saved scenes (settings panel) ===== */
+.seg{grid-column:1 / -1;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:3px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.03)}
+.seg label{position:relative;cursor:pointer;min-width:0}
+.seg input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.seg span{display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;border:1px solid transparent;color:var(--dim);font:500 13px/1 var(--f-ui);letter-spacing:.08em;text-transform:uppercase}
+.seg label:hover span{color:var(--ink);background:rgba(255,255,255,.04)}
+.seg input:checked+span{color:var(--ink);background:rgba(255,179,106,.11);border-color:rgba(255,179,106,.45)}
+.seg input:focus-visible+span{outline:2px solid var(--wave);outline-offset:1px}
+.fps{position:fixed;z-index:4;top:calc(var(--scope-b,120px) + 6px);left:max(16px,env(safe-area-inset-left,0px));pointer-events:none;white-space:nowrap;
+  padding:4px 7px;border-radius:7px;border:1px solid var(--line);background:var(--glass);font-size:11px;color:var(--dim);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.fps b{font-weight:500;color:var(--ink)}
+.scn-save{display:flex;gap:6px}
+.scn-in{flex:1;min-width:0;height:32px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--ink);padding:0 9px;font:500 14px var(--f-ui);letter-spacing:.02em}
+.scn-in::placeholder{color:var(--faint)}
+.scn-save .follow-x,.scn-acts .follow-x{height:32px}
+.scn-resume{width:100%;flex-direction:column;align-items:flex-start;gap:4px;padding:8px 11px;text-align:left;line-height:1.15}
+#scnResume{height:auto}
+.scn-resume small{font:400 11.5px var(--f-mono);letter-spacing:0;text-transform:none;color:var(--dim)}
+.scn-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.scn-list li{display:flex;flex-direction:column;gap:6px;padding:8px 9px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid var(--line)}
+.scn-head{display:flex;flex-direction:column;gap:2px;min-width:0}
+.scn-head b{font-weight:500;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scn-head span{font:400 11px var(--f-mono);color:var(--dim)}
+.scn-acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.scn-acts .q{flex:1 1 100%;font-size:13px;color:#ffc2a6}
+.scn-acts .ins-del{margin:0;height:32px}
+.scn-note{margin:0;font-size:12.5px;line-height:1.35;color:var(--dim)}
+.scn-note.warn{color:#ffc2a6}
+.resume{position:fixed;z-index:8;left:0;right:0;margin:0 auto;bottom:calc(var(--dock-h,120px) + 10px);width:min(400px,calc(100% - 32px));
+  display:flex;align-items:center;gap:10px;padding:9px 10px 9px 13px;background:var(--glass-hi);border:1px solid var(--line);border-radius:12px;
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);animation:tin .35s ease-out both}
+.resume div{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.resume h3{margin:0;font:600 11.5px/1 var(--f-ui);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.resume p{margin:0;font:400 12px/1.3 var(--f-mono);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.resume .follow-x{height:32px;flex:none}
+@media (prefers-reduced-motion: reduce){.resume{animation:none}}
+html.clean .fps,html.clean .resume{display:none!important}
+body:has(.panel:not([hidden])) .resume,html.phone body:has(.inspect:not([hidden])) .resume{display:none}   /* the open settings panel has its own Resume button */
+html.phone .fps{top:auto;bottom:calc(var(--dock-h,100px) + 70px);left:auto;right:max(12px,env(safe-area-inset-right,0px));font-size:10.5px;padding:3px 6px}   /* above the view dial, clear of the notices */
+html.phone .resume{bottom:calc(var(--dock-h,100px) + 8px);width:min(460px,calc(100% - 20px));padding:7px 8px 7px 11px}
 </style>
 <script>
 // Phone mode: narrow screens, and phones held sideways. Set before the first layout so the camera fits the phone overlays.
@@ -472,6 +512,18 @@ html.phone .coach p{font-size:13px}
   <label class="tog"><span>Labels</span><input id="t-labels" type="checkbox" checked></label>
   <label class="tog"><span>Follow focus<small>The heaviest object, or its barycenter with a partner of at least 30% its mass. Click any object to follow it instead.</small></span><input id="t-follow" type="checkbox" checked></label>
   <div class="btns"><button class="btn" id="fit">Recenter</button><button class="btn" id="clear">Clear all</button></div>
+  <h2>Graphics</h2>
+  <div class="rowr"><span id="qLbl">Quality</span><output id="qOut" class="mono"></output>
+    <div class="seg" role="radiogroup" aria-labelledby="qLbl">
+      <label><input type="radio" name="quality" value="low"><span>Low</span></label><label><input type="radio" name="quality" value="medium"><span>Medium</span></label><label><input type="radio" name="quality" value="high"><span>High</span></label><label><input type="radio" name="quality" value="auto" checked><span>Auto</span></label>
+    </div>
+    <small id="qNote"></small></div>
+  <label class="tog"><span>Frame rate<small>Frames per second and frame time, shown small at the edge of the view</small></span><input id="t-fps" type="checkbox"></label>
+  <h2>Scenes</h2>
+  <div class="scn-save"><label class="sr" for="scnName">Name for this scene</label><input id="scnName" class="scn-in" maxlength="40" placeholder="Name this scene" autocomplete="off" enterkeyhint="done"><button class="follow-x" id="scnSave" type="button">Save</button></div>
+  <button class="btn scn-resume" id="scnResume" type="button" hidden></button>
+  <ul class="scn-list" id="scnList" aria-label="Saved scenes"></ul>
+  <p class="scn-note" id="scnNote" aria-live="polite"></p>
   <h2>Receipts</h2>
   <ul class="notes">
     <li>G and c are scaled together, so 1 grid unit is 11.8 km. Horizon sizes, orbital speeds, inspiral timing and GW frequencies line up with real values; on-screen time runs about 23× slower than real.</li>
@@ -625,7 +677,7 @@ let speedIdx = 2;
 let slow = 1, slowHoldUntil = -1;
 let gwBoost = 1;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const opt = { slow:true, lens:true, bloom:true, waves:!reduceMotion, jets:true, trails:true, labels:true, follow:true };
+const opt = { slow:true, lens:true, bloom:true, waves:!reduceMotion, jets:true, trails:true, labels:true, follow:true, fps:false };
 let tool = 'move';
 let bhMass = 30, bhSpin = 0;
 let camX = 0, camY = 0, zoom = 1;
@@ -776,11 +828,12 @@ function regrade(b) {
 }
 
 const MAXM = 7000, BODY_CAP = 96;
+const Q = { mode:'auto', rs:1, bloom:5, gas:MAXG - 800, mat:MAXM };   // graphics quality: render-scale factor, bloom levels, gas and matter budgets (settings panel)
 const qx = new Float64Array(MAXM), qy = new Float64Array(MAXM), qvx = new Float64Array(MAXM), qvy = new Float64Array(MAXM);
 const qm = new Float64Array(MAXM), qT = new Float32Array(MAXM), qc = new Int32Array(MAXM), qk = new Uint16Array(MAXM), qp = new Float32Array(MAXM), qr = new Uint8Array(MAXM); // qr: 1 = ring debris; qk: how many grains have stuck together; qp: size for its mass, relative to rock (ice is puffier)
 let qN = 0, matterFull = false, mcDt = 0, mcWall = 0, mcHeavy = true;
 function addMatter(x, y, vx, vy, m, heat, puff) {
-  if (qN >= MAXM) return false;
+  if (qN >= Q.mat) return false;
   qx[qN] = x; qy[qN] = y; qvx[qN] = vx; qvy[qN] = vy; qm[qN] = m; qT[qN] = heat || 0; qk[qN] = 1; qp[qN] = puff || 1; qr[qN] = 0; qN++;
   return true;
 }
@@ -1080,7 +1133,7 @@ function nameTheMoon() {
     'The real one is thought to have gathered at 3 to 5 Earth radii within months to years, and has been drifting outward ever since, 3.8 cm a year today.'], 'w');
 }
 function ringFrom(p, host, r) {
-  const N = Math.min(Math.round(clamp(500 + 160 * Math.log10(p.m / 1e-12), 300, 1500)), MAXM - qN);
+  const N = Math.min(Math.round(clamp(500 + 160 * Math.log10(p.m / 1e-12), 300, 1500)), Q.mat - qN);
   bodies = bodies.filter(o => o !== p);
   if (followId === p.id) followId = host.id;
   if (N < 8) { matterLands(host, p.m, p.vx, p.vy); return; }
@@ -1108,7 +1161,7 @@ function planetImpact(a, b) {
   const kms = vc * KM_PER_UNIT / SIM2REAL;
   let f = clamp(sinT * (0.3 + 0.5 * x) + 0.1 * x * x, 0, 0.9);
   f *= big.real ? clamp((kms - 3) / 4, 0, 1) : 0.5;   // gentle bumps between small bodies just stick
-  let N = Math.min(Math.round(80 + 900 * f), MAXM - qN);
+  let N = Math.min(Math.round(80 + 900 * f), Q.mat - qN);
   const md = f * small.m;
   if (md < 2e-4 * M || N < 12) { N = 0; }
   const keep = small.m - (N ? md : 0), Mn = big.m + keep;
@@ -1160,7 +1213,7 @@ function magnetarFlare(b) {
 // the matter brush
 let matterRate = -5.5;   // log10 of solar masses sprayed per second
 function sprayMatter(sx, sy, wallDt) {
-  if (matterFull && qN > MAXM - 16) return;
+  if (matterFull && qN > Q.mat - 16) return;
   matterFull = false;
   const n = 8, m = Math.pow(10, matterRate) * Math.min(wallDt, 0.05) / n;
   for (let k = 0; k < n; k++) {
@@ -1383,7 +1436,7 @@ const PRESETS = {
     build() {
       const AU = 1.496e8 / KM_PER_UNIT, sun = makeStar('G', 0, 0, 0, 0, 1); sun.label = 'Young star'; bodies.push(sun);
       let seed = 5; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-      const N = 4200, Md = 0.004;
+      const N = Math.min(4200, Q.mat), Md = 0.004;   // a lower quality setting makes fewer, heavier grains of the same disk
       for (let k = 0; k < N; k++) {
         const r = (0.45 + 2.6 * Math.pow(rnd(), 0.8)) * AU, a = 2 * Math.PI * rnd(), v = Math.sqrt(G * sun.m / r) * (1 + 0.03 * (rnd() - 0.5));
         addMatter(r * Math.cos(a), r * Math.sin(a), Math.sin(a) * v, -Math.cos(a) * v, Md / N, 0);
@@ -3215,6 +3268,7 @@ function resize() {
   vw = innerWidth; vh = innerHeight;
   const dpr = window.devicePixelRatio || 1;
   RS = Math.min(dpr, 1.5); if (vw * vh * RS * RS > 2.4e6) RS = Math.sqrt(2.4e6 / (vw * vh));
+  RS *= Q.rs;
   OD = Math.min(dpr, 2);
   scene.width = view.width = Math.round(vw * RS); scene.height = view.height = Math.round(vh * RS);
   ui.width = Math.round(vw * OD); ui.height = Math.round(vh * OD);
@@ -3704,14 +3758,14 @@ function composite() {
     if (bloomOn) {
       P = GLR.down; gl.useProgram(P.p); gl.uniform1i(P.u.uTex, 0);
       let srcT = T.lens;
-      for (let i = 0; i < B.length; i++) {
+      for (let i = 0; i < Q.bloom; i++) {
         target(B[i]); bind(0, srcT.tex);
         gl.uniform2f(P.u.uTexel, 1 / srcT.w, 1 / srcT.h); gl.uniform1f(P.u.uPre, i === 0 ? 1 : 0);
         tri(); srcT = B[i];
       }
       P = GLR.up; gl.useProgram(P.p); gl.uniform1i(P.u.uTex, 0);
       gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-      for (let i = B.length - 1; i > 0; i--) {
+      for (let i = Q.bloom - 1; i > 0; i--) {
         target(B[i - 1]); bind(0, B[i].tex);
         gl.uniform2f(P.u.uTexel, 1 / B[i].w, 1 / B[i].h); gl.uniform2f(P.u.uOut, B[i - 1].w, B[i - 1].h);
         tri();
@@ -4083,7 +4137,7 @@ function drawScope() {
 const $ = id => document.getElementById(id);
 const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>';
 const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>';
-const TOGGLES = ['slow','lens','bloom','waves','jets','trails','labels','follow'];
+const TOGGLES = ['slow','lens','bloom','waves','jets','trails','labels','follow','fps'];
 function syncPlay() { $('play').innerHTML = paused ? ICON_PLAY : ICON_PAUSE; $('play').setAttribute('aria-label', paused ? 'Play' : 'Pause'); }
 function syncToggles() { for (const k of TOGGLES) $('t-' + k).checked = opt[k]; }
 
@@ -4849,7 +4903,8 @@ function frameBody(now) {
   // frame-time governor: shrink the gas budget on slow devices, grow it back when there is headroom
   workMs += (performance.now() - tWork - workMs) * 0.1;
   if (workMs > 20) gasCap = Math.max(900, gasCap * 0.985);
-  else if (workMs < 10) gasCap = Math.min(MAXG - 800, gasCap + 8);
+  else if (workMs < 10) gasCap = Math.min(Q.gas, gasCap + 8);
+  perfTick(now);   // frame-rate readout, and Auto quality's render-scale steps
   if (frameN % 8 === 0) {
     let nb = 0, ns = 0, mb = 0;
     for (const b of bodies) { if (b.kind === 'bh') { nb++; mb += b.m; } else ns++; }
@@ -5095,6 +5150,216 @@ addEventListener('keydown', e => {
 }, true);
 renderTry();
 if (!ob.tour && !/^s1[zr]-/.test(location.hash.slice(1))) setTimeout(() => { if (tourStep < 0 && !ob.tour) tourGo(0, false); }, 900);
+/* ---------- remembered settings, saved scenes, graphics quality ----------
+   Kept in localStorage under three fixed keys, each a JSON object stamped with a version. Every access is wrapped: a private
+   window, storage turned off or a full quota only means nothing is kept, and anything unreadable or from another version is
+   ignored. A scene is the share-link snapshot (bodies, camera, scene scale; no gas or loose matter). Sound isn't remembered:
+   browsers only let audio start from a tap or click. */
+const KEYS = { prefs: 'ringdown.prefs', scenes: 'ringdown.scenes', last: 'ringdown.last' }, STORE_V = 1;
+let storeErr = '';   // why the last write failed: 'full' or 'off'
+function storeGet(k) {
+  try { const o = JSON.parse(localStorage.getItem(k)); return o && typeof o === 'object' && o.v === STORE_V ? o : null; } catch (e) { return null; }
+}
+function storeSet(k, o) {
+  try { localStorage.setItem(k, JSON.stringify(Object.assign({ v: STORE_V }, o))); return true; }
+  catch (e) { storeErr = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) ? 'full' : 'off'; return false; }
+}
+const storeOff = (() => { try { localStorage.getItem(KEYS.prefs); return false; } catch (e) { return true; } })();
+
+// Quality levels. High is the renderer as it always was; Auto starts there and steps the resolution down while frames run slow.
+const QUALITY = {
+  low:    { rs: 0.5,  bloom: 3, gas: 1800, mat: 3000, note: 'Half resolution, a tighter glow, less gas and loose matter' },
+  medium: { rs: 0.75, bloom: 4, gas: 3000, mat: 5000, note: 'Three-quarter resolution, a little less glow, gas and matter' },
+  high:   { rs: 1, bloom: 5, gas: MAXG - 800, mat: MAXM, note: 'Full resolution, glow and budgets, always' },
+  auto:   { rs: 1, bloom: 5, gas: MAXG - 800, mat: MAXM, note: 'Full quality; the resolution steps down while frames run slow and back up when they recover' },
+};
+const AUTO_RS = [1, 0.85, 0.7, 0.55];
+let autoK = 0;
+/* Frame timing, in windows of a third of a second, drives the readout and Auto. Auto steps down after 1.5 s under ~36 fps and keeps
+   the step only if frames got at least 10% faster (otherwise resolution isn't what's slow: it steps back and leaves it alone for a
+   while). It steps up after 6 s of frames over ~50 fps, and waits twice as long (up to 5 minutes) each time a step up had to be taken back. */
+const pf = { prev: 0, t0: 0, n: 0, sum: 0, slow: 0, slowMs: 0, fast: 0, hold: 0, chk: null, lock: 0, lockMs: 30000, upWait: 6, upAt: -1e9 };
+const fpsEl = document.body.appendChild(document.createElement('div'));
+fpsEl.className = 'fps mono'; fpsEl.hidden = true;
+// the readout sits under the strain scope, which grows once its readouts fill in: keep its bottom edge current
+if (window.ResizeObserver) new ResizeObserver(() => document.documentElement.style.setProperty('--scope-b', Math.round(document.querySelector('.scope').getBoundingClientRect().bottom) + 'px')).observe(document.querySelector('.scope'));
+function perfTick(now) {
+  const dt = now - pf.prev; pf.prev = now;
+  if (!(dt > 0) || dt > 1000) { pf.n = pf.sum = 0; pf.t0 = now; return; }   // first frame, or back from a hidden tab
+  pf.n++; pf.sum += dt;
+  const span = now - pf.t0; if (span < 333) return;
+  const ms = pf.sum / pf.n; pf.n = pf.sum = 0; pf.t0 = now;
+  fpsEl.hidden = !opt.fps;
+  if (opt.fps) fpsEl.innerHTML = `<b>${Math.round(1000 / ms)}</b> fps · <b>${ms.toFixed(1)}</b> ms${Q.rs < 1 ? ` · <b>${Math.round(Q.rs * 100)}%</b> res` : ''}`;
+  if (Q.mode === 'auto') autoStep(ms, span / 1000, now);
+  if (!$('panel').hidden) syncQuality();
+}
+function autoStep(ms, w, now) {
+  if (now < pf.hold) return;   // settling after a change
+  if (pf.chk) {   // just stepped down: did it help?
+    pf.chk.sum += ms; if (++pf.chk.n < 3) return;
+    const after = pf.chk.sum / pf.chk.n, before = pf.chk.before; pf.chk = null;
+    if (after > before * 0.9) { setAutoRS(autoK - 1, now); pf.lock = now + pf.lockMs; pf.lockMs = Math.min(pf.lockMs * 2, 300000); }
+    return;
+  }
+  if (ms > 28) { pf.slow += w; pf.slowMs += ms * w; pf.fast = 0; } else if (ms < 20) { pf.fast += w; pf.slow = pf.slowMs = 0; } else pf.slow = pf.slowMs = pf.fast = 0;
+  if (pf.slow >= 1.5 && autoK < AUTO_RS.length - 1 && now >= pf.lock) {
+    if (now - pf.upAt < 10000) pf.upWait = Math.min(pf.upWait * 2, 300);   // the last step up didn't hold
+    pf.chk = { before: pf.slowMs / pf.slow, sum: 0, n: 0 }; setAutoRS(autoK + 1, now);
+  } else if (pf.fast >= pf.upWait && autoK > 0) { pf.upAt = now; setAutoRS(autoK - 1, now); }
+}
+function setAutoRS(k, now) { autoK = k; Q.rs = AUTO_RS[k]; pf.slow = pf.slowMs = pf.fast = 0; pf.hold = now + 1000; resize(); syncQuality(); }
+function setQuality(mode, save) {
+  Q.mode = QUALITY[mode] ? mode : 'auto';
+  const L = QUALITY[Q.mode]; Q.rs = L.rs; Q.bloom = L.bloom; Q.gas = L.gas; Q.mat = L.mat;
+  autoK = 0; Object.assign(pf, { slow: 0, slowMs: 0, fast: 0, chk: null, lock: 0, lockMs: 30000, upWait: 6, hold: performance.now() + 1000 });
+  gasCap = Math.min(Q.gas, Math.max(gasCap, 3200));
+  resize(); syncQuality();
+  if (save) savePrefs();
+}
+function syncQuality() {
+  for (const r of document.querySelectorAll('input[name=quality]')) r.checked = r.value === Q.mode;
+  const glow = !gl ? 'no glow without WebGL2' : opt.bloom ? `glow ${Q.bloom} levels` : 'glow off';
+  const out = `${view.width}×${view.height}`, note = `${QUALITY[Q.mode].note}. Now: ${Math.round(Q.rs * 100)}% resolution · ${glow} · up to ${Q.gas.toLocaleString('en-US')} gas and ${Q.mat.toLocaleString('en-US')} matter particles.`;
+  if ($('qOut').textContent !== out) $('qOut').textContent = out;
+  if ($('qNote').textContent !== note) $('qNote').textContent = note;
+}
+
+// settings: every toggle but follow (camera state that each scene load resets), the speed and the quality
+const PREF_OPTS = TOGGLES.filter(k => k !== 'follow');
+function savePrefs() { storeSet(KEYS.prefs, { opt: Object.fromEntries(PREF_OPTS.map(k => [k, opt[k]])), speed: SPEEDS[speedIdx], quality: Q.mode }); }
+function loadPrefs() {
+  const p = storeGet(KEYS.prefs); if (!p) return 'auto';
+  if (p.opt && typeof p.opt === 'object') for (const k of PREF_OPTS) if (typeof p.opt[k] === 'boolean') opt[k] = p.opt[k];
+  const i = SPEEDS.indexOf(p.speed); if (i >= 0) { speedIdx = i; $('speed').textContent = SPEEDS[i] + '×'; }
+  return QUALITY[p.quality] ? p.quality : 'auto';
+}
+
+// saved scenes, and the last session (saved every 15 s and when the page is hidden, once the viewer has done something in it)
+const SCENE_MAX = 24, SCENE_BYTES = 100000;
+let scenes = [], lastSess = null, touched = false, resumeEl = null;
+const okSnap = s => !!s && typeof s === 'object' && Array.isArray(s.b) && s.b.length <= 200
+  && s.b.every(a => Array.isArray(a) && (a[0] === 'h' ? a.slice(1, 7) : a[0] === 's' ? a.slice(2, 10) : [NaN]).every(Number.isFinite) && a.length >= (a[0] === 'h' ? 7 : 10));
+const okScene = x => !!x && typeof x.name === 'string' && /^[a-z0-9]{1,20}$/.test(x.id) && Number.isFinite(x.t) && okSnap(x.s);
+const when = t => new Date(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : when(t); };
+const objs = n => `${n} object${n === 1 ? '' : 's'}`;
+const sceneTag = s => PRESETS[s.p] ? PRESETS[s.p].name.split(' · ')[0] : 'Scene';
+function sceneNote(t, warn) { const el = $('scnNote'); el.textContent = t; el.classList.toggle('warn', !!warn); }
+function putScenes(prev) {   // write the list; if that fails, put the old one back and say why
+  if (storeSet(KEYS.scenes, { list: scenes })) return true;
+  scenes = prev;
+  sceneNote(storeErr === 'full' ? 'Browser storage is full, so that wasn’t saved. Delete a scene and try again.'
+    : 'This browser window isn’t keeping site data (a private window, or storage turned off), so scenes can’t be saved here.', true);
+  return false;
+}
+function renderScenes() {
+  const ul = $('scnList'); ul.replaceChildren();
+  for (const sc of scenes) {
+    const li = document.createElement('li'); li.dataset.id = sc.id;
+    li.innerHTML = '<div class="scn-head"><b></b><span></span></div><div class="scn-acts"><button class="follow-x" type="button" data-a="load">Load</button>'
+      + '<button class="follow-x" type="button" data-a="ren">Rename</button><button class="ins-del" type="button" data-a="del">Delete</button></div>';
+    li.querySelector('b').textContent = li.querySelector('b').title = sc.name;
+    li.querySelector('.scn-head span').textContent = `${objs(sc.n)} · ${when(sc.t)}`;
+    for (const b of li.querySelectorAll('button')) b.setAttribute('aria-label', `${b.textContent} scene “${sc.name}”`);
+    ul.appendChild(li);
+  }
+  const r = $('scnResume'); r.hidden = !lastSess;
+  if (lastSess) { r.innerHTML = '<span>Resume last session</span><small></small>'; r.querySelector('small').textContent = `${sceneTag(lastSess.s)} · ${objs(lastSess.n)} · ${ago(lastSess.t)}`; }
+}
+const focusRow = (id, a) => { const b = $('scnList').querySelector(`li[data-id="${id}"] [data-a="${a}"]`); if (b) b.focus(); };
+function saveScene() {
+  const inp = $('scnName');
+  if (!bodies.length) return sceneNote('There is nothing in the scene to save yet.', true);
+  if (scenes.length >= SCENE_MAX) return sceneNote(`${SCENE_MAX} saved scenes is the limit. Delete one to make room.`, true);
+  const s = snapshot();
+  if (JSON.stringify(s).length > SCENE_BYTES) return sceneNote('This scene is too big to keep.', true);
+  const base = inp.value.trim().slice(0, 40) || `${sceneTag(s)} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  let name = base; for (let k = 2; scenes.some(x => x.name === name); k++) name = `${base} (${k})`;
+  const prev = scenes.slice();
+  scenes.unshift({ id: Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36), name, n: bodies.length, t: Date.now(), s });
+  if (!putScenes(prev)) return;
+  inp.value = ''; renderScenes(); sceneNote(`Saved “${name}”.`);
+}
+function loadScene(st) {
+  try { restore(st); } catch (e) { loadPreset(currentPreset); sceneNote('That scene couldn’t be read, so the default scene is shown instead.', true); return false; }
+  touched = true; return true;
+}
+function resumeLast() {
+  if (!lastSess || !loadScene(lastSess.s)) return;
+  toast('Session resumed', [`${objs(bodies.length)}, where you left them`, 'Gas and loose matter aren’t kept between visits']);
+  lastSess = null; hideResume(); renderScenes();
+}
+function hideResume() { if (resumeEl) { resumeEl.remove(); resumeEl = null; } }
+function offerResume() {   // a small notice, never a silent swap; a shared link in the address always wins
+  if (!lastSess || /^s1[zr]-/.test(location.hash.slice(1))) return;
+  resumeEl = document.body.appendChild(document.createElement('div'));
+  resumeEl.className = 'resume'; resumeEl.setAttribute('role', 'status');
+  resumeEl.innerHTML = '<div><h3>Last session</h3><p></p></div><button class="follow-x" type="button" data-a="go" aria-label="Resume last session">Resume</button>'
+    + '<button class="ins-x" type="button" data-a="x" aria-label="Dismiss"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+  resumeEl.querySelector('p').textContent = `${sceneTag(lastSess.s)} · ${objs(lastSess.n)} · ${ago(lastSess.t)}`;
+  resumeEl.addEventListener('click', e => { const b = e.target.closest('button'); if (b) b.dataset.a === 'go' ? resumeLast() : hideResume(); });
+  setTimeout(hideResume, 30000);
+}
+function saveLast() {
+  if (!touched) return;
+  if (bodies.length) storeSet(KEYS.last, { t: Date.now(), s: snapshot() });
+  else try { localStorage.removeItem(KEYS.last); } catch (e) {}
+}
+setInterval(() => { if (!document.hidden) saveLast(); }, 15000);
+addEventListener('visibilitychange', () => { if (document.hidden) saveLast(); });
+addEventListener('pagehide', saveLast);
+for (const ev of ['pointerdown', 'click', 'change']) addEventListener(ev, e => { if (e.target.closest && e.target.closest('#ui,#inspect,#clear,#preset')) touched = true; }, true);
+addEventListener('hashchange', hideResume);
+$('gear').addEventListener('click', () => { if (!$('panel').hidden) { renderScenes(); syncQuality(); } });   // fresh "how long ago" times
+
+$('panel').addEventListener('change', e => {
+  if (e.target.name === 'quality') setQuality(e.target.value, true);
+  else if (e.target.closest('.tog')) { fpsEl.hidden = !opt.fps; if (opt.fps && !fpsEl.textContent) fpsEl.textContent = '– fps'; syncQuality(); savePrefs(); }
+});
+$('speed').addEventListener('click', savePrefs);
+$('scnSave').addEventListener('click', saveScene);
+$('scnName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveScene(); } else if (e.key === 'Escape') e.stopPropagation(); });
+$('scnResume').addEventListener('click', resumeLast);
+$('scnList').addEventListener('click', e => {
+  const b = e.target.closest('button'), li = b && b.closest('li'); if (!li) return;
+  const sc = scenes.find(x => x.id === li.dataset.id); if (!sc) return;
+  const acts = li.querySelector('.scn-acts'), a = b.dataset.a;
+  if (a === 'load') { if (loadScene(sc.s)) toast('Scene loaded', [`“${sc.name}”: ${objs(bodies.length)}, as saved`, 'Gas and loose matter aren’t kept with a scene']); }
+  else if (a === 'ren') {
+    li.querySelector('.scn-head').innerHTML = '<input class="scn-in" maxlength="40" autocomplete="off" enterkeyhint="done">';
+    const inp = li.querySelector('input'); inp.value = sc.name; inp.setAttribute('aria-label', `New name for scene “${sc.name}”`);
+    acts.innerHTML = '<button class="follow-x" type="button" data-a="ren-ok">Save name</button><button class="follow-x" type="button" data-a="back">Cancel</button>';
+    acts.dataset.back = 'ren'; inp.focus(); inp.select();
+  } else if (a === 'ren-ok') {
+    const v = li.querySelector('input').value.trim().slice(0, 40);
+    if (!v) return li.querySelector('input').focus();
+    if (scenes.some(x => x !== sc && x.name === v)) { sceneNote(`There is already a scene called “${v}”.`, true); return li.querySelector('input').focus(); }
+    const prev = scenes.map(x => Object.assign({}, x)); sc.name = v;
+    if (putScenes(prev)) sceneNote(`Renamed to “${v}”.`);
+    renderScenes(); focusRow(sc.id, 'ren');
+  } else if (a === 'del') {
+    acts.innerHTML = '<span class="q"></span><button class="ins-del arm" type="button" data-a="del-ok">Delete</button><button class="follow-x" type="button" data-a="back">Keep</button>';
+    acts.querySelector('.q').textContent = `Delete “${sc.name}”? This can’t be undone.`;
+    acts.dataset.back = 'del'; acts.querySelector('[data-a="back"]').focus();
+  } else if (a === 'del-ok') {
+    const prev = scenes.slice(); scenes = scenes.filter(x => x !== sc);
+    if (putScenes(prev)) { sceneNote(`Deleted “${sc.name}”.`); renderScenes(); $('scnName').focus(); } else { renderScenes(); focusRow(sc.id, 'del'); }
+  } else if (a === 'back') { const k = acts.dataset.back; renderScenes(); focusRow(sc.id, k); }
+});
+$('scnList').addEventListener('keydown', e => {
+  const li = e.target.closest('li'); if (!li) return;
+  if (e.key === 'Escape') { const back = li.querySelector('[data-a="back"]'); if (back) { e.stopPropagation(); back.click(); } }
+  else if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); li.querySelector('[data-a="ren-ok"]').click(); }
+});
+
+setQuality(loadPrefs()); syncToggles(); fpsEl.hidden = !opt.fps;
+loadScenes();
+{ const o = storeGet(KEYS.last); lastSess = o && Number.isFinite(o.t) && okSnap(o.s) && o.s.b.length ? { t: o.t, n: o.s.b.length, s: o.s } : null; }
+renderScenes();
+sceneNote(storeOff ? 'This browser window isn’t keeping site data, so settings and scenes won’t be remembered.' : 'A scene keeps its bodies, camera and view. Gas and loose matter aren’t kept.', storeOff);
+offerResume();
+function loadScenes() { const o = storeGet(KEYS.scenes); scenes = o && Array.isArray(o.list) ? o.list.filter(okScene).slice(0, SCENE_MAX) : []; }
 
 presetSel.value = currentPreset;
 loadPreset(currentPreset);
