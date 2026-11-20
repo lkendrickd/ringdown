@@ -484,6 +484,17 @@ let gwSrc = null;
 let currentPreset = 'kerr';
 let wallNow = 0;
 const flashes = [];
+// Everything random in the simulation draws from this seeded generator (mulberry32), so the same seed plays out the
+// same way. Each scene gets a fresh seed; share links carry the generator's state. (Camera shake stays on Math.random:
+// it is only for the eye and never touches the simulation.)
+let rngS = 1;
+function reseed(s) { rngS = s >>> 0; }
+const newSeed = () => Math.floor(Math.random() * 4294967296);
+function rand() {
+  let t = rngS = (rngS + 0x6D2B79F5) >>> 0;
+  t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
 
 const MAXG = 5000;
 let gasCap = 3200;       // soft budget for streamed gas; the frame-time governor moves it
@@ -515,8 +526,8 @@ function makeStar(tid, x, y, vx, vy, m) {
   const R0 = t.kind === 'planet' ? planetR(mm, realSizes) : realSizes ? t.Rsun * RSUN_U * (t.kind === 'ms' ? Math.pow(mm / t.m, 0.8) : 1) : t.R;
   const s = { kind:'star', id:nextId++, type:t, x, y, vx, vy, ax:0, ay:0, m:mm, m0:mm, R:R0, R0, real: realSizes, trail:[], emitAcc:0, f:0, hx:0, hy:0, noted:false,
     core: t.core ? t.core * mm / t.m : 0, ep: null, passes: 0, mBirth: mm };
-  if (t.kind === 'ns') { s.spinHz = 1 + 3 * Math.random(); s.beamPh = Math.random() * 6.28; s.msp = false; }
-  if (tid === 'MAG') { s.spinHz = 0.1 + 0.2 * Math.random(); s.flareAt = wallNow + 5000 + 6000 * Math.random(); s.flares = 0; }   // magnetars spin slowly: their field has braked them
+  if (t.kind === 'ns') { s.spinHz = 1 + 3 * rand(); s.beamPh = rand() * 6.28; s.msp = false; }
+  if (tid === 'MAG') { s.spinHz = 0.1 + 0.2 * rand(); s.flareAt = wallNow + 5000 + 6000 * rand(); s.flares = 0; }   // magnetars spin slowly: their field has braked them
   return s;
 }
 const isNS = b => b.kind === 'star' && b.type.kind === 'ns';
@@ -758,7 +769,7 @@ function matterCollective(dt, wallDt) {
     // remember the heaviest grain in the cell, and one other picked at random
     if (clA[c] < 0) clA[c] = i;
     else if (m > qm[clA[c]]) { clB[c] = clA[c]; clA[c] = i; }
-    else if (clB[c] < 0 || Math.random() * clN[c] < 1) clB[c] = i;
+    else if (clB[c] < 0 || rand() * clN[c] < 1) clB[c] = i;
   }
   for (let c = 0; c < nc; c++) { const m = clM[c]; clX[c] /= m; clY[c] /= m; clVX[c] /= m; clVY[c] /= m; clHR[c] /= m; clT[c] /= m; }
   // cell-on-cell gravity (skipped for very large clouds, where the pull of the bodies dominates anyway)
@@ -795,7 +806,7 @@ function matterCollective(dt, wallDt) {
     if (A < 0 || B < 0 || A === B || clForm[c]) continue;
     const hM = clHM[c], hR = clHR[c], w = hM > 0 ? Math.sqrt(G * hM / (hR * hR * hR)) : Math.sqrt(G * clM[c] / Math.pow(clH[c], 3));
     const tau = clM[c] * 1.989e30 / (clH[c] * clH[c] * M2) / 6000;
-    if (Math.random() > 0.45 * clN[c] * w * tau * dt) continue;
+    if (rand() > 0.45 * clN[c] * w * tau * dt) continue;
     const m = qm[A] + qm[B];
     const hill = hM > 0 ? hR * Math.cbrt(m / (3 * hM)) : Infinity;
     if (planetRsun(m) * Math.max(qp[A], qp[B]) * sizeScale(clHI[c] >= 0 ? bodies[clHI[c]] : null) > 0.55 * hill) continue;
@@ -917,7 +928,7 @@ function ringFrom(p, host, r) {
   if (N < 8) { matterLands(host, p.m, p.vx, p.vy); return; }
   const vesc = Math.sqrt(2 * G * p.m / p.R), puff = p.R / planetR(p.m, p.real);
   for (let k = 0; k < N; k++) {
-    const a = Math.random() * Math.PI * 2, d = p.R * Math.sqrt(Math.random()) * 1.1, sp = vesc * 0.5 * Math.random(), va = Math.random() * Math.PI * 2;
+    const a = rand() * Math.PI * 2, d = p.R * Math.sqrt(rand()) * 1.1, sp = vesc * 0.5 * rand(), va = rand() * Math.PI * 2;
     addMatter(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, p.vx + Math.cos(va) * sp, p.vy + Math.sin(va) * sp, p.m / N, 0, puff); qr[qN - 1] = 1;
   }
   toast('Torn into a ring', [`${cap(bodyName(p))} came within ${fmtDist(r * KM_PER_UNIT)} of ${bodyName(host)}, inside its Roche limit`,
@@ -953,10 +964,10 @@ function planetImpact(a, b) {
     big.hot = wallNow;
     const sg = Lz >= 0 ? 1 : -1, phi = Math.atan2(dy, dx), Rm = big.R, GM = G * Mn;
     for (let k = 0; k < N; k++) {
-      const rho = Rm * (1.25 + 2.3 * Math.pow(Math.random(), 1.3));
-      const ang = phi + sg * (-0.3 + 2.6 * Math.random());
+      const rho = Rm * (1.25 + 2.3 * Math.pow(rand(), 1.3));
+      const ang = phi + sg * (-0.3 + 2.6 * rand());
       const ux = Math.cos(ang), uy = Math.sin(ang), vc = Math.sqrt(GM / rho);
-      const vt = vc * (0.82 + 0.36 * Math.random()) * sg, vr = vc * 0.2 * (Math.random() - 0.3);
+      const vt = vc * (0.82 + 0.36 * rand()) * sg, vr = vc * 0.2 * (rand() - 0.3);
       addMatter(cx + ux * rho, cy + uy * rho, cvx - uy * vt + ux * vr, cvy + ux * vt + uy * vr, md / N, 1);
     }
     flashes.push({ x: cx, y: cy, t0: wallNow, dur: 2600, scale: big.R / 30 });
@@ -969,7 +980,7 @@ function planetImpact(a, b) {
    until it cracks (a starquake) and the field snaps into a new shape: a giant flare. The 2004 flare of SGR 1806-20
    put out more energy in a fifth of a second than the Sun does in about 100,000 years, and it was 50,000 light-years away. */
 function magnetarFlare(b) {
-  b.flares = (b.flares || 0) + 1; b.flareAt = wallNow + 14000 + 16000 * Math.random(); b.flashT = wallNow;
+  b.flares = (b.flares || 0) + 1; b.flareAt = wallNow + 14000 + 16000 * rand(); b.flashT = wallNow;
   flashes.push({ x: b.x, y: b.y, t0: wallNow, dur: 2200, scale: 0.9 });
   flashes.push({ x: b.x, y: b.y, t0: wallNow, dur: 5000, kind: 'sn', R: 3, power: 0.55, st: simTime });
   if (!reduceMotion) shake = wallNow;
@@ -991,12 +1002,12 @@ function sprayMatter(sx, sy, wallDt) {
   matterFull = false;
   const n = 8, m = Math.pow(10, matterRate) * Math.min(wallDt, 0.05) / n;
   for (let k = 0; k < n; k++) {
-    const a = Math.random() * Math.PI * 2, d = 26 * Math.sqrt(Math.random());
+    const a = rand() * Math.PI * 2, d = 26 * Math.sqrt(rand());
     const [wx, wy] = toW(sx + Math.cos(a) * d, sy + Math.sin(a) * d * Math.max(cosI, 0.2));
     let vx = 0, vy = 0;
     const host = dominantAny(wx, wy);
     if (host) { // near something: put it on a circular orbit, with a little scatter
-      const dx = wx - host.x, dy = wy - host.y, r = Math.hypot(dx, dy) || 1, v = Math.sqrt(G * host.m / r) * (1 + 0.04 * (Math.random() - 0.5));
+      const dx = wx - host.x, dy = wy - host.y, r = Math.hypot(dx, dy) || 1, v = Math.sqrt(G * host.m / r) * (1 + 0.04 * (rand() - 0.5));
       vx = host.vx + dy / r * v; vy = host.vy - dx / r * v;
     }
     if (!addMatter(wx, wy, vx, vy, m, 0)) { matterFull = true; toast('That is all the loose matter the sandbox can track', ['Let some of it settle into bodies, then spray more']); return; }
@@ -1220,7 +1231,7 @@ const PRESETS = {
       const mg = makeStar('MAG', 0, 0, 0, 0); mg.flareAt = wallNow + 4000; bodies.push(mg);
       const pl = makeStar('ROCK', 0, 0, 0, 0); bodies.push(pl); orbitAround(mg, pl, 150, 0.6);
       for (let k = 0; k < 520; k++) { // a ring of rubble left over from the supernova that made it
-        const r = 60 + 50 * Math.random(), a = Math.random() * Math.PI * 2, v = Math.sqrt(G * mg.m / r);
+        const r = 60 + 50 * rand(), a = rand() * Math.PI * 2, v = Math.sqrt(G * mg.m / r);
         addMatter(r * Math.cos(a), r * Math.sin(a), Math.sin(a) * v, -Math.cos(a) * v, 2e-9, 0);
       }
     } },
@@ -1238,8 +1249,8 @@ const PRESETS = {
       const m = 25, R = 62, s = R * Math.sqrt(3), w = Math.sqrt(G * 3 * m / (s * s * s));
       for (let k = 0; k < 3; k++) {
         const a = -Math.PI / 2 + k * 2 * Math.PI / 3, x = R * Math.cos(a), y = R * Math.sin(a);
-        const v = w * R * (0.86 + (Math.random() - 0.5) * 0.06);
-        bodies.push(makeBH(x, y, (y / R) * v, (-x / R) * v, m * (0.92 + Math.random() * 0.16), (Math.random() - 0.5) * 1.2));
+        const v = w * R * (0.86 + (rand() - 0.5) * 0.06);
+        bodies.push(makeBH(x, y, (y / R) * v, (-x / R) * v, m * (0.92 + rand() * 0.16), (rand() - 0.5) * 1.2));
       } } },
   empty:    { name:'Empty space', extent:200, build() {} },
 };
@@ -1320,8 +1331,8 @@ function keplerPlace(host, b, aAU, e, omega, sense, meanAnom) {
   const c = Math.cos(omega), s = Math.sin(omega);
   b.x = host.x + x * c - y * s; b.y = host.y + x * s + y * c; b.vx = host.vx + vx * c - vy * s; b.vy = host.vy + vx * s + vy * c;
 }
-function loadPreset(id) {
-  currentPreset = id;
+function loadPreset(id, seed) {
+  currentPreset = id; reseed(seed == null ? newSeed() : seed);
   warp = PRESETS[id].warp || 1; realSizes = !!PRESETS[id].real; tdeSlowUntil = -1e9; trailEvery = PRESETS[id].trailEvery || 2;
   if (typeof toastsEl !== 'undefined') toastsEl.replaceChildren();
   bodies = []; gN = 0; qN = 0; gwSrc = null; slow = 1; slowHoldUntil = -1; totalFed = 0; totalWind = 0; simTime = 0; flashes.length = 0; if (typeof xrBuf !== 'undefined') xrBuf.fill(0);
@@ -1602,17 +1613,23 @@ function startRing(rem, w, chiAbs) {
   return q;
 }
 
+// Remnant of two holes, m1 the heavier, with spins c1 and c2 along the orbit's axis. Returns its spin (relative to the
+// orbit), the fraction of the mass radiated (from the remnant's ISCO binding energy) and the remnant mass.
+function remnantFit(m1, m2, c1, c2) {
+  const M = m1 + m2, eta = m1 * m2 / (M * M), q = m2 / m1;
+  const ct = (c1 + c2 * q * q) / (1 + q * q);
+  // Rezzolla et al. (2008) remnant spin for aligned spins, relative to the orbit
+  let chi = ct - 0.129 * ct * ct * eta - 0.384 * ct * eta * eta - 2.686 * ct * eta + 2 * Math.sqrt(3) * eta - 3.454 * eta * eta + 2.353 * eta ** 3;
+  chi = clamp(chi, -0.998, 0.998);
+  const frac = 0.46 * (4 * eta) ** 2 * (1 - eIsco(chi));
+  return { chi, frac, mf: M * (1 - frac) };
+}
 function mergeBH(a, b) {
   const M = a.m + b.m, eta = a.m * b.m / (M * M);
   const sL = orbitSign(a, b);
-  const big = a.m >= b.m ? a : b, sml = big === a ? b : a, q = sml.m / big.m;
+  const big = a.m >= b.m ? a : b, sml = big === a ? b : a;
   const c1 = big.chi * sL, c2 = sml.chi * sL;
-  const ct = (c1 + c2 * q * q) / (1 + q * q);
-  // Rezzolla et al. (2008) remnant spin for aligned spins, relative to the orbit
-  let chiA = ct - 0.129 * ct * ct * eta - 0.384 * ct * eta * eta - 2.686 * ct * eta + 2 * Math.sqrt(3) * eta - 3.454 * eta * eta + 2.353 * eta ** 3;
-  chiA = clamp(chiA, -0.998, 0.998);
-  const frac = 0.46 * (4 * eta) ** 2 * (1 - eIsco(chiA));
-  const mf = M * (1 - frac);
+  const { chi: chiA, frac, mf } = remnantFit(big.m, sml.m, c1, c2);
   const w = pairWave(a, b);
   const kickKms = 1.2e4 * eta * eta * Math.sqrt(Math.max(0, 1 - 4 * eta)) * (1 - 0.93 * eta);
   const kick = kickKms / 299792.458 * C;
@@ -1636,13 +1653,13 @@ function addKilonova(x, y, scale, ej, vx, vy) {
   const N = Math.min(240, MAXG - gN);
   for (let k = 0; k < N; k++) {
     // launched from ~70 km out at 0.25-0.45 c, fast enough to escape
-    const a = Math.random() * Math.PI * 2, s = (0.25 + 0.2 * Math.random()) * C, r0 = 6;
+    const a = rand() * Math.PI * 2, s = (0.25 + 0.2 * rand()) * C, r0 = 6;
     addGas(x + Math.cos(a) * r0, y + Math.sin(a) * r0, vx + Math.cos(a) * s, vy + Math.sin(a) * s, ej / Math.max(N, 1));
   }
 }
 function mergeNS(a, b) {
   const M = a.m + b.m, sL = orbitSign(a, b);
-  const ej = 0.03 + 0.03 * Math.random(), erad = 0.015 * M, mf = M - ej - erad;
+  const ej = 0.03 + 0.03 * rand(), erad = 0.015 * M, mf = M - ej - erad;
   const w = pairWave(a, b);
   const x = (a.x * a.m + b.x * b.m) / M, y = (a.y * a.m + b.y * b.m) / M;
   const vx = (a.vx * a.m + b.vx * b.m) / M, vy = (a.vy * a.m + b.vy * b.m) / M;
@@ -1812,8 +1829,8 @@ function commonEnvelope(st, host, r) {
     const vHost = bodies.includes(host) ? Math.hypot(host.vx - cvx, host.vy - cvy) : 0;
     const N = Math.min(900, MAXG - gN);
     for (let k = 0; k < N; k++) {
-      const a = Math.random() * Math.PI * 2, rr = R0 * (0.7 + 0.5 * Math.random()), x = x0 + Math.cos(a) * rr, y = y0 + Math.sin(a) * rr;
-      const vInf = (0.002 + 0.006 * Math.random()) * C, ve = escapeSpeed(x, y, st), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve) + vHost, 0.85 * C);
+      const a = rand() * Math.PI * 2, rr = R0 * (0.7 + 0.5 * rand()), x = x0 + Math.cos(a) * rr, y = y0 + Math.sin(a) * rr;
+      const vInf = (0.002 + 0.006 * rand()) * C, ve = escapeSpeed(x, y, st), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve) + vHost, 0.85 * C);
       if (addGas(x, y, cvx + Math.cos(a) * sp, cvy + Math.sin(a) * sp, mass / Math.max(N, 1))) gf[gN - 1] = 3;
     }
   };
@@ -1890,7 +1907,7 @@ function escapeSpeed(x, y, skip, extra, ex, ey, extraHole) {
 function explode(st) {
   const name = st.type.lc, mode = st.sn ? st.sn.mode : 'cc';
   const toBH = mode === 'dc' || (mode === 'cc' && (st.type.id === 'WR' ? st.m >= 15 : st.mBirth >= 20));
-  const mRem = mode === 'pi' || mode === 'ia' ? 0 : mode === 'dc' ? 0.9 * st.m : toBH ? clamp(0.3 * st.m, 5, 15) : 1.25 + 0.2 * Math.random();
+  const mRem = mode === 'pi' || mode === 'ia' ? 0 : mode === 'dc' ? 0.9 * st.m : toBH ? clamp(0.3 * st.m, 5, 15) : 1.25 + 0.2 * rand();
   const ej = Math.max(0, st.m - mRem);
   // ejecta. Stars here are drawn far smaller than real ones, so gravity at their surface is far too strong;
   // launch fast enough to escape and still coast away at a realistic speed (about 5,000-20,000 km/s).
@@ -1900,10 +1917,10 @@ function explode(st) {
   const pt = partnerOf(st), vOrb = pt ? Math.sqrt(G * (st.m + pt.m) / Math.max(Math.hypot(pt.x - st.x, pt.y - st.y), 1)) : 0;
   let vmean = 0;
   for (let k = 0; k < N; k++) {
-    const a = Math.random() * Math.PI * 2, rr = Math.max(st.R * (0.5 + 0.5 * Math.sqrt(Math.random())), toBH ? 4 * rsOf(mRem) : 0);
+    const a = rand() * Math.PI * 2, rr = Math.max(st.R * (0.5 + 0.5 * Math.sqrt(rand())), toBH ? 4 * rsOf(mRem) : 0);
     const x = st.x + Math.cos(a) * rr, y = st.y + Math.sin(a) * rr;
-    const vReal = (mode === 'dc' ? 0.005 + 0.01 * Math.random() : 0.017 + 0.05 * Math.random()) * C;
-    const vInf = Math.min(Math.max(vReal, (mode === 'dc' ? 1.2 : 2.5 + 1.5 * Math.random()) * vOrb), 0.7 * C);
+    const vReal = (mode === 'dc' ? 0.005 + 0.01 * rand() : 0.017 + 0.05 * rand()) * C;
+    const vInf = Math.min(Math.max(vReal, (mode === 'dc' ? 1.2 : 2.5 + 1.5 * rand()) * vOrb), 0.7 * C);
     const ve = escapeSpeed(x, y, st, mRem, st.x, st.y, toBH), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
     if (addGas(x, y, st.vx + Math.cos(a) * sp, st.vy + Math.sin(a) * sp, ej / Math.max(N, 1))) gf[gN - 1] = 3;
     vmean += vReal;
@@ -1932,10 +1949,10 @@ function explode(st) {
     return;
   }
   // natal kick: neutron stars are born moving at a few hundred km/s
-  const kick = (toBH ? 50 : 300 + 200 * Math.random()) / 299792.458 * C, ka = Math.random() * Math.PI * 2;
+  const kick = (toBH ? 50 : 300 + 200 * rand()) / 299792.458 * C, ka = rand() * Math.PI * 2;
   const vx = st.vx + Math.cos(ka) * kick, vy = st.vy + Math.sin(ka) * kick;
-  const rem = toBH ? makeBH(st.x, st.y, vx, vy, mRem, (Math.random() < 0.5 ? -1 : 1) * 0.2) : makeStar('NS', st.x, st.y, vx, vy, mRem);
-  if (!toBH) rem.spinHz = 20 + 30 * Math.random();
+  const rem = toBH ? makeBH(st.x, st.y, vx, vy, mRem, (rand() < 0.5 ? -1 : 1) * 0.2) : makeStar('NS', st.x, st.y, vx, vy, mRem);
+  if (!toBH) rem.spinHz = 20 + 30 * rand();
   bodies = bodies.filter(o => o !== st); bodies.push(rem);
   if (followId === st.id) { followId = rem.id; followPos = [rem.x, rem.y]; }
   if (mode === 'dc') {
@@ -2004,8 +2021,8 @@ function stageRadius(id, m) {
 function ejectShell(st, mass, vmin, vmax, N) { // a slow, glowing shell of gas leaving a star
   N = Math.min(N, MAXG - gN);
   for (let k = 0; k < N; k++) {
-    const a = Math.random() * Math.PI * 2, rr = st.R * (0.9 + 0.4 * Math.random()), x = st.x + Math.cos(a) * rr, y = st.y + Math.sin(a) * rr;
-    const vInf = (vmin + (vmax - vmin) * Math.random()) * C, ve = escapeSpeed(x, y, st), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
+    const a = rand() * Math.PI * 2, rr = st.R * (0.9 + 0.4 * rand()), x = st.x + Math.cos(a) * rr, y = st.y + Math.sin(a) * rr;
+    const vInf = (vmin + (vmax - vmin) * rand()) * C, ve = escapeSpeed(x, y, st), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
     if (addGas(x, y, st.vx + Math.cos(a) * sp, st.vy + Math.sin(a) * sp, mass / Math.max(N, 1), st.id)) gf[gN - 1] = 3;
   }
 }
@@ -2130,15 +2147,15 @@ function becomeBrownDwarf(st) {
 }
 function emitL1(st, host, rL, pm) {
   const dx = host.x - st.x, dy = host.y - st.y, r = Math.hypot(dx, dy) || 1, nx = dx / r, ny = dy / r;
-  const l = Math.min(rL, st.R) * 0.95 + (Math.random() - 0.5) * 0.12 * st.R;
-  const j = (Math.random() - 0.5) * 0.22 * st.R;
+  const l = Math.min(rL, st.R) * 0.95 + (rand() - 0.5) * 0.12 * st.R;
+  const j = (rand() - 0.5) * 0.22 * st.R;
   const x = st.x + nx * l - ny * j, y = st.y + ny * l + nx * j;
   const rx = st.x - host.x, ry = st.y - host.y, rvx = st.vx - host.vx, rvy = st.vy - host.vy;
   const om = (rx * rvy - ry * rvx) / (r * r);
   const px = x - host.x, py = y - host.y;
   let vx = host.vx - om * py, vy = host.vy + om * px;
   const sp = Math.hypot(vx - host.vx, vy - host.vy);
-  vx += (Math.random() - 0.5) * 0.03 * sp + nx * 0.03 * sp; vy += (Math.random() - 0.5) * 0.03 * sp + ny * 0.03 * sp;
+  vx += (rand() - 0.5) * 0.03 * sp + nx * 0.03 * sp; vy += (rand() - 0.5) * 0.03 * sp + ny * 0.03 * sp;
   if (gN >= gasCap) return false;
   return addGas(x, y, vx, vy, pm, st.id);
 }
@@ -2150,7 +2167,7 @@ function shred(st, host, r, kind) {
   // the hole's gravity than its far end, so about half ends up bound (falls back) and half escapes.
   const nx = -rx / (r || 1), ny = -ry / (r || 1), str = Math.max(stretchOf(st), 3), sq = 1 / Math.sqrt(str);
   for (let k = 0; k < N; k++) {
-    const u = (Math.random() * 2 - 1), w = (Math.random() * 2 - 1) * Math.sqrt(1 - u * u);
+    const u = (rand() * 2 - 1), w = (rand() * 2 - 1) * Math.sqrt(1 - u * u);
     const ox = (nx * u * str - ny * w * sq) * st.R, oy = (ny * u * str + nx * w * sq) * st.R;
     addGas(st.x + ox, st.y + oy, st.vx - om * oy, st.vy + om * ox, st.m / Math.max(N, 1));
   }
@@ -2184,9 +2201,9 @@ function nova(wd) {
   const out = layer * (1 - NOVA_KEEP), N = Math.min(160, MAXG - gN);
   wd.m -= out; wd.layer = 0; wd.novae = (wd.novae || 0) + 1;
   for (let k = 0; k < N; k++) {
-    const a = Math.random() * Math.PI * 2, rr = wd.R * (1.2 + 0.4 * Math.random());
+    const a = rand() * Math.PI * 2, rr = wd.R * (1.2 + 0.4 * rand());
     const x = wd.x + Math.cos(a) * rr, y = wd.y + Math.sin(a) * rr;
-    const vInf = (0.003 + 0.008 * Math.random()) * C, ve = escapeSpeed(x, y, null), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
+    const vInf = (0.003 + 0.008 * rand()) * C, ve = escapeSpeed(x, y, null), sp = Math.min(Math.sqrt(vInf * vInf + ve * ve), 0.85 * C);
     if (addGas(x, y, wd.vx + Math.cos(a) * sp, wd.vy + Math.sin(a) * sp, out / Math.max(N, 1))) gf[gN - 1] = 3;
   }
   flashes.push({ x: wd.x, y: wd.y, t0: wallNow, dur: 4500, kind: 'sn', R: 6, power: 0.35, st: simTime });
@@ -2258,8 +2275,8 @@ function stepGas(simDt) {
         const ex = x - hb.x, ey = y - hb.y, er = Math.hypot(ex, ey);
         if (er < 15 * hrp) {
           const fOut = hb.kind === 'bh' ? 0.15 + 0.5 * clamp(hb.feedRate * 160, 0, 1) : isWD(hb) ? 0.1 : 0.4;
-          if (Math.random() < fOut) {
-            const sp = (0.3 + 0.15 * Math.random()) * C;
+          if (rand() < fOut) {
+            const sp = (0.3 + 0.15 * rand()) * C;
             vx += ex / er * sp; vy += ey / er * sp; gf[i] = 2;
             totalWind += gm[i]; hb.windM = (hb.windM || 0) + gm[i];
             if (!hb.windNoted) { hb.windNoted = true; windQueue.push(hb); }
@@ -2371,7 +2388,7 @@ let view = document.getElementById('view');
 const ui = document.getElementById('ui'), octx = ui.getContext('2d');
 const scopeCv = document.getElementById('scope'), scx = scopeCv.getContext('2d');
 const scene = document.createElement('canvas'), sctx = scene.getContext('2d');
-let gl = null, vctx = null, HDR = false;
+let gl = null, vctx = null, HDR = false, glLost = false;
 let vw = innerWidth, vh = innerHeight, RS = 1, OD = 1;
 const GLR = { tg: {}, bloom: [] };   // programs, vertex arrays and render targets of the GPU pipeline
 
@@ -2661,7 +2678,10 @@ void main(){
 
 function initGL() {
   try { gl = view.getContext('webgl2', { antialias:false, alpha:false, premultipliedAlpha:false, powerPreference:'high-performance' }); } catch (e) { gl = null; }
-  if (!gl) return false;
+  return !!gl && buildGL();
+}
+// programs, vertex arrays and textures: everything the GPU holds. Built again when a lost context comes back.
+function buildGL() {
   const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
     if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
   const program = (vs, fs, attribs) => {
@@ -2805,10 +2825,24 @@ function makeSkyTile() {
 }
 const skyTile = makeSkyTile();
 const skyPattern = sctx.createPattern(skyTile, 'repeat');
-if (gl) {
+function uploadSky() {
   gl.bindTexture(gl.TEXTURE_2D, GLR.skyTex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, skyTile);
+}
+if (gl) uploadSky();
+/* A GPU reset (a driver crash or update, too many pages using the GPU) takes the context away and blanks the canvas.
+   Cancelling the event asks the browser to give it back; until it does nothing is drawn with it, and when it does,
+   everything the GPU held is rebuilt. The simulation runs on meanwhile. */
+if (gl) {
+  view.addEventListener('webglcontextlost', e => {
+    e.preventDefault(); glLost = true;
+    toast('Graphics reset', ['The browser took the graphics card away from this page for a moment; the picture returns as soon as it is given back']);
+  });
+  view.addEventListener('webglcontextrestored', () => {
+    if (!buildGL()) { toast('Graphics lost', ['The picture could not be rebuilt after a graphics reset. Reload the page to get it back']); return; }
+    GLR.tg = {}; GLR.bloom = []; glTargets(); uploadSky(); glLost = false;   // the old targets belonged to the lost context: drop, don't delete
+  });
 }
 // gas colours for the GPU path: the same ramp as the sprites, as floats
 const gasRGB = new Float32Array(24 * 3);
@@ -2834,7 +2868,7 @@ function resize() {
   scene.width = view.width = Math.round(vw * RS); scene.height = view.height = Math.round(vh * RS);
   ui.width = Math.round(vw * OD); ui.height = Math.round(vh * OD);
   scopeCv.width = Math.round(scopeCv.clientWidth * OD); scopeCv.height = Math.round((scopeCv.clientHeight || 62) * OD);
-  if (gl) glTargets();
+  if (gl && !glLost) glTargets();
   const dk = document.getElementById('dock');
   document.documentElement.style.setProperty('--dock-h', dk.offsetHeight + 'px');
   const sc = document.querySelector('.scope');
@@ -3235,6 +3269,7 @@ function kerrShadow(chi, incDeg) {
   return res;
 }
 function composite() {
+  if (glLost) return;   // nothing to draw with until the browser restores the context
   const W = view.width, H = view.height, s = RS;
   const bh = bhList().slice(0, 16);
   if (gl) {
@@ -4022,6 +4057,15 @@ function toast(title, lines, kind) {
   while (toastsEl.children.length > 3) toastsEl.firstChild.remove();
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 520); }, kind === 'w' ? 11000 : 6500);
 }
+// Errors outside the frame loop (event handlers, timers, promises) get a short notice instead of failing silently.
+// One notice every 10 seconds at most, so an error that keeps repeating doesn't bury the screen.
+let errNoticeAt = -1e9;
+function errorNotice(err) {
+  const t = performance.now(); if (t - errNoticeAt < 10000) return; errNoticeAt = t;
+  toast('Something glitched', [String((err && err.message) || err || 'Unknown error').slice(0, 160), 'The simulation keeps running; reloading the page clears it']);
+}
+addEventListener('error', e => errorNotice(e.error || e.message));
+addEventListener('unhandledrejection', e => errorNotice(e.reason));
 
 /* ================= input ================= */
 const pointers = new Map();
@@ -4165,9 +4209,9 @@ addEventListener('resize', () => requestAnimationFrame(resize));
 
 /* ================= loop ================= */
 let last = performance.now(), frameN = 0, workMs = 8, frameSim = 0;
-let loopErr = false;
+let loopErr = false, manual = false;   // manual: the test hook is stepping frames itself
 function frame(now) {
-  try { frameBody(now); }
+  if (!manual) try { frameBody(now); }
   catch (err) { if (!loopErr) { loopErr = true; console.error('Ringdown frame error', err); toast('Something glitched', ['A frame hit an error and was skipped; the simulation keeps running']); } }
   requestAnimationFrame(frame);
 }
@@ -4292,7 +4336,7 @@ syncPlay(); syncToggles();
 const B32 = 'abcdefghijklmnopqrstuvwxyz234567';
 const num = v => +(+v).toPrecision(9);
 function snapshot() {
-  return { v: 1, p: currentPreset, w: num(warp), rs: realSizes ? 1 : 0, te: trailEvery, t: num(tiltDeg), y: num(yaw), z: num(zoom), c: [num(camX), num(camY)],
+  return { v: 1, p: currentPreset, r: rngS, w: num(warp), rs: realSizes ? 1 : 0, te: trailEvery, t: num(tiltDeg), y: num(yaw), z: num(zoom), c: [num(camX), num(camY)],
     f: followId != null ? bodies.findIndex(b => b.id === followId) : -1,
     b: bodies.map(b => b.kind === 'bh'
       ? ['h', num(b.m), num(b.x), num(b.y), num(b.vx), num(b.vy), num(b.chi), b.label || '']
@@ -4303,6 +4347,7 @@ function restore(st) {
   bodies = []; gN = 0; qN = 0; gwSrc = null; flashes.length = 0; totalFed = 0; totalWind = 0; closeUpId = null; closeUpDrift = null;
   scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); xrBuf.fill(0);
   warp = st.w || 1; realSizes = !!st.rs; trailEvery = st.te || 2; tdeSlowUntil = -1e9;
+  reseed(Number.isFinite(st.r) ? st.r : newSeed());   // links made before seeds existed get a fresh one
   for (const a of st.b || []) {
     if (a[0] === 'h') { const b = makeBH(a[2], a[3], a[4], a[5], a[1], a[6]); if (a[7]) b.label = a[7]; bodies.push(b); continue; }
     if (!TYPE[a[1]]) continue;
@@ -4368,6 +4413,24 @@ addEventListener('hashchange', () => { loadFromHash(); });
 presetSel.value = currentPreset;
 loadPreset(currentPreset);
 loadFromHash();
+/* ---------- test hook ----------
+   Only with ?rdtest in the address: the automated tests (tests/) reach the physics through window.__rd. load() and
+   step() run a scene on a fixed clock with a fixed frame time, so the same calls play out the same scene. */
+if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
+  riscoM, eIsco, rocheFrac, ringFor, remnantFit, wdRadius, M_CH, KR, KM_PER_UNIT, SIM2REAL,
+  presets: Object.keys(PRESETS), makeBH, makeStar, mergeWhiteDwarfs, snapshot, restore, encodeState, decodeState, rand, reseed,
+  get seed() { return rngS; },
+  get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; }, get glLost() { return glLost; },
+  add(...bs) { bodies.push(...bs); computeAccel(); },
+  load(id, seed) { manual = true; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; loadPreset(id, seed); },
+  open(st) { this.load('empty', 0); restore(st); },   // like a fresh page opening a share link
+  step(n, ms = 1000 / 60) { manual = true; for (let i = 0; i < n; i++) { gasCap = 3200; frameBody(last + ms); } },   // frame-time governor held still
+  state() {
+    const f = (a, n) => Array.from(a.subarray(0, n));
+    return { t: simTime, b: bodies.map(b => [b.kind, b.type ? b.type.id : '', b.m, b.x, b.y, b.vx, b.vy, b.chi || 0, b.R || 0, b.spinHz || 0]),
+      g: [f(gx, gN), f(gy, gN), f(gvx, gN), f(gvy, gN), f(gm, gN)], q: [f(qx, qN), f(qy, qN), f(qvx, qN), f(qvy, qN), f(qm, qN)] };
+  },
+};
 requestAnimationFrame(t => { last = t; wallNow = t; frame(t); });
 })();
 </script>
