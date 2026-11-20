@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "Ringdown",
+  "short_name": "Ringdown",
+  "description": "Interactive black hole simulator: merge black holes and hear the ringdown, spin them up, feed them stars, and smash neutron stars into kilonovae.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#04050b",
+  "theme_color": "#04050b",
+  "categories": ["education", "games", "science"],
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

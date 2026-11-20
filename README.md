@@ -54,6 +54,45 @@ It's a single self-contained `index.html` with no build step and no dependencies
 
 On a phone (or a narrow window) the screenshot, record, photo-mode and fullscreen buttons fold into one camera menu in the top bar. On a phone the layout also tightens up on its own: the strain scope folds into a one-line strip (tap it to open), the inspector and settings become sheets above the object bar (tap an inspected object's name for the full readout), and only the newest notice shows, small, at the top (tap to dismiss). It also works held sideways.
 
+### Keyboard
+
+Every control can be reached with Tab and shows a focus ring. The scene itself is the first Tab stop; with it focused (or nothing focused):
+
+| Key | Does |
+|---|---|
+| Arrow keys | Pan |
+| + / − | Zoom in / out |
+| [ / ] | Turn the view |
+| , / . | Tilt toward face-on / edge-on |
+| Enter | Place the selected object at the centre of the view (with Matter, hold it to pour) |
+| Space | Pause |
+| H | Hide all the controls |
+| P | Screenshot |
+| F | Fullscreen |
+| Esc | Back to Move; leaves photo mode; inside the share box or settings, closes them |
+| Ctrl/Cmd+Z | Undo placement |
+
+In the object bar, ← and → pick an object and Enter places it. Keys are ignored while you type in a field. Screen readers announce each notice as it appears.
+
+### Gamepad
+
+| Control | Does |
+|---|---|
+| Left stick | Pan |
+| Right stick | Turn (sideways) and tilt (up and down) |
+| Right / left trigger | Zoom in / out |
+| A | Place the selected object at the centre of the view (with Matter, hold it to pour) |
+| B | Back to Move |
+| X | Pause |
+| LB / RB | Previous / next object |
+| Start | Hide all the controls |
+
+Any pad with the standard layout works. Press a button once so the browser lets the page see it.
+
+### Install and offline
+
+Ringdown installs like an app: use the browser's Install option (Chrome, Edge), or Share → Add to Home Screen in Safari on iPhone and iPad. After one visit it also opens with no connection, fonts included. When you're online it always loads the newest version. Opened straight from a downloaded `index.html`, it runs the same, just without the offline copy.
+
 ## The physics
 
 G and c are scaled together, so 1 grid unit is 11.8 km. Horizon sizes, orbital speeds, inspiral timing and gravitational-wave frequencies all match real values; on-screen time runs about 23× slower than real.
