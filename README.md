@@ -8,7 +8,7 @@ It's a single self-contained `index.html` with no build step and no dependencies
 
 ## What you can do
 
-- **Merge black holes.** Watch the inspiral, the merger and the ringdown. The strain scope shows the chirp, and **Listen** plays it (one octave up).
+- **Merge black holes.** Watch the inspiral, the merger and the ringdown. The strain scope shows the chirp, and **Listen** plays it (one octave up), along with synthesized sounds for supernovae, kilonovae, mergers, tidal disruptions, flares, impacts and feeding, with a volume slider beside it.
 - **Spin them.** Each hole has a spin from −0.99 to +0.99. Spin moves the innermost stable orbit, drags gas around through frame dragging, and changes how mergers turn out. Accreted gas spins holes up toward the 0.998 Thorne limit.
 - **Feed them.** Drop stars of any type: brown dwarf; M, K, G, F, A, B and O main-sequence stars; red giant, yellow supergiant, red supergiant (Betelgeuse-like), blue supergiant, luminous blue variable (Eta Carinae-like) and Wolf–Rayet; white dwarf, helium white dwarf, hot subdwarf and R Coronae Borealis star; plus neutron stars and black holes. Stars that overflow their Roche lobe stream gas into an accretion disk; get one too close and it's tidally disrupted.
 - **Feeding works for every pairing.** Black holes, neutron stars and white dwarfs all accept gas. A star feeding a white dwarf sets off novae. A star much heavier than its companion can't feed it stably: the transfer runs away into a common envelope, where the companion spirals inside the star and either throws off the envelope (leaving the bare core in a much tighter orbit, like Cygnus X-3) or merges with it.
