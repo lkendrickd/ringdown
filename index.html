@@ -295,6 +295,47 @@ html.phone .toast li:nth-child(n+3){display:none}
   html.phone .inspect,html.phone .panel{top:calc(env(safe-area-inset-top,0px) + 50px);bottom:auto;max-height:calc(100% - 64px - var(--dock-h,100px));left:auto;width:min(330px,46vw);margin:0}
 }
 @media (max-width:400px){ html.phone .brand{display:none} }
+
+/* ===== Capture: screenshot, recording, photo mode, fullscreen ===== */
+.cap{display:contents}
+.cap .btn span,#capMore{display:none}
+.btn#rec .r-stop,.btn#fs .f-out{display:none}
+.btn#rec[aria-pressed="true"]{border-color:rgba(255,106,94,.6);color:#ff8a7e}
+.btn#rec[aria-pressed="true"] .r-stop,.btn#fs[aria-pressed="true"] .f-out{display:inline}
+.btn#rec[aria-pressed="true"] .r-go,.btn#fs[aria-pressed="true"] .f-in{display:none}
+/* recording indicator: elapsed time, tap to stop; outside the bar so it stays up in clean view and photo mode */
+.recind{position:fixed;z-index:9;top:calc(env(safe-area-inset-top,0px) + 58px);left:50%;transform:translateX(-50%);height:28px;padding:0 11px 0 9px;border-radius:14px;
+  display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,106,94,.5);background:var(--glass-hi);color:var(--ink);
+  font:500 12.5px/1 var(--f-mono);font-variant-numeric:tabular-nums;cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.recind i{width:9px;height:9px;border-radius:50%;background:#ff5a4e;animation:recb 1.2s ease-in-out infinite}
+@keyframes recb{50%{opacity:.3}}
+@media (prefers-reduced-motion: reduce){.recind i{animation:none}}
+@media (orientation:portrait){html.phone:not(.clean) .recind{top:calc(var(--scope-b,110px) + 8px);left:auto;right:max(12px,env(safe-area-inset-right,0px));transform:none}}
+/* photo mode: clean view with the sim paused and the bar gone too; a small hint (and the view dial) fade out when idle */
+.photohint{display:none;position:fixed;z-index:9;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);
+  align-items:center;flex-wrap:wrap;justify-content:center;gap:6px 10px;padding:6px 6px 6px 13px;border-radius:12px;border:1px solid var(--line);background:var(--glass-hi);
+  font-size:13px;color:var(--dim);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:opacity .4s}
+.photohint b{font:600 12px/1 var(--f-ui);letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+.photohint .follow-x{height:28px}
+html.photo .photohint{display:flex}
+html.photo .bar{display:none}
+html.photo .gizmo{transition:opacity .4s}
+html.photo:not(.photo-idle) .gizmo{display:block!important}
+html.photo-idle .photohint,html.photo-idle .gizmo{opacity:0;pointer-events:none}
+/* narrow bars (phones, small windows): the capture buttons fold into one menu under the camera button */
+@media (max-width:1080px),(max-height:500px) and (pointer:coarse){
+  .btn#capMore{display:inline-flex}
+  .cap{display:none;position:fixed;z-index:9;top:calc(env(safe-area-inset-top,0px) + 54px);right:max(16px,env(safe-area-inset-right,0px));
+    flex-direction:column;align-items:stretch;gap:4px;padding:6px;border-radius:12px;border:1px solid var(--line);background:var(--glass-hi);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  .cap.open{display:flex}
+  .bar:has(.cap.open){z-index:10}   /* the bar is the menu's stacking context: lift it over toasts and sheets while open */
+  html .cap .btn.icon{width:auto;justify-content:flex-start;gap:10px;padding:0 14px 0 10px}
+  .cap .btn span{display:inline}
+}
+/* that camera button costs the bar 42px: drop the tagline, then clip the title, before either slides under the controls */
+@media (max-width:820px){.brand .tag{display:none}}
+@media (max-width:700px){.brand{overflow:hidden}}
 </style>
 <script>
 // Phone mode: narrow screens, and phones held sideways. Set before the first layout so the camera fits the phone overlays.
@@ -316,6 +357,23 @@ html.phone .toast li:nth-child(n+3){display:none}
     <label class="sel"><span class="sr">Scenario</span><select id="preset"></select></label>
     <button class="btn icon" id="play" aria-label="Pause"></button>
     <button class="btn" id="speed" aria-label="Simulation speed">1×</button>
+    <button class="btn icon" id="capMore" aria-label="Capture and fullscreen" aria-expanded="false" aria-pressed="false" title="Screenshot, record, photo mode, fullscreen">
+      <svg viewBox="0 0 24 24"><path d="M3.5 8.5h3.2L8.4 6h7.2l1.7 2.5h3.2v10h-17z"/><circle cx="12" cy="13.2" r="3.4"/></svg>
+    </button>
+    <div class="cap" id="cap">
+      <button class="btn icon" id="shot" aria-label="Save a screenshot" title="Screenshot: save the view as a PNG (P)">
+        <svg viewBox="0 0 24 24"><path d="M3.5 8.5h3.2L8.4 6h7.2l1.7 2.5h3.2v10h-17z"/><circle cx="12" cy="13.2" r="3.4"/></svg><span>Screenshot</span>
+      </button>
+      <button class="btn icon" id="rec" aria-label="Record a clip" aria-pressed="false" title="Record a video clip (up to 60 s, with sound when Listen is on)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle class="r-go" cx="12" cy="12" r="3.5" fill="currentColor"/><rect class="r-stop" x="8.5" y="8.5" width="7" height="7" rx="1" fill="currentColor"/></svg><span>Record</span>
+      </button>
+      <button class="btn icon" id="photo" aria-label="Photo mode" title="Photo mode: pause, hide the controls and frame the shot (Esc exits)">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.6"/><path d="M3.5 16.5l5-5 4.5 4.5 2.5-2.5 5 5"/><circle cx="15.5" cy="9.5" r="1.4"/></svg><span>Photo mode</span>
+      </button>
+      <button class="btn icon" id="fs" aria-label="Fullscreen" aria-pressed="false" title="Fullscreen (F)">
+        <svg viewBox="0 0 24 24"><path class="f-in" d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><path class="f-out" d="M9 4v5H4M15 4v5h5M15 20v-5h5M9 20v-5H4"/></svg><span>Fullscreen</span>
+      </button>
+    </div>
     <button class="btn icon" id="share" aria-label="Share this setup" aria-expanded="false">
       <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
     </button>
@@ -405,6 +463,8 @@ html.phone .toast li:nth-child(n+3){display:none}
 <div class="gizmo" id="gizmo" tabindex="0" role="group" aria-label="View dial"><canvas id="gizmoCv"></canvas></div>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
+<button class="recind" id="recind" type="button" hidden aria-label="Stop recording" title="Stop recording"><i></i><span id="recT">REC 0:00</span></button>
+<div class="photohint" id="photohint" role="group" aria-label="Photo mode"><b>Photo mode</b><span id="photoHelp"></span><button class="follow-x" id="photoShot" type="button">Screenshot</button><button class="follow-x" id="photoExit" type="button">Exit</button></div>
 
 <script>
 (() => {
@@ -2371,7 +2431,7 @@ function initAudio() {
   const comp = ctx.createDynamicsCompressor();
   o1.connect(g); o2.connect(g2); g2.connect(g); g.connect(comp); comp.connect(ctx.destination);
   o1.start(); o2.start();
-  au = { ctx, o1, o2, g }; return true;
+  au = { ctx, o1, o2, g, comp }; return true;
 }
 function updateAudio() {
   if (!au) return;
@@ -3682,7 +3742,7 @@ function drawOverlay() {
       c.moveTo(drag.ex, drag.ey); c.lineTo(drag.ex - 9 * Math.cos(ang + 0.45), drag.ey - 9 * Math.sin(ang + 0.45)); c.stroke();
       ghost(c, drag.sx, drag.sy);
     }
-  } else if (hover && !drag && tool !== 'move') ghost(c, hover.x, hover.y);
+  } else if (hover && !drag && tool !== 'move' && !photo && !shotWant) ghost(c, hover.x, hover.y);
 }
 
 function drawScope() {
@@ -4067,6 +4127,178 @@ function errorNotice(err) {
 addEventListener('error', e => errorNotice(e.error || e.message));
 addEventListener('unhandledrejection', e => errorNotice(e.reason));
 
+/* ================= capture: screenshot, recording, photo mode, fullscreen ================= */
+// The view keeps no copy of its last frame (no preserveDrawingBuffer), so captures are taken inside the frame,
+// right after the view and the overlay are drawn: the loop calls capFrame only while a screenshot or a clip is wanted.
+const root = document.documentElement;
+const stamp = ext => { const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `ringdown-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`; };
+function paintCap(cv, W, H) {   // the view plus the overlay (labels, orbits, jets), fitted into W×H
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const x = cv.getContext('2d', { alpha:false }), k = Math.min(W / vw, H / vh), dw = vw * k, dh = vh * k, dx = (W - dw) / 2, dy = (H - dh) / 2;
+  if (dx > 0.5 || dy > 0.5) { x.fillStyle = '#04050b'; x.fillRect(0, 0, W, H); }
+  x.drawImage(view, dx, dy, dw, dh); x.drawImage(ui, dx, dy, dw, dh);
+}
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+// touch devices get the share sheet (save to photos, send) where it takes files; everything else downloads
+function saveFile(blob, name) {
+  try {
+    const f = coarse && navigator.canShare && new File([blob], name, { type: blob.type });
+    if (f && navigator.canShare({ files: [f] })) { navigator.share({ files: [f], title: 'Ringdown' }).catch(e => { if (e.name !== 'AbortError') download(blob, name); }); return; }
+  } catch (e) {}
+  download(blob, name);
+}
+let shotWant = false;
+const shot = () => { shotWant = true; };
+function capFrame() {
+  if (rec) paintCap(rec.cv, rec.cv.width, rec.cv.height);
+  if (!shotWant) return;
+  shotWant = false;
+  const cv = document.createElement('canvas'), name = stamp('png');
+  paintCap(cv, ui.width, ui.height);   // device resolution
+  cv.toBlob(b => {
+    if (!b) { toast('Screenshot failed', ['The browser could not make the image']); return; }
+    saveFile(b, name); toast('Screenshot saved', [name]);
+    if (photo) { photoWake(); $('photoShot').textContent = 'Saved'; setTimeout(() => { $('photoShot').textContent = 'Screenshot'; }, 1400); }
+  }, 'image/png');
+}
+
+// recording: a canvas of the view's size gets view + overlay each frame while recording, and MediaRecorder encodes it
+const REC_MAX = 60;   // seconds
+const recType = audio => ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4']
+  .map(t => audio && t.includes('codecs') ? t + ',opus' : t).find(t => MediaRecorder.isTypeSupported(t));
+const canRec = typeof MediaRecorder === 'function' && typeof MediaRecorder.isTypeSupported === 'function' && !!HTMLCanvasElement.prototype.captureStream && !!recType(false);
+let rec = null;
+function recStart() {
+  const cv = document.createElement('canvas'), W = Math.max(2, view.width & ~1), H = Math.max(2, view.height & ~1);   // even sizes suit every encoder
+  paintCap(cv, W, H);
+  const stream = cv.captureStream(30);
+  // sound on: tap the output after its compressor into the clip
+  const src = soundOn && au && (au.comp || au.g); let tap = null;
+  if (src && au.ctx.createMediaStreamDestination) { tap = au.ctx.createMediaStreamDestination(); src.connect(tap); for (const t of tap.stream.getAudioTracks()) stream.addTrack(t); }
+  const type = recType(!!tap), chunks = [];
+  const end = () => { stream.getTracks().forEach(t => t.stop()); if (tap) try { src.disconnect(tap); } catch (e) {} };
+  let mr;
+  try { mr = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8e6 }); mr.start(1000); }
+  catch (e) { end(); toast('Recording failed', ['This browser could not start a video recording']); return; }
+  const r = rec = { mr, cv, t0: performance.now(), tick: setInterval(recTick, 250), ms: 0, why: '' };
+  mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  mr.onerror = () => recStop();
+  mr.onstop = async () => {
+    end();
+    if (!chunks.length) { toast('Recording failed', ['No video came through']); return; }
+    const mt = (mr.mimeType || type).split(';')[0], ext = mt.includes('mp4') ? 'mp4' : 'webm', name = stamp(ext);
+    let blob = new Blob(chunks, { type: mt });
+    if (ext === 'webm') blob = await webmLength(blob, r.ms);
+    saveFile(blob, name); toast('Clip saved', [name, `${(r.ms / 1000).toFixed(1)} s${tap ? ' with sound' : ''}${r.why}`]);
+  };
+  syncRec();
+}
+function recStop(why) {
+  if (!rec) return;
+  const r = rec; rec = null; clearInterval(r.tick);
+  r.ms = performance.now() - r.t0; r.why = why || '';
+  if (r.mr.state !== 'inactive') r.mr.stop();
+  syncRec();
+}
+function recTick() {
+  if (!rec) return;
+  const s = (performance.now() - rec.t0) / 1000;
+  if (s >= REC_MAX) { recStop(` · stopped at the ${REC_MAX} s limit`); return; }
+  $('recT').textContent = `REC ${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+}
+function syncRec() {
+  const on = !!rec, b = $('rec');
+  b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', on ? 'Stop recording' : 'Record a clip');
+  b.querySelector('span').textContent = on ? 'Stop recording' : 'Record';
+  $('recind').hidden = !on; recTick();
+}
+// Chrome and Firefox write WebM clips without a length, which leaves them unseekable in many players: put it in the header
+async function webmLength(blob, ms) {
+  try {
+    const h = new Uint8Array(await blob.slice(0, 8192).arrayBuffer());
+    const vint = i => { let n = 1; while (n < 9 && !(h[i] & (0x100 >> n))) n++; let v = h[i] & (0xff >> n); for (let k = 1; k < n; k++) v = v * 256 + h[i + k]; return [v, n]; };
+    for (let i = 0; i + 5 < h.length; i++) {
+      if (h[i] !== 0x15 || h[i + 1] !== 0x49 || h[i + 2] !== 0xA9 || h[i + 3] !== 0x66) continue;   // Segment Info
+      const [size, n] = vint(i + 4), s = i + 4 + n, e = s + size;
+      if (n > 8 || e > h.length) return blob;
+      let scale = 1e6;
+      for (let j = s; j < e;) {   // its children: stop if a length is already there, note the timecode scale
+        const idn = vint(j)[1], [sz, sn] = vint(j + idn);
+        if (h[j] === 0x44 && h[j + 1] === 0x89) return blob;
+        if (h[j] === 0x2A && h[j + 1] === 0xD7 && h[j + 2] === 0xB1) { scale = 0; for (let k = 0; k < sz; k++) scale = scale * 256 + h[j + idn + sn + k]; }
+        j += idn + sn + sz;
+      }
+      const d = new Uint8Array(11); d[0] = 0x44; d[1] = 0x89; d[2] = 0x88; new DataView(d.buffer).setFloat64(3, ms * 1e6 / (scale || 1e6));
+      const len = new Uint8Array(8); len[0] = 1; for (let k = 7, v = size + 11; k > 0; k--, v = Math.floor(v / 256)) len[k] = v % 256;
+      return new Blob([blob.slice(0, i + 4), len, blob.slice(s, e), d, blob.slice(e)], { type: blob.type });
+    }
+  } catch (e) {}
+  return blob;
+}
+
+// fullscreen on the whole page (not offered where the browser can't, e.g. iPhone)
+const fsOK = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+function toggleFS() {
+  try {
+    const p = fsEl() ? (document.exitFullscreen || document.webkitExitFullscreen).call(document) : (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
+}
+function syncFS() {
+  const on = !!fsEl(), b = $('fs');
+  b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Fullscreen');
+  b.querySelector('span').textContent = on ? 'Exit fullscreen' : 'Fullscreen';
+}
+document.addEventListener('fullscreenchange', syncFS); document.addEventListener('webkitfullscreenchange', syncFS);
+
+// photo mode: pause, clean view without the bar, camera still free; leaving puts back exactly what was there
+let photo = null, photoT = 0;
+function photoWake(e) {
+  if (e && e.type === 'pointermove' && e.buttons) return;   // not while dragging the view around
+  root.classList.remove('photo-idle'); clearTimeout(photoT);
+  photoT = setTimeout(() => root.classList.add('photo-idle'), 2600);
+}
+function setPhoto(on) {
+  if (!on === !photo) return;
+  if (on) {
+    photo = { paused, clean: root.classList.contains('clean'), panel: !$('panel').hidden };
+    closeCap(); paused = true; syncPlay(); setClean(true); root.classList.add('photo');
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    $('photoHelp').textContent = coarse ? 'Drag to pan · pinch to zoom · dial to tilt' : 'Drag to pan · scroll to zoom · right-drag to tilt · P saves · Esc exits';
+    photoWake(); addEventListener('pointermove', photoWake, true); addEventListener('pointerdown', photoWake, true);
+  } else {
+    const p = photo; photo = null;
+    removeEventListener('pointermove', photoWake, true); removeEventListener('pointerdown', photoWake, true);
+    clearTimeout(photoT); root.classList.remove('photo', 'photo-idle');
+    setClean(p.clean); paused = p.paused; syncPlay();
+    if (p.panel) { $('panel').hidden = false; $('gear').setAttribute('aria-expanded', 'true'); $('gear').setAttribute('aria-pressed', 'true'); }
+  }
+}
+
+// on narrow bars the capture buttons live in a menu under the camera button
+const capEl = $('cap');
+function closeCap() { capEl.classList.remove('open'); $('capMore').setAttribute('aria-expanded', 'false'); $('capMore').setAttribute('aria-pressed', 'false'); }
+$('capMore').addEventListener('click', () => {
+  const on = !capEl.classList.contains('open'); capEl.classList.toggle('open', on);
+  $('capMore').setAttribute('aria-expanded', String(on)); $('capMore').setAttribute('aria-pressed', String(on));
+});
+capEl.addEventListener('click', e => { if (e.target.closest('button')) closeCap(); });
+addEventListener('pointerdown', e => { if (capEl.classList.contains('open') && !capEl.contains(e.target) && !$('capMore').contains(e.target)) closeCap(); });
+$('shot').addEventListener('click', shot);
+$('photoShot').addEventListener('click', shot);
+$('rec').hidden = !canRec;
+$('rec').addEventListener('click', () => rec ? recStop() : recStart());
+$('recind').addEventListener('click', () => recStop());
+$('photo').addEventListener('click', () => setPhoto(true));
+$('photoExit').addEventListener('click', () => setPhoto(false));
+$('fs').hidden = !fsOK;
+$('fs').addEventListener('click', toggleFS);
+
 /* ================= input ================= */
 const pointers = new Map();
 function commitPlace(sx, sy, ex, ey) {
@@ -4105,7 +4337,7 @@ ui.addEventListener('pointerdown', e => {
   if (pointers.size > 2) return;
   const p = { lx: e.clientX, ly: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
   if (e.button === 2 || e.shiftKey || e.ctrlKey) { drag = { mode:'orbit', ...p }; ui.style.cursor = 'move'; }
-  else if (tool === 'move' || e.button === 1) { drag = { mode:'pan', ...p }; ui.style.cursor = 'grabbing'; }
+  else if (tool === 'move' || photo || e.button === 1) { drag = { mode:'pan', ...p }; ui.style.cursor = 'grabbing'; }
   else if (tool === 'matter') drag = { mode:'spray', x: e.clientX, y: e.clientY };
   else drag = { mode:'place', sx: e.clientX, sy: e.clientY, ex: e.clientX, ey: e.clientY };
 });
@@ -4155,11 +4387,14 @@ ui.addEventListener('wheel', e => {
   if (!opt.follow) { const o = scrOff(e.clientX - vw / 2, e.clientY - vh / 2); camX = w[0] - o[0]; camY = w[1] - o[1]; }
 }, { passive:false });
 addEventListener('keydown', e => {
+  if (e.key === 'Escape' && photo) { setPhoto(false); return; }
   if (e.key === 'Escape' && document.documentElement.classList.contains('clean')) { setClean(false); return; }
   if (e.key === 'Escape') { if (tool === 'move' && followId != null) { followId = null; opt.follow = true; syncToggles(); renderMoveCtx(true); } else setTool('move'); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !(e.target.closest && e.target.closest('input,select'))) { e.preventDefault(); undoPlace(); return; }
   if (e.target.closest && e.target.closest('input,select,button,.gizmo')) return;
-  if (e.key.toLowerCase() === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) { setClean(!document.documentElement.classList.contains('clean')); return; }
+  if (e.key.toLowerCase() === 'h' && !e.ctrlKey && !e.metaKey && !e.altKey) { if (photo) setPhoto(false); else setClean(!document.documentElement.classList.contains('clean')); return; }
+  if (e.key.toLowerCase() === 'p' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) { shot(); return; }
+  if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && fsOK) { toggleFS(); return; }
   if (e.code === 'Space') { e.preventDefault(); paused = !paused; syncPlay(); }
 });
 
@@ -4311,6 +4546,7 @@ function frameBody(now) {
   }
   { const t = wallNow - shake; const amp = reduceMotion || t > 700 ? 0 : 7 * (1 - t / 700) ** 2; shX = (Math.random() - 0.5) * 2 * amp; shY = (Math.random() - 0.5) * 2 * amp; }
   drawScene(); composite(); drawOverlay(); drawScope();
+  if (shotWant || rec) capFrame();   // same task as the draw: the view's buffer is still there to read
   renderMoveCtx(false);
   updateInspect();
   // frame-time governor: shrink the gas budget on slow devices, grow it back when there is headroom
