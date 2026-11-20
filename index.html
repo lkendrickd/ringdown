@@ -1602,17 +1602,23 @@ function startRing(rem, w, chiAbs) {
   return q;
 }
 
+// Remnant of two holes, m1 the heavier, with spins c1 and c2 along the orbit's axis. Returns its spin (relative to the
+// orbit), the fraction of the mass radiated (from the remnant's ISCO binding energy) and the remnant mass.
+function remnantFit(m1, m2, c1, c2) {
+  const M = m1 + m2, eta = m1 * m2 / (M * M), q = m2 / m1;
+  const ct = (c1 + c2 * q * q) / (1 + q * q);
+  // Rezzolla et al. (2008) remnant spin for aligned spins, relative to the orbit
+  let chi = ct - 0.129 * ct * ct * eta - 0.384 * ct * eta * eta - 2.686 * ct * eta + 2 * Math.sqrt(3) * eta - 3.454 * eta * eta + 2.353 * eta ** 3;
+  chi = clamp(chi, -0.998, 0.998);
+  const frac = 0.46 * (4 * eta) ** 2 * (1 - eIsco(chi));
+  return { chi, frac, mf: M * (1 - frac) };
+}
 function mergeBH(a, b) {
   const M = a.m + b.m, eta = a.m * b.m / (M * M);
   const sL = orbitSign(a, b);
-  const big = a.m >= b.m ? a : b, sml = big === a ? b : a, q = sml.m / big.m;
+  const big = a.m >= b.m ? a : b, sml = big === a ? b : a;
   const c1 = big.chi * sL, c2 = sml.chi * sL;
-  const ct = (c1 + c2 * q * q) / (1 + q * q);
-  // Rezzolla et al. (2008) remnant spin for aligned spins, relative to the orbit
-  let chiA = ct - 0.129 * ct * ct * eta - 0.384 * ct * eta * eta - 2.686 * ct * eta + 2 * Math.sqrt(3) * eta - 3.454 * eta * eta + 2.353 * eta ** 3;
-  chiA = clamp(chiA, -0.998, 0.998);
-  const frac = 0.46 * (4 * eta) ** 2 * (1 - eIsco(chiA));
-  const mf = M * (1 - frac);
+  const { chi: chiA, frac, mf } = remnantFit(big.m, sml.m, c1, c2);
   const w = pairWave(a, b);
   const kickKms = 1.2e4 * eta * eta * Math.sqrt(Math.max(0, 1 - 4 * eta)) * (1 - 0.93 * eta);
   const kick = kickKms / 299792.458 * C;
@@ -4165,9 +4171,9 @@ addEventListener('resize', () => requestAnimationFrame(resize));
 
 /* ================= loop ================= */
 let last = performance.now(), frameN = 0, workMs = 8, frameSim = 0;
-let loopErr = false;
+let loopErr = false, manual = false;   // manual: the test hook is stepping frames itself
 function frame(now) {
-  try { frameBody(now); }
+  if (!manual) try { frameBody(now); }
   catch (err) { if (!loopErr) { loopErr = true; console.error('Ringdown frame error', err); toast('Something glitched', ['A frame hit an error and was skipped; the simulation keeps running']); } }
   requestAnimationFrame(frame);
 }
@@ -4368,6 +4374,23 @@ addEventListener('hashchange', () => { loadFromHash(); });
 presetSel.value = currentPreset;
 loadPreset(currentPreset);
 loadFromHash();
+/* ---------- test hook ----------
+   Only with ?rdtest in the address: the automated tests (tests/) reach the physics through window.__rd. load() and
+   step() run a scene on a fixed clock with a fixed frame time, so the same calls play out the same scene. */
+if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
+  riscoM, eIsco, rocheFrac, ringFor, remnantFit, wdRadius, M_CH, KR, KM_PER_UNIT, SIM2REAL,
+  presets: Object.keys(PRESETS), makeBH, makeStar, mergeWhiteDwarfs, snapshot, restore, encodeState, decodeState,
+  get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; },
+  add(...bs) { bodies.push(...bs); computeAccel(); },
+  load(id, seed) { manual = true; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; loadPreset(id, seed); },
+  open(st) { this.load('empty', 0); restore(st); },   // like a fresh page opening a share link
+  step(n, ms = 1000 / 60) { manual = true; for (let i = 0; i < n; i++) { gasCap = 3200; frameBody(last + ms); } },   // frame-time governor held still
+  state() {
+    const f = (a, n) => Array.from(a.subarray(0, n));
+    return { t: simTime, b: bodies.map(b => [b.kind, b.type ? b.type.id : '', b.m, b.x, b.y, b.vx, b.vy, b.chi || 0, b.R || 0, b.spinHz || 0]),
+      g: [f(gx, gN), f(gy, gN), f(gvx, gN), f(gvy, gN), f(gm, gN)], q: [f(qx, qN), f(qy, qN), f(qvx, qN), f(qvy, qN), f(qm, qN)] };
+  },
+};
 requestAnimationFrame(t => { last = t; wallNow = t; frame(t); });
 })();
 </script>

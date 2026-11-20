@@ -1,0 +1,14 @@
+{
+  "name": "ringdown",
+  "private": true,
+  "description": "Test harness for Ringdown. The page itself (index.html) has no build step and no dependencies.",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.js"
+  },
+  "devDependencies": {
+    "playwright": "1.59.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
