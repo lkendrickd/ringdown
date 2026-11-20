@@ -4028,6 +4028,15 @@ function toast(title, lines, kind) {
   while (toastsEl.children.length > 3) toastsEl.firstChild.remove();
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 520); }, kind === 'w' ? 11000 : 6500);
 }
+// Errors outside the frame loop (event handlers, timers, promises) get a short notice instead of failing silently.
+// One notice every 10 seconds at most, so an error that keeps repeating doesn't bury the screen.
+let errNoticeAt = -1e9;
+function errorNotice(err) {
+  const t = performance.now(); if (t - errNoticeAt < 10000) return; errNoticeAt = t;
+  toast('Something glitched', [String((err && err.message) || err || 'Unknown error').slice(0, 160), 'The simulation keeps running; reloading the page clears it']);
+}
+addEventListener('error', e => errorNotice(e.error || e.message));
+addEventListener('unhandledrejection', e => errorNotice(e.reason));
 
 /* ================= input ================= */
 const pointers = new Map();
