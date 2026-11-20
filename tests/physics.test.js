@@ -105,4 +105,22 @@ test("README's scales: 1 grid unit is 11.8 km, time runs about 23× slower than 
   near(slow, 23, 0.5, 'slow-down factor');
 });
 
+// The checks above allow for the scatter between published values. These pin what the code computes today, so a change
+// to any formula shows up even when it stays inside that scatter. Changing the physics on purpose means updating them.
+test('pinned outputs of the physics helpers', async () => {
+  const r = await p.page.evaluate(() => {
+    const f = __rd.remnantFit, q = __rd.ringFor(62, 0.68);
+    return { isco: [__rd.riscoM(0.5), __rd.riscoM(-0.5)], gw: f(36, 29, 0, 0), eq: f(30, 30, 0, 0), aligned: f(30, 30, 0.9, 0.9),
+      lopsided: f(40, 8, -0.5, 0.3), ring: [q.fReal, q.tauReal], roche: __rd.rocheFrac(0.3), wd: __rd.wdRadius(1.0) };
+  });
+  const pin = (got, want, what) => assert.ok(Math.abs(got / want - 1) < 1e-12, `${what}: got ${got}, pinned ${want}`);
+  pin(r.isco[0], 4.233002529530826, 'riscoM(0.5)'); pin(r.isco[1], 7.554584714512358, 'riscoM(-0.5)');
+  pin(r.gw.mf, 62.05428099490057, '36 + 29 mass'); pin(r.gw.chi, 0.6805860211311479, '36 + 29 spin');
+  pin(r.eq.mf, 57.192466062120346, '30 + 30 mass'); pin(r.eq.chi, 0.6869160287844386, '30 + 30 spin');
+  pin(r.aligned.mf, 55.11384646426289, '30 + 30, χ 0.9 mass'); pin(r.aligned.chi, 0.9348435287844387, '30 + 30, χ 0.9 spin');
+  pin(r.lopsided.mf, 47.580064281684294, '40 + 8 mass'); pin(r.lopsided.chi, 0.12615056982208672, '40 + 8 spin');
+  pin(r.ring[0], 274.4770589948843, 'ringdown frequency'); pin(r.ring[1], 0.0037169119203145718, 'ringdown damping time');
+  pin(r.roche, 0.2810311498674334, 'rocheFrac(0.3)'); pin(r.wd, 1.2505457136106182, 'wdRadius(1.0)');
+});
+
 test('no page or console errors while computing', () => assert.deepEqual(p.errors, []));
