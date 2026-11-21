@@ -19,7 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm test   # builds dist/ first (pretest), then tests that build
+      - run: npm test   # builds dist/ first, then tests that build
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v5
         with:

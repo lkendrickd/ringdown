@@ -5,8 +5,7 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
-    "pretest": "node build.mjs",
-    "test": "node --test --test-concurrency=1 tests/*.test.js"
+    "test": "node build.mjs && node --test --test-concurrency=1 tests/*.test.js"
   },
   "devDependencies": {
     "playwright": "1.59.1"
