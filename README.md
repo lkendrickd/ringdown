@@ -4,7 +4,7 @@ An interactive astrophysics sandbox that runs in your browser. Merge black holes
 
 **Live:** https://lkendrickd.github.io/ringdown/
 
-It's a single self-contained `index.html` with no build step and no dependencies beyond Google Fonts. It uses WebGL2 for everything on screen (instanced gas and stars, HDR with bloom, ray-traced lensing of the disk) and Web Audio for sound. Without WebGL2 it falls back to a plain 2D canvas.
+It ships as a single self-contained `index.html` with no dependencies beyond Google Fonts. It uses WebGL2 for everything on screen (instanced gas and stars, HDR with bloom, ray-traced lensing of the disk) and Web Audio for sound. Without WebGL2 it falls back to a plain 2D canvas.
 
 ## What you can do
 
@@ -92,6 +92,29 @@ Any pad with the standard layout works. Press a button once so the browser lets 
 ### Install and offline
 
 Ringdown installs like an app: use the browser's Install option (Chrome, Edge), or Share → Add to Home Screen in Safari on iPhone and iPad. After one visit it also opens with no connection, fonts included. When you're online it always loads the newest version. Opened straight from a downloaded `index.html`, it runs the same, just without the offline copy.
+
+## Working on it
+
+The page is written as the files under `src/` and joined into the one `index.html` by a small script with no dependencies (it needs Node 20 or newer):
+
+```
+node build.mjs           # writes dist/index.html, plus the service worker, manifest and icons
+node build.mjs --watch   # the same, again on every save
+```
+
+Open `dist/index.html` straight from disk, or serve `dist/` for the offline copy and the install prompt.
+
+`src/index.html` is the shell: the markup, and one `/*@include css/phone.css*/` or `/*@include js/physics.js*/` line for each file, in order. The build pastes each file in where its line is, so all the styles end up in one `<style>` and all the scripts in one `<script>` sharing a single scope. Nothing is imported or exported; a new file only needs its own include line, and the build stops if a file under `src/css` or `src/js` has none.
+
+The tests drive the built page in headless Chromium:
+
+```
+npm ci
+npx playwright install chromium
+npm test                 # builds first
+```
+
+Every push runs them, and a push to `main` that passes is published to the live site.
 
 ## The physics
 

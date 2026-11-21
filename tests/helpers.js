@@ -1,11 +1,12 @@
-// Shared test setup: serve the repo statically, open index.html?rdtest in headless Chromium and collect every error.
+// Shared test setup: serve the built site (dist/, from `node build.mjs`) statically, open index.html?rdtest in headless
+// Chromium and collect every error.
 'use strict';
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '..', 'dist');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 
 function serve() {

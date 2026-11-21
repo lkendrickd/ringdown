@@ -1,0 +1,8 @@
+/* ===== Clean view: hide every overlay so the sim gets the whole screen (button or H key) ===== */
+.btn#clean svg .slash{display:none}
+html.clean .btn#clean svg .slash{display:inline}
+html.clean .scope,html.clean .dock,html.clean .gizmo,html.clean .toasts,html.clean .inspect,html.clean .panel,html.clean .sharepop,
+html.clean .brand,html.clean .ctrls>:not(#clean):not(#play){display:none!important}
+html.clean .bar{justify-content:flex-end}
+html.clean .btn{background:rgba(11,13,23,.45)}
+

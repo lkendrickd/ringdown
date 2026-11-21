@@ -1,8 +1,11 @@
 {
   "name": "ringdown",
   "private": true,
-  "description": "Test harness for Ringdown. The page itself (index.html) has no build step and no dependencies.",
+  "description": "Build script and test harness for Ringdown. The build (build.mjs) joins src/ into one index.html and has no dependencies; Playwright is only for the tests.",
   "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "pretest": "node build.mjs",
     "test": "node --test --test-concurrency=1 tests/*.test.js"
   },
   "devDependencies": {
