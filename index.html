@@ -320,6 +320,8 @@ html.phone .toast li:nth-child(n+3){display:none}
   html.phone .inspect,html.phone .panel{top:calc(env(safe-area-inset-top,0px) + 50px);bottom:auto;max-height:calc(100% - 64px - var(--dock-h,100px));left:auto;width:min(330px,46vw);margin:0}
 }
 @media (max-width:400px){ html.phone .brand{display:none} }
+/* the narrowest phones: tighter bar, so the scene picker keeps a readable name */
+@media (max-width:400px){ html.phone .bar{gap:4px} html.phone .btn{min-width:31px} html.phone .btn.icon{width:31px} html.phone .btn.icon svg{width:17px;height:17px} }
 
 /* ===== Capture: screenshot, recording, photo mode, fullscreen ===== */
 .cap{display:contents}
