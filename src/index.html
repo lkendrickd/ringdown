@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ringdown</title>
+<meta name="description" content="Interactive black hole simulator: merge black holes and hear the ringdown, spin them up, feed them stars, and smash neutron stars into kilonovae.">
+<meta property="og:title" content="Ringdown">
+<meta property="og:description" content="Merge black holes, hear the gravitational-wave chirp, and watch them feed on stars.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Ringdown">
+<meta property="og:url" content="https://lkendrickd.github.io/ringdown/">
+<meta property="og:image" content="https://lkendrickd.github.io/ringdown/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A spinning black hole with its glowing, lensed accretion disk and jets, beside the title Ringdown">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Ringdown">
+<meta name="twitter:description" content="Merge black holes, hear the gravitational-wave chirp, and watch them feed on stars.">
+<meta name="twitter:image" content="https://lkendrickd.github.io/ringdown/assets/og-image.png">
+<meta name="twitter:image:alt" content="A spinning black hole with its glowing, lensed accretion disk and jets, beside the title Ringdown">
+<link rel="canonical" href="https://lkendrickd.github.io/ringdown/">
+<meta name="theme-color" content="#04050b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2304050b'/%3E%3Ccircle cx='32' cy='32' r='19' fill='none' stroke='%23ffb36a' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%23000'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@1,6..96,600&family=IBM+Plex+Mono:wght@400;500&family=Saira+Condensed:wght@400;500;600&display=swap" crossorigin>
+<style>
+/*@include css/base.css*/
+/*@include css/keyboard.css*/
+/*@include css/clean-view.css*/
+/*@include css/phone.css*/
+/*@include css/capture.css*/
+/*@include css/onboarding.css*/
+/*@include css/settings.css*/
+</style>
+<script>
+// Phone mode: narrow screens, and phones held sideways. Set before the first layout so the camera fits the phone overlays.
+(function () {
+  const mq = matchMedia('(max-width: 560px), (max-height: 500px) and (pointer: coarse)');
+  const set = () => document.documentElement.classList.toggle('phone', mq.matches);
+  set(); (mq.addEventListener ? mq.addEventListener('change', set) : mq.addListener(set));
+})();
+</script>
+
+</head>
+<body>
+<main>
+<canvas id="view" class="full" aria-hidden="true"></canvas>
+<canvas id="ui" class="full" tabindex="0" role="application" aria-label="Black hole simulation. Tap or click to place the selected object; drag to throw it." aria-describedby="sceneKeys"></canvas>
+<p id="sceneKeys" class="sr">Keys: arrows pan, plus and minus zoom, [ and ] turn the view, comma and period tilt it, Enter places the selected object at the centre of the view (hold it to pour matter), Space pauses, H hides the controls, P saves a screenshot, F goes fullscreen, Escape goes back to Move. In the object bar, the left and right arrows choose an object. Events are read out as they happen.</p>
+</main>
+
+<header class="bar">
+  <div class="brand"><h1>Ringdown</h1><span class="tag">black hole bench</span></div>
+  <div class="ctrls">
+    <label class="sel"><span class="sr">Scenario</span><select id="preset"></select></label>
+    <button class="btn icon" id="play" aria-label="Pause"></button>
+    <span class="sr" id="speedLbl">Simulation speed</span><button class="btn" id="speed" aria-labelledby="speedLbl speed">1×</button>
+    <button class="btn icon" id="capMore" aria-label="Capture and fullscreen" aria-expanded="false" aria-pressed="false" title="Screenshot, record, photo mode, fullscreen">
+      <svg viewBox="0 0 24 24"><path d="M3.5 8.5h3.2L8.4 6h7.2l1.7 2.5h3.2v10h-17z"/><circle cx="12" cy="13.2" r="3.4"/></svg>
+    </button>
+    <div class="cap" id="cap">
+      <button class="btn icon" id="shot" aria-label="Save a screenshot" title="Screenshot: save the view as a PNG (P)">
+        <svg viewBox="0 0 24 24"><path d="M3.5 8.5h3.2L8.4 6h7.2l1.7 2.5h3.2v10h-17z"/><circle cx="12" cy="13.2" r="3.4"/></svg><span>Screenshot</span>
+      </button>
+      <button class="btn icon" id="rec" aria-label="Record a clip" aria-pressed="false" title="Record a video clip (up to 60 s, with sound when Listen is on)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle class="r-go" cx="12" cy="12" r="3.5" fill="currentColor"/><rect class="r-stop" x="8.5" y="8.5" width="7" height="7" rx="1" fill="currentColor"/></svg><span>Record</span>
+      </button>
+      <button class="btn icon" id="photo" aria-label="Photo mode" title="Photo mode: pause, hide the controls and frame the shot (Esc exits)">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.6"/><path d="M3.5 16.5l5-5 4.5 4.5 2.5-2.5 5 5"/><circle cx="15.5" cy="9.5" r="1.4"/></svg><span>Photo mode</span>
+      </button>
+      <button class="btn icon" id="fs" aria-label="Fullscreen" aria-pressed="false" title="Fullscreen (F)">
+        <svg viewBox="0 0 24 24"><path class="f-in" d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><path class="f-out" d="M9 4v5H4M15 4v5h5M15 20v-5h5M9 20v-5H4"/></svg><span>Fullscreen</span>
+      </button>
+    </div>
+    <button class="btn icon" id="share" aria-label="Share this setup" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg>
+    </button>
+    <button class="btn icon" id="gear" aria-label="Settings" aria-expanded="false" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+    <button class="btn icon" id="help" aria-label="Help and things to try" aria-controls="guide" aria-expanded="false" aria-pressed="false" title="Help and things to try (?)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5"/><path d="M12 17.2v.1"/></svg>
+    </button>
+    <button class="btn icon" id="clean" aria-label="Hide the controls" aria-pressed="false" title="Clean view: hide the controls (H)">
+      <svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M4 4l16 16"/></svg>
+    </button>
+  </div>
+</header>
+
+<section class="scope" aria-label="Gravitational-wave strain">
+  <div class="scope-head">
+    <span class="lbl">Strain <i>h(t)</i></span><span class="slow" id="slow" hidden>slow-mo</span>
+    <span id="fgw" class="mono">no source</span>
+    <button class="listen" id="sound" aria-pressed="false" aria-label="Listen to the gravitational waves and every event">
+      <svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg><span>Listen</span>
+    </button>
+    <input class="vol" id="vol" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Volume" title="Volume" hidden>
+  </div>
+  <canvas id="scope"></canvas>
+  <div class="legend mono"><span>strain</span><span class="f">frequency (log)</span><span class="x">infall glow</span></div>
+  <div id="readouts" class="mono"></div>
+</section>
+
+<aside class="panel" id="panel" hidden aria-label="Settings">
+  <h2>Physics</h2>
+  <div class="rowr"><label for="gw">Gravitational-wave emission</label><output id="gwOut" class="mono">1× real</output>
+    <input id="gw" type="range" min="0" max="20" step="0.5" value="1"></div>
+  <label class="tog"><span>Slow-mo near merger<small>Eases time down for the plunge and ringdown</small></span><input id="t-slow" type="checkbox" checked></label>
+  <h2>View</h2>
+  <div class="rowr"><label for="tilt">Viewing angle</label><output id="tiltOut" class="mono">0° face-on</output>
+    <input id="tilt" type="range" min="0" max="80" step="1" value="0">
+    <small>Tilt the orbital plane to see Doppler beaming, D-shaped shadows on spinning holes, and the jets. You can also drag the view dial (bottom right), or right-drag or Shift-drag the scene, to tilt and rotate.</small></div>
+  <label class="tog"><span>Gravitational lensing</span><input id="t-lens" type="checkbox" checked></label>
+  <label class="tog"><span>Glow<small>Bright gas and stars bloom instead of clipping</small></span><input id="t-bloom" type="checkbox" checked></label>
+  <label class="tog"><span>Gravitational waves<small>Space ripples, hugely exaggerated</small></span><input id="t-waves" type="checkbox" checked></label>
+  <label class="tog"><span>Jets</span><input id="t-jets" type="checkbox" checked></label>
+  <label class="tog"><span>Orbit trails</span><input id="t-trails" type="checkbox" checked></label>
+  <label class="tog"><span>Labels</span><input id="t-labels" type="checkbox" checked></label>
+  <label class="tog"><span>Follow focus<small>The heaviest object, or its barycenter with a partner of at least 30% its mass. Click any object to follow it instead.</small></span><input id="t-follow" type="checkbox" checked></label>
+  <div class="btns"><button class="btn" id="fit">Recenter</button><button class="btn" id="clear">Clear all</button></div>
+  <h2>Graphics</h2>
+  <div class="rowr"><span id="qLbl">Quality</span><output id="qOut" class="mono"></output>
+    <div class="seg" role="radiogroup" aria-labelledby="qLbl">
+      <label><input type="radio" name="quality" value="low"><span>Low</span></label><label><input type="radio" name="quality" value="medium"><span>Medium</span></label><label><input type="radio" name="quality" value="high"><span>High</span></label><label><input type="radio" name="quality" value="auto" checked><span>Auto</span></label>
+    </div>
+    <small id="qNote"></small></div>
+  <label class="tog"><span>Frame rate<small>Frames per second and frame time, shown small at the edge of the view</small></span><input id="t-fps" type="checkbox"></label>
+  <h2>Scenes</h2>
+  <div class="scn-save"><label class="sr" for="scnName">Name for this scene</label><input id="scnName" class="scn-in" maxlength="40" placeholder="Name this scene" autocomplete="off" enterkeyhint="done"><button class="follow-x" id="scnSave" type="button">Save</button></div>
+  <button class="btn scn-resume" id="scnResume" type="button" hidden></button>
+  <ul class="scn-list" id="scnList" aria-label="Saved scenes"></ul>
+  <p class="scn-note" id="scnNote" aria-live="polite"></p>
+  <h2>Receipts</h2>
+  <ul class="notes">
+    <li>G and c are scaled together, so 1 grid unit is 11.8 km. Horizon sizes, orbital speeds, inspiral timing and GW frequencies line up with real values; on-screen time runs about 23× slower than real.</li>
+    <li>Inspiral comes from Peters’ quadrupole energy loss, for any pair of black holes or neutron stars. Remnant spin uses the Rezzolla et al. fit for aligned spins, radiated energy follows the remnant’s ISCO binding energy, and the ringdown uses the Berti fits for the l = m = 2 mode. 36 + 29 M☉ gives about 62 M☉, roughly GW150914.</li>
+    <li>Spin (χ) moves the innermost stable orbit using the Bardeen–Press–Teukolsky formula, drags nearby gas with a gravitomagnetic force, and gets spun up by accreted gas toward the 0.998 Thorne limit. Aligned spins merge later and radiate more.</li>
+    <li>Each hole’s shadow is the exact Kerr outline (Bardeen 1973) for its spin and your viewing angle. It is nearly round at moderate spin and only flattens noticeably on the approaching side as spin nears 1 and the view goes edge-on. The disk is brighter and bluer on the side moving toward you (beaming ∝ δ³). The disk is ray traced: each pixel near a hole follows its light back along a Schwarzschild geodesic to where it crosses the orbital plane, which is why the far side of the disk arcs over and under the shadow. The background sky is still bent with a flat point lens, and the tracing ignores spin.</li>
+    <li>Jet power scales with feeding rate × spin² (Blandford–Znajek). Each jet has a fast spine (0.92c) that is strongly beamed, inside a slower sheath (0.3c) that glows in every direction, so jets show from any angle and the one aimed at you is brighter. Knots move at the apparent speed for your viewing angle; on the near jet that can look faster than light, the superluminal-motion illusion seen in M87 and 3C 279. Jet length and width are drawn schematically.</li>
+    <li>Neutron stars are the one thing at true size: 12 km radius, 1 grid unit. Two of them merging make a kilonova; above about 2.3 M☉ the remnant collapses to a hole (in reality, after a short-lived hypermassive phase). A real kilonova fades over days; here it takes about 9 seconds.</li>
+    <li>Listen plays the GW frequency one octave up. The real 36 + 29 chirp lasts about 0.2 s; here it is stretched out. The other sounds (explosions, mergers, flares, feeding) are synthesized for effect and placed left or right by where they happen on screen; only the chirp is data.</li>
+    <li>A white dwarf that spirals into a neutron star gets torn into a disk. The neutron star feeds and spins up (about 0.1 M☉ takes it to millisecond periods), the usual story for millisecond pulsars; the fastest known spins 716 times a second. A neutron star that eats past about 2.3 M☉ collapses into a hole. A neutron star sinking into a giant makes a Thorne–Żytkow object.</li>
+    <li>A black hole rarely eats a star whole. Gas spills off through the Roche lobe and the star keeps going. It starts as a thin wind once the lobe is about half full and becomes a steady stream when the star fills it; while you place a star, dashed rings round the nearest hole show where each begins and where the star would be torn apart. A giant stays big until its envelope is gone, then its helium core is left orbiting, as a white dwarf for a red giant or a Wolf–Rayet star for a blue supergiant. A small star can be whittled down to a brown dwarf. On a stretched orbit, each close pass takes a little (like ASASSN-14ko, which flares every 115 days).</li>
+    <li>Black holes, neutron stars and white dwarfs all accept gas. A star feeding a white dwarf builds up a hydrogen layer that ignites as a nova every so often; each one throws most of the layer off, so the white dwarf grows slowly and can eventually pass 1.44 M☉ and explode as a Type Ia. Real novae eject about 0.00001 M☉; here the layer is scaled up so they come every few seconds.</li>
+    <li>Mass transfer is only stable when the star giving mass isn't much heavier than the one taking it. Past about 1.5×, the orbit shrinks as mass moves, the overflow grows, and it runs away into a common envelope: the companion spirals inside the star, and either throws the envelope off (leaving the bare core in an orbit many times tighter) or merges with it. Most merging black-hole and neutron-star pairs are thought to have gone through this.</li>
+    <li>Not all the stolen gas gets eaten. Near the hole, part of it is blown back out by its own light, 15–65% here and more when the hole is feeding hard, as in ultraluminous X-ray sources. The purple band on the scope tracks how fast gas is falling in.</li>
+    <li>A magnetar is a neutron star with a field near 10¹¹ tesla. Its giant flares here come every 15–30 seconds; real ones are decades apart. The 2004 flare of SGR 1806−20 released more energy in a fifth of a second than the Sun does in about 100,000 years.</li>
+    <li>Planets, moons and asteroids get their size from their mass, on a curve through Ceres, the Moon, Earth, Neptune, Saturn and Jupiter. Past about 13 Jupiter masses a body becomes a brown dwarf, and past 0.075 M☉ it ignites as a star.</li>
+    <li>Loose matter feels every body’s gravity and its own. It gathers into a body only where that body could hold itself together against the tide of whatever it orbits, which is outside the Roche limit (about 2.4 planet radii for matter as dense as the planet). Inside it, matter stays a ring. A moon that orbits inside the limit is pulled apart after about one of its own free-fall times.</li>
+    <li>Two worlds that meet slowly or head-on merge. A fast, glancing blow throws part of the smaller one off as molten debris; what stays in orbit outside the Roche limit gathers into moons. The giant-impact scene uses the standard picture: a Mars-sized Theia, about 45° off head-on, just above escape speed.</li>
+    <li>The Solar System scene uses each planet’s real mass, radius and orbit (J2000 elements run forward to late 2026), with everything flattened into one plane. Dwarf-planet positions are approximate. Belts are a few thousand sample bodies, not a census. The nearest stars are markers at their true distances, not simulated.</li>
+    <li>Sticking and clumping run on a coarse grid with a few thousand particles, far faster than the real thing: a planet here gathers in a minute, not a few million years.</li>
+    <li>Stars above about 8 M☉ can go supernova from the inspector. The iron core collapses, bounces at nuclear density, and the shock stalls until neutrinos reheat it; then it blows the envelope off at thousands of km/s. Stars born above about 20 M☉ leave a black hole here, the rest a neutron star with a kick of a few hundred km/s. Collisions can build stars no galaxy makes on its own: from about 140 to 260 M☉ the star ends in a pair-instability supernova that leaves nothing behind, and above about 260 M☉ it collapses straight into an intermediate-mass black hole. A real star like that would live a couple of million years first; here it ends at once. In reality the collapse takes a fraction of a second and the shock needs hours to reach a supergiant's surface; here the sequence takes about 5 seconds. Because stars here are drawn far smaller than real ones, ejecta is launched fast enough to escape their exaggerated surface gravity and then coasts away at a realistic 5,000–20,000 km/s. In a tight binary it is launched faster still, to keep the real ratio of ejecta speed to orbital speed (about 50 to 1 in nature), since binaries here are compressed to about 1,000 km.</li>
+    <li>White dwarfs are held up by electron pressure, which fails at 1.44 M☉ (the Chandrasekhar limit), and they shrink as they gain mass. Two carbon–oxygen white dwarfs that merge below the limit make one smaller, heavier white dwarf; two helium white dwarfs reignite as a helium-burning hot subdwarf, and a helium plus a carbon–oxygen white dwarf swell into an R Coronae Borealis giant. Past the limit, carbon ignites in a runaway and the whole star explodes as a Type Ia supernova, leaving nothing (some may instead collapse quietly into a neutron star; that outcome isn't modeled). A white dwarf that hits an ordinary star sinks into it.</li>
+    <li>Star types follow real classes, each with a real example. Red giants are Sun-like stars in old age and end as white dwarfs; red supergiants like Betelgeuse are massive stars in old age and are the most common supernova progenitors. A supernova's class (II-P, II, IIb, IIn, Ib/c) follows from how much hydrogen envelope the star kept.</li>
+    <li>Age it jumps a star to its next life stage, skipping the time in between, which the button notes. The path depends on birth mass: below about 0.8 M☉ stars outlive the universe so far; up to 8 M☉ they become red giants, puff off a planetary nebula and leave a white dwarf (mass from the initial–final mass relation); heavier ones become supergiants and end in supernovae, and the heaviest pass through luminous-blue-variable and Wolf–Rayet stages first.</li>
+    <li>Spaghettification: the hole pulls harder on a star's near side than its far side, stretching it along the line to the hole and squeezing it sideways. Past the tidal limit it is torn into a long thin stream; the near end is deeper in the hole's gravity, so roughly half the debris is bound and falls back while the rest escapes.</li>
+    <li>Sgr A*, the 4.3 million M☉ hole at the center of our galaxy, with five of the S-stars that orbit it on their measured periods and eccentricities (S2: 16 years, swinging to 120 AU at closest approach; S4714: so eccentric it passes within 13 AU). The real orbits are tilted every which way; here they share one plane. This scene runs at true scale with stars at their real sizes, and time is sped up so S2 laps the hole in about half a minute; the readout shows what a screen-second is in real time. S2's orbit really precesses by 12 arcminutes per lap, as general relativity predicts (measured by the GRAVITY team in 2020), too little to see here. Throw a star at the hole to see a galactic-center tidal disruption; time slows down automatically so the debris can be followed.</li>
+    <li>Click any object to inspect it. Masses and rates are live; rates are per second of simulation time, and orbital periods are given in real seconds. The dashed ring is the selected object's orbit around the barycenter it shares with its strongest partner, run one lap ahead with the same gravity the simulation uses, so orbits close to a hole visibly fail to close (precession) and paths that end in a plunge or a tidal disruption are marked. Other bodies and gravitational-wave losses are left out of the forecast, so in crowded or chaotic systems it's only the orbit for the moment.</li>
+    <li>Not to scale: ordinary stars are drawn thousands of times smaller than life (a white dwarf is really Earth-sized, about 500× a neutron star, but here only 1.6×), and mass transfer runs fast enough to watch.</li>
+  </ul>
+</aside>
+
+<nav class="dock" id="dock" aria-label="Objects">
+  <div class="ctx" id="ctx"></div>
+  <div class="tools" id="tools" role="radiogroup" aria-label="Object to place"></div>
+  <div class="tscroll" id="tscroll" aria-hidden="true"><div class="thumb"></div></div>
+</nav>
+
+<aside class="inspect" id="inspect" hidden aria-label="Selected object"></aside>
+<div class="sharepop" id="sharepop" hidden role="dialog" aria-label="Share this setup">
+  <h2>Share this setup</h2>
+  <div class="row"><label class="sr" for="shareUrl">Link</label><input id="shareUrl" readonly><button class="follow-x" id="shareCopy" type="button">Copy</button></div>
+  <p id="shareNote"></p>
+</div>
+
+<div class="gizmo" id="gizmo" tabindex="0" role="group" aria-label="View dial"><canvas id="gizmoCv"></canvas></div>
+
+<div class="toasts" id="toasts"></div>
+<div class="sr" id="live" aria-live="polite"></div>
+<button class="recind" id="recind" type="button" hidden aria-label="Stop recording" title="Stop recording"><i></i><span id="recT">REC 0:00</span></button>
+<div class="photohint" id="photohint" role="group" aria-label="Photo mode"><b>Photo mode</b><span id="photoHelp"></span><button class="follow-x" id="photoShot" type="button">Screenshot</button><button class="follow-x" id="photoExit" type="button">Exit</button></div>
+
+<aside class="panel guide" id="guide" hidden aria-label="Help">
+  <div class="g-tabs" role="tablist" aria-label="Help">
+    <button class="g-tab" type="button" role="tab" id="gtab-try" aria-controls="gpane-try" aria-selected="true">Things to try</button>
+    <button class="g-tab" type="button" role="tab" id="gtab-keys" aria-controls="gpane-keys" aria-selected="false" tabindex="-1">Controls</button>
+    <button class="ins-x" type="button" id="guideX" aria-label="Close help"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="g-pane" id="gpane-try" role="tabpanel" aria-labelledby="gtab-try">
+    <p class="g-prog"><span><b id="gDone">0</b> of <b id="gAll">0</b> done</span><span class="g-meter" aria-hidden="true"><i id="gMeter"></i></span></p>
+    <ul class="g-list" id="gList"></ul>
+  </div>
+  <div class="g-pane" id="gpane-keys" role="tabpanel" aria-labelledby="gtab-keys" hidden>
+    <table class="g-keys">
+      <thead><tr><th scope="col"><span class="sr">Action</span></th><th scope="col">Mouse &amp; keys</th><th scope="col">Touch</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Pan</th><td>Drag (Move tool), or the arrow keys</td><td>Drag</td></tr>
+        <tr><th scope="row">Zoom</th><td>Scroll, or <kbd>+</kbd> / <kbd>-</kbd></td><td>Pinch</td></tr>
+        <tr><th scope="row">Tilt &amp; rotate</th><td>Right-drag or Shift-drag, the view dial, or <kbd>[</kbd> <kbd>]</kbd> to turn and <kbd>,</kbd> <kbd>.</kbd> to tilt</td><td>Twist two fingers, or drag the view dial</td></tr>
+        <tr><th scope="row">Inspect &amp; follow</th><td>Click it (<kbd>Esc</kbd> to close)</td><td>Tap it</td></tr>
+        <tr><th scope="row">Place an object</th><td>Pick it in the bar, click to orbit, drag to throw; <kbd>Enter</kbd> drops it at the centre</td><td>Same</td></tr>
+        <tr><th scope="row">Pour out matter</th><td>Pick Matter, set the flow, hold and drag (or hold <kbd>Enter</kbd>)</td><td>Same</td></tr>
+        <tr><th scope="row">Undo placement</th><td><kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Z</kbd></td><td>Undo button</td></tr>
+        <tr><th scope="row">Edit or delete</th><td>Inspector → Edit</td><td>Inspector → Edit</td></tr>
+        <tr><th scope="row">Share the setup</th><td>Share button (top right)</td><td>Share button</td></tr>
+        <tr><th scope="row">Back to Move</th><td><kbd>Esc</kbd></td><td>Move chip</td></tr>
+        <tr><th scope="row">Pause</th><td><kbd>Space</kbd></td><td>Pause button</td></tr>
+        <tr><th scope="row">Hide the controls</th><td><kbd>H</kbd>, or the eye button</td><td>Eye button (tap it again to bring them back)</td></tr>
+        <tr><th scope="row">Screenshot</th><td><kbd>P</kbd>, or the camera button</td><td>Camera menu → Screenshot</td></tr>
+        <tr><th scope="row">Fullscreen</th><td><kbd>F</kbd>, or the fullscreen button</td><td>Camera menu → Fullscreen</td></tr>
+        <tr><th scope="row">This help</th><td><kbd>?</kbd>, or the ? button</td><td>? button</td></tr>
+      </tbody>
+    </table>
+    <p class="g-note">With the view dial focused, the arrow keys tilt and rotate and Home resets it. In the object bar, the arrow keys step through the objects and <kbd>Enter</kbd> places the chosen one. A gamepad works too: left stick pans, right stick turns and tilts, triggers zoom, A places, B goes back to Move, X pauses, the bumpers change the object and Start hides the controls.</p>
+    <div class="btns"><button class="btn" type="button" id="gTour">Take the tour again</button></div>
+  </div>
+</aside>
+<div class="coach" id="coach" hidden role="dialog" aria-labelledby="coachT" aria-describedby="coachB">
+  <span class="coach-arr" aria-hidden="true"></span>
+  <div class="coach-head"><h2 id="coachT"></h2><span class="coach-n mono" id="coachN"></span></div>
+  <p id="coachB" aria-live="polite"></p>
+  <div class="coach-btns"><button class="follow-x go" type="button" id="coachDo" hidden></button><button class="follow-x" type="button" id="coachNext">Next</button><button class="coach-skip" type="button" id="coachSkip">Skip tour</button></div>
+</div>
+<div class="coach-ring" id="coachRing" hidden></div>
+
+<script>
+(() => {
+'use strict';
+
+/*@include js/constants.js*/
+/*@include js/state.js*/
+/*@include js/matter.js*/
+/*@include js/helpers.js*/
+/*@include js/presets.js*/
+/*@include js/physics.js*/
+/*@include js/star-aging.js*/
+/*@include js/editing.js*/
+/*@include js/spaghettification.js*/
+/*@include js/gw-scope.js*/
+/*@include js/sound.js*/
+/*@include js/render-pipeline.js*/
+/*@include js/render-sprites.js*/
+/*@include js/overlay.js*/
+/*@include js/ui.js*/
+/*@include js/capture.js*/
+/*@include js/input.js*/
+/*@include js/keyboard-gamepad.js*/
+/*@include js/loop.js*/
+/*@include js/share.js*/
+/*@include js/onboarding.js*/
+/*@include js/settings.js*/
+/*@include js/test-hook.js*/
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,4 @@
+/* ===== Keyboard: every control shows the focus ring; the full-screen scene and the clipped object chips draw it inside ===== */
+#ui:focus-visible{outline-offset:-3px}
+.chip:focus-visible{outline-offset:-2px}
+
