@@ -22,7 +22,7 @@
 html.clean .graphs{display:none!important}
 /* what used to sit just under the scope (the frame-rate readout; on a phone, the notices and the recording timer) sits under the graphs */
 .fps{top:calc(var(--graphs-b,var(--scope-b,120px)) + 6px)}
-html.phone .toasts{top:calc(var(--graphs-b,var(--scope-b,120px)) + 8px)}
+@media (orientation:portrait){html.phone .toasts{top:calc(var(--graphs-b,var(--scope-b,120px)) + 8px)}}   /* held sideways there's no room below: they stay put, over the panel */
 /* desktop: notices rise from the bottom left, into the open panel's column; while it's open they move over beside it */
 @media (min-width:761px){html:not(.phone):has(.graphs.open) .toasts{left:calc(max(16px,env(safe-area-inset-left,0px)) + 372px)}}
 @media (orientation:portrait){html.phone:not(.clean) .recind{top:calc(var(--graphs-b,var(--scope-b,110px)) + 8px)}}
@@ -34,4 +34,8 @@ html.phone .gr-head .lbl{font-size:10.5px;letter-spacing:.14em}
 html.phone .gr-now{font-size:10.5px}
 html.phone .gr-head{height:24px}
 html.phone .gr-tab{height:28px;font-size:10.5px;letter-spacing:.08em}
-@media (orientation:landscape){html.phone .graphs{right:auto;width:min(340px,45vw)}}
+@media (orientation:landscape){
+  html.phone .graphs{right:auto;width:min(340px,45vw)}
+  html.phone #grCv{height:clamp(64px,calc(100vh - var(--scope-b,200px) - var(--dock-h,110px) - 118px),168px)}
+  @supports (height:100dvh){html.phone #grCv{height:clamp(64px,calc(100dvh - var(--scope-b,200px) - var(--dock-h,110px) - 118px),168px)}}
+}

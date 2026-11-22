@@ -392,7 +392,7 @@ function drawMass() {
   const tg = massTarget();
   if (!tg) { emptyNote('Nothing in the scene'); return { read: 'Nothing to weigh', n: 0, i: 0 }; }
   const b = tg.b, s = grMass.get(b.id), mu = massUnit(b), col = '127,211,230';
-  const who = `${grName(b)}${tg.auto ? ' (heaviest; click a body to pick one)' : ''}`;
+  const who = `${grName(b)}${tg.auto ? ' (heaviest)' : ''}`;
   if (!s || !s.len) { emptyNote('Waiting for the simulation to run'); return { read: who, n: 0, i: 0 }; }
   const n = s.len;
   let lo = Infinity, hi = -Infinity; for (let i = 0; i < n; i++) { lo = Math.min(lo, s.Lo(i)); hi = Math.max(hi, s.Hi(i)); }
@@ -407,14 +407,15 @@ function drawMass() {
     fmt = v => '+' + (v - base).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
     unit = `${mu.u} above ${base.toLocaleString('en-US', { maximumFractionDigits: dec })}`;
   }
-  const labels = flat ? [] : ys.map(fmt), F0 = frameOf(labels.length ? labels : ['']);
+  if (flat) { const mid = (lo + hi) / 2; ys.length = 0; ys.push(mid); fmt = v => mu.k === 1 ? fmtM(v) : v.toPrecision(4); unit = mu.u; }   // one level, labelled
+  const labels = ys.map(fmt), F0 = frameOf(labels.length ? labels : ['']);
   const yOf = v => F0.y1 - (v / mu.k - lo) / (hi - lo) * (F0.y1 - F0.y0);
-  if (!flat) gridY(F0, ys.map(v => yOf(v * mu.k)), labels);
+  gridY(F0, ys.map(v => yOf(v * mu.k)), labels);
   const P = timePlot(s, labels.length ? labels : [''], yOf, col, true);
   caption(P.F, unit);
   const i = grCur != null ? cursorAt(P, s, yOf, col) : n - 1;
   const mv = s.V(0, i) / mu.k, m0 = s.V(0, 0) / mu.k, dm = mv - m0;
-  const mtxt = mu.k === 1 ? fmtMass(mv) : mv.toPrecision(5);
+  const mtxt = mu.k !== 1 ? mv.toPrecision(5) : mv >= 1e5 ? fmtM(mv) : fmtMass(mv);
   const tail = flat ? 'steady' : `${dm >= 0 ? '+' : '−'}${+Math.abs(dm).toPrecision(3)} over ${fmtSec(realT(s.T(i) - s.T(0)))}`;
   return { read: `${who} · ${grCur != null ? fmtSec(realT(s.T(i))) + ' · ' : ''}${mtxt} ${mu.u} · ${tail}`, n, i };
 }
@@ -491,7 +492,7 @@ function grSummary() {
     const tg = massTarget(); if (!tg) return 'Mass graph: nothing in the scene.';
     const s = grMass.get(tg.b.id), mu = massUnit(tg.b); if (!s || !s.len) return `Mass of the ${grLc(tg.b)}: no samples yet.`;
     const a = s.V(0, 0) / mu.k, z = s.V(0, s.len - 1) / mu.k, p = v => mu.k === 1 ? fmtMass(v) : v.toPrecision(5);
-    return `Mass of the ${grLc(tg.b)} over ${fmtSec(realT(s.T(s.len - 1) - s.T(0)))}: ${a === z ? 'steady at ' + p(z) : 'from ' + p(a) + ' to ' + p(z)} ${mu.u}.`;
+    return `Mass of the ${grLc(tg.b)} over ${fmtSec(realT(s.T(s.len - 1) - s.T(0)))}: ${a === z ? 'steady at ' + p(z) : 'from ' + p(a) + ' to ' + p(z)} ${mu.u}.${tg.auto ? ' It is the heaviest body; inspect another to graph that one instead.' : ''}`;
   }
   const stars = hrStars(), b = inspected(), st = b && stars.find(x => x.b === b);
   const where = st ? ` The ${grLc(b)} is ${st.b.type.kind === 'giant' ? 'among the giants' : st.b.type.kind === 'wd' ? 'among the white dwarfs' : st.b.type.kind === 'ms' && !['WR', 'sdB'].includes(st.b.type.id) ? 'on the main sequence' : 'off the main sequence'}, at ${Math.round(st.c.T).toLocaleString('en-US')} K and ${wordsL(st.c.L)}.` : '';
@@ -573,6 +574,14 @@ grCv.addEventListener('keydown', e => {
   }
   grDraw();
 });
+// focused from the keyboard, the reading holds still on the newest sample (or the inspected star) instead of changing
+// every frame under a screen reader
+grCv.addEventListener('focus', () => {
+  if (grCur != null) return;
+  if (grTab === 'hr') { const sel = inspected(), stars = hrStars(), st = stars.find(x => x.b === sel) || stars[0]; grCur = st ? st.b.id : null; }
+  else { const tg = grTab === 'mass' ? massTarget() : null, s = grTab === 'light' ? grLight : tg && grMass.get(tg.b.id); grCur = s && s.len ? s.T(s.len - 1) : null; }
+  if (grOpen) grDraw();
+});
 grCv.addEventListener('blur', () => { if (grCur != null) { grCur = null; if (grOpen) grDraw(); } });
 // G opens and closes the graphs (not while typing, or on a focused button, like the other single-letter keys)
 addEventListener('keydown', e => {
@@ -580,7 +589,10 @@ addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,select,textarea,button,[contenteditable]')) return;
   grSetOpen(!grOpen);
 });
-if (window.ResizeObserver) new ResizeObserver(() => { grSize2(); grLayout(); if (grOpen) grDraw(); }).observe(grEl);
+if (window.ResizeObserver) {   // the scope too: when it opens or closes, the panel moves without changing size
+  const ro = new ResizeObserver(() => { grSize2(); grLayout(); if (grOpen) grDraw(); });
+  ro.observe(grEl); ro.observe(document.querySelector('.scope'));
+}
 addEventListener('resize', grLayout);
 (() => { let st = null; try { st = JSON.parse(localStorage.getItem(GR_KEY)); } catch (e) {}
   if (st && GR_TABS.includes(st.tab)) grSetTab(st.tab);
