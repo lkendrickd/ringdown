@@ -33,6 +33,7 @@ function restore(st) {
   if (PRESETS[st.p]) { currentPreset = st.p; presetSel.value = st.p; }
   setLandmarks(st.p);
   computeAccel(); renderMoveCtx(true);
+  sceneChanged();
 }
 function toB32(bytes) {
   let out = '', bits = 0, val = 0;

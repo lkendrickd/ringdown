@@ -324,6 +324,7 @@ toolsEl.addEventListener('keydown', e => {
 const toastsEl = $('toasts');
 toastsEl.addEventListener('click', e => { const t = e.target.closest('.toast'); if (t) t.remove(); });
 function toast(title, lines, kind) {
+  logEvent(title, kind);
   const el = document.createElement('div'); el.className = 'toast';
   el.innerHTML = `<h3${kind === 'w' ? ' class="w"' : ''}></h3><ul class="mono"></ul>`;
   el.querySelector('h3').textContent = title;
