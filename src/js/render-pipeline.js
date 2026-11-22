@@ -482,6 +482,77 @@ void main(){
   }
   o = vec4(c, 0.0);
 }`;
+// Jets as light on the GPU, added after the lens and before the bloom, so they glow in HDR like the disk they come from.
+// One instanced quad per jet: a beam that narrows the way real jets do (width growing as distance^0.6, like M87's), with a
+// thin hot spine inside a wider, edge-brightened sheath, filaments that stream outward, evenly spaced shock knots that
+// pinch and brighten it as they ride out at the jet's apparent speed, a slow sideways sway that grows with distance, and a
+// ragged end that spreads into a faint plume. A second kind is the beamed core of a jet seen nearly head-on.
+const VS_JET = `#version 300 es
+in vec2 q;
+in vec4 iA;   // x, y of the hole (px), length (px), direction up (+1) or down (-1) the screen; 0: a head-on core of that radius
+in vec4 iB;   // half-width at the base and at the end (px), radius hidden behind the hole (px, 0: in front), seed
+in vec4 iC;   // spine and sheath brightness, how far the knots have moved (px), their spacing (px)
+uniform vec2 uRes;
+out vec2 vP; flat out vec4 vA; flat out vec4 vB; flat out vec4 vC;
+void main(){
+  vA = iA; vB = iB; vC = iC;
+  if (iA.w == 0.0) { vP = q * iA.z; gl_Position = vec4((iA.xy + vP) / uRes * 2.0 - 1.0, 0.0, 1.0); return; }
+  float hw = iB.y * 3.4 + 8.0, len = iA.z * 1.22 + 8.0;
+  vP = vec2(q.x * hw, (q.y * 0.5 + 0.5) * len - 6.0);   // across, and along from the hole
+  gl_Position = vec4((iA.xy + vec2(vP.x, iA.w * vP.y)) / uRes * 2.0 - 1.0, 0.0, 1.0);
+}`;
+const FS_JET = `#version 300 es
+precision highp float;
+in vec2 vP; flat in vec4 vA; flat in vec4 vB; flat in vec4 vC;
+uniform float uFlow, uDetail, uHDR;
+out vec4 o;
+float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p){ return vnoise(p) * 0.55 + vnoise(p * 2.1 + 3.7) * 0.3 + vnoise(p * 4.3 - 1.3) * 0.15; }
+const vec3 SPINE = vec3(0.86, 0.92, 1.0), SHEATH = vec3(0.42, 0.58, 1.0), HALO = vec3(0.34, 0.36, 0.95);
+void main(){
+  if (vA.w == 0.0) {   // seen nearly head-on: a beamed core in front of the shadow, like a blazar
+    float r = length(vP) / vA.z;
+    if (r >= 1.0) discard;
+    float g = exp(-r * r * 7.0) * (1.0 - r) * (1.0 + 0.8 * uHDR * exp(-r * r * 60.0));
+    o = vec4(mix(SHEATH, SPINE, exp(-r * r * 14.0)) * g * vC.x, 0.0); return;
+  }
+  float L = vA.z, s = vP.y / L, sc = clamp(s, 0.0, 1.0), w0 = vB.x, seed = vB.w;
+  float detail = step(0.5, uDetail);
+  // the stream: stretched along the jet, moving outward
+  float yN = (vP.y - uFlow) / (w0 * 5.0 + 14.0);
+  // shock knots: evenly spaced, riding outward; each pinches the beam and brightens its spine
+  float kf = fract((vP.y - vC.z) / vC.w) - 0.5;
+  float wk = vB.x + (vB.y - vB.x) * pow(sc, 0.62);
+  float knot = exp(-kf * kf * vC.w * vC.w / (2.2 * wk * wk + 30.0)) * smoothstep(0.03, 0.12, s) * (1.0 - sc);
+  float w = wk * (1.0 - 0.16 * knot) * (1.0 + 0.9 * smoothstep(0.72, 1.15, s));   // narrowing parabola, spreading into the plume
+  float sway = detail * 0.5 * sc * sc * sin(sc * 7.0 - uFlow / (L * 0.9 + 40.0) * 6.2832 + seed * 6.2832)
+             + detail * 0.22 * sc * (vnoise(vec2(seed * 9.0, yN * 0.35)) - 0.5);
+  float x = vP.x / w - sway, ax = abs(x);
+  float spine = exp(-x * x * 16.0);
+  float sheath = exp(-x * x * 1.25) * (0.5 + 0.5 * smoothstep(0.2, 0.95, ax));   // brighter toward its edges, as radio maps show
+  float halo = exp(-ax * 1.1) * 0.16;
+  float fil = 1.0, wisp = 0.0, rag = 0.5;
+  if (detail > 0.5) {
+    float n = fbm(vec2(x * 2.6 + seed * 17.0, yN)) * 0.65 + fbm(vec2(x * 6.0 - seed * 5.0, yN * 2.3 + 4.0)) * 0.35;
+    fil = mix(1.0, 0.3 + 1.45 * n, 0.8 * smoothstep(0.02, 0.25, sc));
+    wisp = pow(vnoise(vec2(x * 5.0 + seed * 31.0 + sin(yN * 0.7) * 0.8, yN * 0.45)), 4.0) * 1.6 * smoothstep(0.05, 0.3, sc);
+    rag = fbm(vec2(x * 1.4 + seed * 3.0, yN * 0.5));
+  }
+  float along = 1.0 / (1.0 + 4.5 * sc);                                   // fades with distance as it spreads
+  float tip = 1.0 - smoothstep(0.5, 1.12, s + 0.34 * (rag - 0.5));        // a ragged end, not a cut
+  float nozzle = exp(-vP.y * vP.y / (10.0 * w0 * w0 + 20.0)) * exp(-x * x * 2.5);
+  float fadeIn = smoothstep(-6.0, 2.0, vP.y);
+  float hid = vB.z > 0.0 ? smoothstep(vB.z * 0.92, vB.z * 1.5, length(vP)) : 1.0;   // the far jet starts behind the hole
+  vec3 c = SHEATH * vC.y * 0.8 * (sheath * fil + wisp * sheath) * along
+         + HALO * vC.y * halo * along
+         + SPINE * (0.3 * vC.y + 0.6 * vC.x) * spine * (0.55 + 0.45 * fil) * (along + 0.45 * knot) * (1.0 + 0.7 * uHDR)
+         + SPINE * (0.4 * vC.y + 0.5 * vC.x) * nozzle * 0.55 * (1.0 + 0.7 * uHDR);
+  o = vec4(c * tip * fadeIn * hid, 0.0);
+}`;
 // Quality switches, one per costly stage, for a quality setting to turn off: edge anti-aliasing, surface detail (star
 // and planet surfaces, explosion filaments). fx: explosions on the GPU; off draws them on the 2D canvas as the
 // fallback does (kept to compare against).
@@ -515,6 +586,7 @@ function buildGL() {
     GLR.fin = program(VS_TRI, FS_FINAL, ['p']);
     GLR.fxaa = program(VS_TRI, FS_FXAA, ['p']);
     GLR.fx = program(VS_FX, FS_FX, ['q', 'iA', 'iB', 'iC', 'iD', 'iE']);
+    GLR.jet = program(VS_JET, FS_JET, ['q', 'iA', 'iB', 'iC']);
   } catch (e) { console.warn('WebGL2 shaders failed, using 2D fallback', e); return false; }
   HDR = !!gl.getExtension('EXT_color_buffer_float');
   // full-screen triangle
@@ -536,6 +608,7 @@ function buildGL() {
   GLR.starI = instanced(16, [4, 4, 4, 4]);
   GLR.gasI = instanced(8, [4, 4]);
   GLR.fxI = instanced(20, [4, 4, 4, 4, 4]);
+  GLR.jetI = instanced(12, [4, 4, 4]);
   gl.bindVertexArray(null);
   // textures: the tiled sky (uploaded once) and the 2D effects canvas (uploaded only on frames that draw to it)
   const texture = (wrap) => {
