@@ -589,7 +589,7 @@ function sprayMatter(sx, sy, wallDt) {
       const dx = wx - host.x, dy = wy - host.y, r = Math.hypot(dx, dy) || 1, v = Math.sqrt(G * host.m / r) * (1 + 0.04 * (rand() - 0.5));
       vx = host.vx + dy / r * v; vy = host.vy - dx / r * v;
     }
-    if (qN >= matCap || !addMatter(wx, wy, vx, vy, m, 0)) { matterFull = true; toast('That is all the loose matter the sandbox can track', ['Let some of it settle into bodies, then spray more']); return; }
+    if (qN >= matCap || !addMatter(wx, wy, vx, vy, m, 0)) { matterFull = true; toast('That is all the loose matter the sandbox can track', ['Let some of it settle into bodies, then spray more'], '', { ui: true }); return; }
   }
 }
 

@@ -1,6 +1,7 @@
 /* ================= loop ================= */
 let last = performance.now(), frameN = 0, workMs = 8, frameSim = 0;
 let loopErr = false, manual = false, simOnly = false;   // manual: the test hook is stepping frames itself (simOnly: without drawing them)
+let wallBack = 0;   // ms the frame clock (wallNow) runs behind performance.now(): a rewind winds it back (timeline.js)
 // Frame-time governor: shrink the gas and matter budgets on slow devices, grow them back when there is headroom.
 // Between 10 and 20 ms of work a frame both hold still, so they settle instead of hunting.
 function govern(ms) {
@@ -10,8 +11,8 @@ function govern(ms) {
   gasCap = Math.min(gasCap, Q.gas); matCap = Math.min(matCap, Q.mat);   // the quality setting's ceilings
 }
 function frame(now) {
-  if (!manual) try { frameBody(now); }
-  catch (err) { if (!loopErr) { loopErr = true; console.error('Ringdown frame error', err); toast('Something glitched', ['A frame hit an error and was skipped; the simulation keeps running']); } }
+  if (!manual) try { frameBody(now - wallBack); }
+  catch (err) { if (!loopErr) { loopErr = true; console.error('Ringdown frame error', err); toast('Something glitched', ['A frame hit an error and was skipped; the simulation keeps running'], '', { ui: true }); } }
   requestAnimationFrame(frame);
 }
 function frameBody(now) {

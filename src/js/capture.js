@@ -31,8 +31,8 @@ function capFrame() {
   const cv = document.createElement('canvas'), name = stamp('png');
   paintCap(cv, ui.width, ui.height);   // device resolution
   cv.toBlob(b => {
-    if (!b) { toast('Screenshot failed', ['The browser could not make the image']); return; }
-    saveFile(b, name); toast('Screenshot saved', [name]);
+    if (!b) { toast('Screenshot failed', ['The browser could not make the image'], '', { ui: true }); return; }
+    saveFile(b, name); toast('Screenshot saved', [name], '', { ui: true });
     if (photo) { photoWake(); $('photoShot').textContent = 'Saved'; setTimeout(() => { $('photoShot').textContent = 'Screenshot'; }, 1400); }
   }, 'image/png');
 }
@@ -54,17 +54,17 @@ function recStart() {
   const end = () => { stream.getTracks().forEach(t => t.stop()); if (tap) try { src.disconnect(tap); } catch (e) {} };
   let mr;
   try { mr = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8e6 }); mr.start(1000); }
-  catch (e) { end(); toast('Recording failed', ['This browser could not start a video recording']); return; }
+  catch (e) { end(); toast('Recording failed', ['This browser could not start a video recording'], '', { ui: true }); return; }
   const r = rec = { mr, cv, t0: performance.now(), tick: setInterval(recTick, 250), ms: 0, why: '' };
   mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
   mr.onerror = () => recStop();
   mr.onstop = async () => {
     end();
-    if (!chunks.length) { toast('Recording failed', ['No video came through']); return; }
+    if (!chunks.length) { toast('Recording failed', ['No video came through'], '', { ui: true }); return; }
     const mt = (mr.mimeType || type).split(';')[0], ext = mt.includes('mp4') ? 'mp4' : 'webm', name = stamp(ext);
     let blob = new Blob(chunks, { type: mt });
     if (ext === 'webm') blob = await webmLength(blob, r.ms);
-    saveFile(blob, name); toast('Clip saved', [name, `${(r.ms / 1000).toFixed(1)} s${tap ? ' with sound' : ''}${r.why}`]);
+    saveFile(blob, name); toast('Clip saved', [name, `${(r.ms / 1000).toFixed(1)} s${tap ? ' with sound' : ''}${r.why}`], '', { ui: true });
   };
   syncRec();
 }

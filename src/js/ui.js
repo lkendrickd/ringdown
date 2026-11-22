@@ -35,7 +35,7 @@ for (const k of TOGGLES) $('t-' + k).addEventListener('change', e => { opt[k] = 
 $('fit').addEventListener('click', () => { fitBodies(); renderMoveCtx(true); });
 $('clear').addEventListener('click', () => { bodies = []; gN = 0; gwSrc = null; totalFed = 0; totalWind = 0; xrBuf.fill(0); flashes.length = 0; scopeBuf.fill(0); scopeMark.fill(0); freqBuf.fill(0); });
 $('sound').addEventListener('click', () => {
-  if (!au && !initAudio()) { toast('No audio', ['This browser does not support Web Audio']); return; }
+  if (!au && !initAudio()) { toast('No audio', ['This browser does not support Web Audio'], '', { ui: true }); return; }
   soundOn = !soundOn; $('sound').setAttribute('aria-pressed', String(soundOn)); $('vol').hidden = !soundOn;
   sndPower();
 });
@@ -311,9 +311,9 @@ function updateInspect() {
 function undoPlace() {
   while (placed.length) {
     const id = placed.pop(), b = bodies.find(o => o.id === id);
-    if (b) { bodies = bodies.filter(o => o !== b); if (followId === id) followId = null; computeAccel(); toast('Removed', [`${describe(b)} taken back out`]); return; }
+    if (b) { bodies = bodies.filter(o => o !== b); if (followId === id) followId = null; computeAccel(); toast('Removed', [`${describe(b)} taken back out`], '', { ui: true }); return; }
   }
-  toast('Nothing to undo', ['Objects you place can be removed here, newest first']);
+  toast('Nothing to undo', ['Objects you place can be removed here, newest first'], '', { ui: true });
 }
 toolsEl.addEventListener('keydown', e => {
   if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
@@ -323,8 +323,10 @@ toolsEl.addEventListener('keydown', e => {
 
 const toastsEl = $('toasts');
 toastsEl.addEventListener('click', e => { const t = e.target.closest('.toast'); if (t) t.remove(); });
-function toast(title, lines, kind) {
-  logEvent(title, kind);
+// data goes to the event log with it: notices about the interface rather than the simulation (a screenshot saved, a link
+// loaded, an error) pass { ui: true }, so the timeline leaves them off its markers
+function toast(title, lines, kind, data) {
+  logEvent(title, kind, data);
   const el = document.createElement('div'); el.className = 'toast';
   el.innerHTML = `<h3${kind === 'w' ? ' class="w"' : ''}></h3><ul class="mono"></ul>`;
   el.querySelector('h3').textContent = title;
@@ -338,7 +340,7 @@ function toast(title, lines, kind) {
 let errNoticeAt = -1e9;
 function errorNotice(err) {
   const t = performance.now(); if (t - errNoticeAt < 10000) return; errNoticeAt = t;
-  toast('Something glitched', [String((err && err.message) || err || 'Unknown error').slice(0, 160), 'The simulation keeps running; reloading the page clears it']);
+  toast('Something glitched', [String((err && err.message) || err || 'Unknown error').slice(0, 160), 'The simulation keeps running; reloading the page clears it'], '', { ui: true });
 }
 addEventListener('error', e => errorNotice(e.error || e.message));
 addEventListener('unhandledrejection', e => errorNotice(e.reason));

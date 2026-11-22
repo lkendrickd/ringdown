@@ -3,7 +3,7 @@ let closeUpId = null, closeUpDrift = null;
 function toggleCloseUp(b) {
   if (closeUpId === b.id) { closeUpId = null; return; }
   closeUpId = b.id; followId = b.id; opt.follow = true; syncToggles();
-  toast('Close-up', ['The hole pulls harder on the side of the star facing it than on the far side', 'That difference stretches the star along the line to the hole and squeezes it from the sides'], 'w');
+  toast('Close-up', ['The hole pulls harder on the side of the star facing it than on the far side', 'That difference stretches the star along the line to the hole and squeezes it from the sides'], 'w', { ui: true });
 }
 // The shape tides give a star, in units of its radius, along the line to the hole (f = radius / Roche lobe).
 // Weak tides raise two equal bulges (a mild football, deformation ~ f³). As the star fills its lobe the near side

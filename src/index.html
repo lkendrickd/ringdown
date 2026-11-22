@@ -36,6 +36,7 @@
 /*@include css/onboarding.css*/
 /*@include css/settings.css*/
 /*@include css/graphs.css*/
+/*@include css/timeline.css*/
 </style>
 <script>
 // Phone mode: narrow screens, and phones held sideways. Set before the first layout so the camera fits the phone overlays.
@@ -51,7 +52,7 @@
 <main>
 <canvas id="view" class="full" aria-hidden="true"></canvas>
 <canvas id="ui" class="full" tabindex="0" role="application" aria-label="Black hole simulation. Tap or click to place the selected object; drag to throw it." aria-describedby="sceneKeys"></canvas>
-<p id="sceneKeys" class="sr">Keys: arrows pan, plus and minus zoom, [ and ] turn the view, comma and period tilt it, Enter places the selected object at the centre of the view (hold it to pour matter), Space pauses, H hides the controls, P saves a screenshot, F goes fullscreen, Escape goes back to Move. In the object bar, the left and right arrows choose an object. Events are read out as they happen.</p>
+<p id="sceneKeys" class="sr">Keys: arrows pan, plus and minus zoom, [ and ] turn the view, comma and period tilt it, Enter places the selected object at the centre of the view (hold it to pour matter), Space pauses, B goes back 10 seconds, H hides the controls, P saves a screenshot, F goes fullscreen, Escape goes back to Move. In the object bar, the left and right arrows choose an object. Events are read out as they happen.</p>
 </main>
 
 <header class="bar">
@@ -182,6 +183,12 @@
 </aside>
 
 <nav class="dock" id="dock" aria-label="Objects">
+  <div class="tl" id="tl" role="group" aria-label="Rewind">
+    <button class="tl-back" id="tlBack" type="button" aria-label="Back 10 seconds" title="Back 10 seconds (B)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 3.5v4h4"/></svg><span>10 s</span></button>
+    <div class="tl-track" id="tlTrack" role="slider" tabindex="0" aria-label="Timeline: drag back to replay, Page Up and Page Down jump between events" aria-valuemin="-30" aria-valuemax="0" aria-valuenow="0" aria-valuetext="Live"><div class="tl-fill" id="tlFill"></div><div class="tl-ahead" id="tlAhead"></div><div class="tl-marks" id="tlMarks"></div><div class="tl-head" id="tlHead"></div></div>
+    <span class="tl-time mono" id="tlTime" aria-hidden="true">live</span>
+    <div class="tl-tip" id="tlTip" hidden aria-hidden="true"></div>
+  </div>
   <div class="ctx" id="ctx"></div>
   <div class="tools" id="tools" role="radiogroup" aria-label="Object to place"></div>
   <div class="tscroll" id="tscroll" aria-hidden="true"><div class="thumb"></div></div>
@@ -227,6 +234,7 @@
         <tr><th scope="row">Back to Move</th><td><kbd>Esc</kbd></td><td>Move chip</td></tr>
         <tr><th scope="row">Pause</th><td><kbd>Space</kbd></td><td>Pause button</td></tr>
         <tr><th scope="row">Graphs</th><td><kbd>G</kbd>, or the Graphs strip under the scope; hover to read values</td><td>Tap the Graphs strip</td></tr>
+        <tr><th scope="row">Rewind</th><td>Drag the timeline above the object bar, click a marker, or <kbd>B</kbd> for 10 s back</td><td>Drag or tap the timeline</td></tr>
         <tr><th scope="row">Hide the controls</th><td><kbd>H</kbd>, or the eye button</td><td>Eye button (tap it again to bring them back)</td></tr>
         <tr><th scope="row">Screenshot</th><td><kbd>P</kbd>, or the camera button</td><td>Camera menu → Screenshot</td></tr>
         <tr><th scope="row">Fullscreen</th><td><kbd>F</kbd>, or the fullscreen button</td><td>Camera menu → Fullscreen</td></tr>
@@ -273,6 +281,7 @@
 /*@include js/onboarding.js*/
 /*@include js/settings.js*/
 /*@include js/graphs.js*/
+/*@include js/timeline.js*/
 /*@include js/test-hook.js*/
 })();
 </script>

@@ -60,8 +60,8 @@ async function decodeState(code) {
 }
 async function loadFromHash() {
   const h = location.hash.slice(1); if (!/^s1[zr]-/.test(h)) return false;
-  try { const st = await decodeState(h); if (!st) return false; restore(st); toast('Shared setup loaded', [`${bodies.length} objects, exactly as they were when the link was made`]); return true; }
-  catch (e) { toast('Link not readable', ['That link looks incomplete or damaged, so the default scene is shown instead']); return false; }
+  try { const st = await decodeState(h); if (!st) return false; restore(st); toast('Shared setup loaded', [`${bodies.length} objects, exactly as they were when the link was made`], '', { ui: true }); return true; }
+  catch (e) { toast('Link not readable', ['That link looks incomplete or damaged, so the default scene is shown instead'], '', { ui: true }); return false; }
 }
 const sharePop = $('sharepop');
 $('share').addEventListener('click', async () => {

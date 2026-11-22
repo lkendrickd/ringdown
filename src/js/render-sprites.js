@@ -70,10 +70,10 @@ if (gl) uploadSky();
 if (gl) {
   view.addEventListener('webglcontextlost', e => {
     e.preventDefault(); glLost = true;
-    toast('Graphics reset', ['The browser took the graphics card away from this page for a moment; the picture returns as soon as it is given back']);
+    toast('Graphics reset', ['The browser took the graphics card away from this page for a moment; the picture returns as soon as it is given back'], '', { ui: true });
   });
   view.addEventListener('webglcontextrestored', () => {
-    if (!buildGL()) { toast('Graphics lost', ['The picture could not be rebuilt after a graphics reset. Reload the page to get it back']); return; }
+    if (!buildGL()) { toast('Graphics lost', ['The picture could not be rebuilt after a graphics reset. Reload the page to get it back'], '', { ui: true }); return; }
     GLR.tg = {}; GLR.bloom = []; glTargets(); uploadSky(); glLost = false;   // the old targets belonged to the lost context: drop, don't delete
   });
 }

@@ -1,10 +1,10 @@
 /* ================= input ================= */
 const pointers = new Map();
 function commitPlace(sx, sy, ex, ey) {
-  if (bodies.length >= 48) { toast('Too crowded', ['48 objects is the limit; clear some space first']); return; }
+  if (bodies.length >= 48) { toast('Too crowded', ['48 objects is the limit; clear some space first'], '', { ui: true }); return; }
   const [wx, wy] = toW(sx, sy), isBH = tool === 'bh';
   const body = isBH ? makeBH(wx, wy, 0, 0, bhMass, bhSpin) : makeStar(tool, wx, wy, 0, 0);
-  for (const b of bhList()) if (sepOf(body, b) < 2.8 * rsOf(b.m) + (isBH ? rsOf(body.m) * 2.6 : body.R)) { toast('Too close', ['Drop it outside the horizon']); return; }
+  for (const b of bhList()) if (sepOf(body, b) < 2.8 * rsOf(b.m) + (isBH ? rsOf(body.m) * 2.6 : body.R)) { toast('Too close', ['Drop it outside the horizon'], '', { ui: true }); return; }
   const pv = placementVelocity(wx, wy, ex - sx, ey - sy);
   if (pv.circular) { if (pv.host) setCircular(pv.host, body); }
   else { body.vx = pv.vx; body.vy = pv.vy; }
