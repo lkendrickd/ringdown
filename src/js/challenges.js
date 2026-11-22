@@ -182,7 +182,7 @@ const CHAL = [
     } },
   { id: 'moon', lvl: 'Hard', t: 'Make a Moon', goal: 'Pour matter round the young Earth until it gathers into a moon of 0.7 to 1.5 times the Moon’s mass.',
     hint: 'Matter is picked. Set Flow to about 0.013 Earth masses a second (about a Moon a second) and hold the pointer down six Earth radii from the planet for two seconds, then speed time up to 64×. Too little and the moonlets stay small; inside about three Earth radii matter stays a ring.',
-    won: 'Beyond the Roche limit, about three Earth radii out, matter sticks together into moonlets, and moonlets that meet merge into one. The Moon is thought to have gathered like this from the debris of a giant impact.',
+    won: 'Beyond the Roche limit, about three Earth radii out, matter sticks together into moonlets, and moonlets that meet merge into one. The Moon may have gathered like this from the debris of a giant impact (recent supercomputer runs suggest it was flung out in one piece instead: see the Giant impact scene).',
     scene: s => chalScene('theia', s, () => { bodies = [world('ROCK', 'Earth', 5.972e24, 6371, [118, 150, 196])]; }, 0, 'matter'),
     check() {
       const earth = bodies.find(b => b.label === 'Earth');

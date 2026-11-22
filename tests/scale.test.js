@@ -130,10 +130,9 @@ test('a scene built on the bigger budget still replays exactly from its seed', a
   assert.ok(r[1], 'stepping without drawing changed the result');
 });
 
-// The README: given a few minutes at 16x or 64x, the impact usually ends as one Moon of roughly 0.7 to 1.5 lunar masses,
-// 3 to 4 Earth radii out. On the bigger budget (where the other scenes use four times the grains) it still should, and
-// exactly as on the old one (1200 frames at 64x is about 6 minutes at 16x).
-test('theia: on the bigger budget the debris still gathers into one Moon like the real one, exactly as before', async t => {
+// The Moon-forming scene on the bigger budget (where the other scenes use four times the grains): it plays out exactly
+// as on the old one, and ends with the flung chunk as the Moon on its wide orbit (tests/moon.test.js has the detail).
+test('theia: on the bigger budget the scene still ends with the same Moon, exactly as before', async t => {
   const rows = [];
   for (const seed of [1, 2, 3]) rows.push(await ev(seed => {
     __rd.budget(undefined, 28000); __rd.load('theia', seed); __rd.speed = 6; __rd.step(1200, 50, false);
@@ -145,10 +144,11 @@ test('theia: on the bigger budget the debris still gathers into one Moon like th
   t.diagnostic(JSON.stringify(rows));
   const same = await ev(() => [7000, 28000].map(m => { __rd.budget(undefined, m); __rd.load('theia', 2); __rd.speed = 6; __rd.step(1200, 50, false); __rd.budget(undefined, 7000); return JSON.stringify(__rd.state()); }));
   assert.ok(same[0] === same[1], 'seed 2 played out differently on the bigger budget');
-  const ok = rows.filter(r => r.m >= 0.5 && r.m <= 1.6 && r.rE >= 2.5 && r.rE <= 4.5);
   assert.ok(rows.every(r => r.scale === 4), 'not built on the bigger budget');
-  assert.ok(ok.length >= 2, `seeds with a Moon of 0.5-1.6 lunar masses at 2.5-4.5 Earth radii: ${ok.length} of 3 ${JSON.stringify(rows)}`);
+  const ok = rows.filter(r => r.m >= 0.6 && r.m <= 0.95 && r.rE >= 6 && r.rE <= 9);
+  assert.equal(ok.length, 3, `seeds with a Moon of 0.6-0.95 lunar masses at 6-9 Earth radii: ${ok.length} of 3 ${JSON.stringify(rows)}`);
 });
+
 
 test('Barnes–Hut cell gravity: within 1% (rms) of the every-pair sum on 3,000 cells, and faster', async t => {
   const runs = [];

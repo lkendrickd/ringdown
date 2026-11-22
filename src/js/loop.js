@@ -60,7 +60,7 @@ function frameBody(now) {
     // the matter's own gravity and sticking are slow processes: every third frame is plenty
     mcDt += simDt; mcWall += wallDt;
     if (frameN % (mcHeavy ? 3 : 12) === 0) { matterCollective(mcDt, mcWall); mcDt = 0; mcWall = 0; }   // light belts: less often still
-    planetTides(simDt); planetPairs(); if (frameN % 30 === 0) nameTheMoon();
+    slingshots(simDt); planetTides(simDt); planetPairs(); if (frameN % 30 === 0) nameTheMoon();
     // smoothed rate of mass change for the inspector (per second of sim time)
     for (const b of bodies) {
       if (b.mPrev == null || simDt <= 0) { b.mPrev = b.m; b.mRate = b.mRate || 0; continue; }
