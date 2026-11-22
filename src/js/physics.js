@@ -279,7 +279,7 @@ function mergeBH(a, b) {
     `${fmtM(a.m)} + ${fmtM(b.m)} → ${fmtM(mf)} M☉, spin ${chiA.toFixed(2)}${spinNote}`,
     `${fmtM(M - mf)} M☉ (${(frac * 100).toFixed(1)}%) radiated as gravitational waves`,
     `Ringdown ${fmtHz(qn.fReal)}, e-folds in ${(qn.tauReal * 1000).toFixed(1)} ms of real time`,
-  ], 'w');
+  ], 'w', { id: 'bh-merge', m1: big.m, m2: sml.m, mf, chi: chiA });
 }
 function addKilonova(x, y, scale, ej, vx, vy) {
   flashes.push({ x, y, t0: wallNow, dur: 9000, scale });
@@ -309,12 +309,12 @@ function mergeNS(a, b) {
       `${fmtM(a.m)} + ${fmtM(b.m)} M☉ → ${fmtM(mf)} M☉ black hole`,
       `About ${ej.toFixed(2)} M☉ of r-process ejecta (gold, platinum, uranium)`,
       `Short gamma-ray burst jet; ringdown ${fmtHz(qn.fReal)}, above LIGO's sweet spot`,
-    ], 'w');
+    ], 'w', { id: 'ns-merge', m1: a.m, m2: b.m, mf, rem: 'bh' });
   } else {
     const rem = makeStar('NS', x, y, vx, vy, mf); rem.R = 1.1; rem.R0 = 1.1; zmix(rem, a, b);
     bodies.push(rem);
     gwSrc = null; markScope = true;
-    toast('Neutron stars merged · kilonova', [`${fmtM(a.m)} + ${fmtM(b.m)} M☉ → ${fmtM(mf)} M☉ neutron star (light enough to survive)`, `About ${ej.toFixed(2)} M☉ of r-process ejecta`], 'w');
+    toast('Neutron stars merged · kilonova', [`${fmtM(a.m)} + ${fmtM(b.m)} M☉ → ${fmtM(mf)} M☉ neutron star (light enough to survive)`, `About ${ej.toFixed(2)} M☉ of r-process ejecta`], 'w', { id: 'ns-merge', m1: a.m, m2: b.m, mf, rem: 'ns' });
   }
 }
 function swallow(bh, st) {
@@ -397,7 +397,7 @@ function mergeWhiteDwarfs(a, b) {
   }
   if (M >= M_CH) {
     if (big.sn) return; // already exploding; the extra mass just goes with it
-    big.sn = { t0: wallNow, mode: 'ia' };
+    big.sn = { t0: wallNow, mode: 'ia', via: 'merge' };
     toast('Over the Chandrasekhar limit', [`Two white dwarfs merged into ${fmtM(M)} M☉, past the 1.44 M☉ that a white dwarf can hold up`, 'Carbon is about to ignite']);
   } else toast('White dwarfs merged', [`Now ${fmtM(M)} M☉, and smaller than before: white dwarfs shrink as they gain mass`, `${fmtM(M_CH - M)} M☉ short of the Chandrasekhar limit`]);
 }
@@ -593,7 +593,7 @@ function explode(st) {
       `The ${fmtM(st.m)} M☉ white dwarf exploded completely. Nothing is left behind`,
       'Carbon and oxygen burned to nickel in about a second; the glow that follows is that nickel decaying to iron',
       'These all peak at nearly the same brightness, which is how they revealed that the universe is speeding up',
-    ], 'w');
+    ], 'w', { id: 'typeia', m: st.m, via: st.sn.via || 'edit' });
     return;
   }
   if (mode === 'pi') { // nothing survives
@@ -635,7 +635,7 @@ function explode(st) {
     const r = sepOf(rem, o), E = 0.5 * ((o.vx - rem.vx) ** 2 + (o.vy - rem.vy) ** 2 + (o.vz - rem.vz) ** 2) - G * (o.m + rem.m) / r;
     lines.push(E > 0 ? `It lost so much mass that its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.lc}, is no longer bound to it` : `Its partner, the ${o.kind === 'bh' ? 'black hole' : o.type.lc}, is still bound to it`);
   } else lines.push(toBH ? 'Most of the core fell back, so it collapsed past the neutron-star limit' : `Born with a kick of ${Math.round(kick / C * 299792.458)} km/s`);
-  toast('Supernova', lines, 'w');
+  toast('Supernova', lines, 'w', { id: 'supernova', rem: toBH ? 'bh' : 'ns', m: st.m, mBirth: st.mBirth, mRem });
 }
 // the observed class of a core-collapse supernova follows from what the star still had on the outside
 function snClass(st) {

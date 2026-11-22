@@ -507,7 +507,7 @@ function ringFrom(p, host, r) {
     addMatter(p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, p.vx + Math.cos(va) * sp, p.vy + Math.sin(va) * sp, p.m / N, 0, puff, p.z, p.vz); qr[qN - 1] = 1;
   }
   toast('Torn into a ring', [`${cap(bodyName(p))} came within ${fmtDist(r * KM_PER_UNIT)} of ${bodyName(host)}, inside its Roche limit`,
-    'There the pull on its near side beats its own gravity, so it came apart. The pieces spread along the orbit into a ring and cannot gather back into a moon this close in.'], 'w');
+    'There the pull on its near side beats its own gravity, so it came apart. The pieces spread along the orbit into a ring and cannot gather back into a moon this close in.'], 'w', { id: 'ring', host: host.label || host.type.id, m: p.m });
   computeAccel();
 }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);

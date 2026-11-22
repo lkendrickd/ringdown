@@ -1,0 +1,54 @@
+/* ===== Challenges: the list (a tab in help) and the goal card (left column, under the strain scope) =====
+   The card sits where nothing else lives while a challenge runs: under the scope on the left, as wide as it, clear of the
+   inspector, settings and help on the right and of the timeline and object bar at the bottom. Notices share the left edge,
+   so while a card is up the newest one drops in just below it (two lines of it), and never under it. */
+.g-tabs{gap:10px}
+.g-tab{letter-spacing:.09em;white-space:nowrap}
+.c-item .c-lvl{display:inline-block;margin-top:4px;font:600 10px/1 var(--f-ui);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.c-item[aria-current="true"]{border-color:rgba(255,179,106,.45);background:rgba(255,179,106,.08)}
+.c-item[aria-current="true"] .c-lvl{color:var(--accent)}
+.c-num{flex:none;width:16px;margin-top:1px;font:500 12px/16px var(--f-mono);color:var(--faint);text-align:right}
+.g-more{margin-top:2px}
+
+.chal{position:fixed;z-index:5;left:max(16px,env(safe-area-inset-left,0px));top:calc(var(--scope-b,220px) + 10px);width:min(360px,calc(100% - 32px));
+  display:flex;flex-direction:column;gap:6px;padding:10px 12px 11px;border-radius:12px;border:1px solid rgba(255,179,106,.32);background:var(--glass-hi);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:tin .3s ease-out both;
+  max-height:calc(100% - var(--scope-b,220px) - var(--dock-h,120px) - 24px);overflow-y:auto;overscroll-behavior:contain}
+body:has(.fps:not([hidden])) .chal{top:calc(var(--scope-b,220px) + 40px)}
+.chal>*{flex-shrink:0}   /* short of room the card scrolls; nothing in it is squashed */
+.chal-head{display:flex;align-items:center;gap:8px;min-height:24px}
+.chal-tag{flex:1;min-width:0;font:600 11px/1 var(--f-ui);letter-spacing:.2em;text-transform:uppercase;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chal .ins-x{width:26px;height:26px}
+.chal h2{margin:0;font:600 16px/1.15 var(--f-ui);letter-spacing:.03em;color:var(--ink)}
+.chal-goal{margin:0;font-size:13.5px;line-height:1.35;color:#c3c1bb;-webkit-user-select:text;user-select:text}
+.chal-prog{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink)}
+.chal-meter{height:4px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
+.chal-meter i{display:block;width:0;height:100%;background:var(--accent);transition:width .3s}
+.chal-hint{margin:0;padding:6px 9px;border-radius:8px;border-left:2px solid var(--wave);background:rgba(127,211,230,.07);font-size:13px;line-height:1.38;color:var(--ink);-webkit-user-select:text;user-select:text}
+.chal-btns{display:flex;flex-wrap:wrap;gap:6px}
+.chal-btns .go{border-color:rgba(127,211,230,.55);background:rgba(127,211,230,.14);color:#bfeaf3}
+.chal.won{border-color:rgba(127,211,230,.6);box-shadow:0 0 0 1px rgba(127,211,230,.18),0 0 26px rgba(127,211,230,.22),0 10px 30px rgba(0,0,0,.4)}
+.chal.won .chal-tag{color:var(--wave)}
+.chal.won .chal-meter i{background:var(--wave)}
+html.clean .chal{display:none!important}
+/* notices on the same edge: the newest one, just under the card (--chal-h is the card's height, kept by challenges.js) */
+html.chal-on .toasts{top:calc(var(--scope-b,220px) + 18px + var(--chal-h,180px));bottom:auto;width:min(360px,calc(100% - 32px))}
+html.chal-on body:has(.fps:not([hidden])) .toasts{margin-top:30px}
+html.chal-on .toast:not(:last-child):not(.pass),html.chal-on .toast li:nth-child(n+3){display:none}
+html.chal-on .toast.pass{display:block}
+/* phone: a compact strip under the strain strip */
+html.phone .chal{top:calc(var(--scope-b,90px) + 8px);left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));width:auto;max-width:420px;
+  padding:8px 10px 9px;gap:4px;border-radius:11px}
+html.phone .chal h2{font-size:14.5px}
+html.phone .chal-goal{font-size:12.5px}
+html.phone .chal-hint{font-size:12.5px;padding:5px 8px}
+html.phone .chal-btns .follow-x{height:28px}
+html.phone.chal-on .toasts{top:calc(var(--scope-b,90px) + 16px + var(--chal-h,150px));left:max(12px,env(safe-area-inset-left,0px));width:min(420px,calc(100% - 24px))}
+/* phone held sideways: no room for both down the left, so the card keeps the left and the notice goes top right */
+@media (orientation:landscape){
+  html.phone .chal{right:auto;width:min(340px,45vw);padding:6px 10px 8px;gap:3px;max-height:calc(100% - var(--scope-b,90px) - var(--dock-h,100px) - 14px)}
+  html.phone .chal:not(.won) .chal-goal,html.phone .chal.won .chal-prog{display:none}   /* the title says it (the full goal is in the list); passed, the tag says it */
+  html.phone .chal.won .chal-goal{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
+  html.phone.chal-on .toasts{top:calc(env(safe-area-inset-top,0px) + 50px);left:auto;right:max(12px,env(safe-area-inset-right,0px));width:min(340px,45vw)}
+}
+@media (prefers-reduced-motion: reduce){.chal{animation:none}.chal-meter i{transition:none}}
