@@ -49,7 +49,7 @@ const PAD_DZ = 0.18;
 function stick(x, y) { const m = Math.hypot(x, y); if (m < PAD_DZ) return [0, 0]; const k = Math.min(1, (m - PAD_DZ) / (1 - PAD_DZ)) / m; return [x * k, y * k]; }
 addEventListener('gamepadconnected', e => {
   padOn = true; padPrev = e.gamepad ? e.gamepad.buttons.map(b => b.pressed) : [];  // the press that woke the pad isn't an action
-  toast('Gamepad connected', ['Left stick pans · right stick turns and tilts · triggers zoom', 'A places · B Move · X pause · bumpers change object · Start hides the controls']);
+  toast('Gamepad connected', ['Left stick pans · right stick turns and tilts · triggers zoom', 'A places · B Move · X pause · bumpers change object · Start hides the controls'], '', { ui: true });
 });
 addEventListener('gamepaddisconnected', () => { padPrev = []; pour(false); });
 let navT = 0;

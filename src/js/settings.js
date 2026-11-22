@@ -60,7 +60,7 @@ function setAutoRS(k, now) { autoK = k; Q.rs = AUTO_RS[k]; pf.slow = pf.slowMs =
 function setQuality(mode, save) {
   Q.mode = QUALITY[mode] ? mode : 'auto';
   const L = QUALITY[Q.mode]; Q.rs = L.rs; Q.bloom = L.bloom; Q.gas = L.gas; Q.mat = L.mat; GFX.aa = L.aa; GFX.surface = L.surface;
-  autoK = 0; Object.assign(pf, { slow: 0, slowMs: 0, fast: 0, chk: null, lock: 0, lockMs: 30000, upWait: 6, hold: performance.now() + 1000 });
+  autoK = 0; Object.assign(pf, { slow: 0, slowMs: 0, fast: 0, chk: null, lock: 0, lockMs: 30000, upWait: 6, hold: performance.now() - wallBack + 1000 });
   gasCap = Math.min(Q.gas, Math.max(gasCap, 3200));
   resize(); syncQuality();
   if (save) savePrefs();
@@ -135,7 +135,7 @@ function loadScene(st) {
 }
 function resumeLast() {
   if (!lastSess || !loadScene(lastSess.s)) return;
-  toast('Session resumed', [`${objs(bodies.length)}, where you left them`, 'Gas and loose matter aren’t kept between visits']);
+  toast('Session resumed', [`${objs(bodies.length)}, where you left them`, 'Gas and loose matter aren’t kept between visits'], '', { ui: true });
   lastSess = null; hideResume(); renderScenes();
 }
 function hideResume() { if (resumeEl) { resumeEl.remove(); resumeEl = null; } }
@@ -173,7 +173,7 @@ $('scnList').addEventListener('click', e => {
   const b = e.target.closest('button'), li = b && b.closest('li'); if (!li) return;
   const sc = scenes.find(x => x.id === li.dataset.id); if (!sc) return;
   const acts = li.querySelector('.scn-acts'), a = b.dataset.a;
-  if (a === 'load') { if (loadScene(sc.s)) toast('Scene loaded', [`“${sc.name}”: ${objs(bodies.length)}, as saved`, 'Gas and loose matter aren’t kept with a scene']); }
+  if (a === 'load') { if (loadScene(sc.s)) toast('Scene loaded', [`“${sc.name}”: ${objs(bodies.length)}, as saved`, 'Gas and loose matter aren’t kept with a scene'], '', { ui: true }); }
   else if (a === 'ren') {
     li.querySelector('.scn-head').innerHTML = '<input class="scn-in" maxlength="40" autocomplete="off" enterkeyhint="done">';
     const inp = li.querySelector('input'); inp.value = sc.name; inp.setAttribute('aria-label', `New name for scene “${sc.name}”`);

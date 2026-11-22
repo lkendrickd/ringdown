@@ -107,7 +107,7 @@ for (const it of TRY) {
   b.type = 'button'; b.className = 'g-item';
   b.innerHTML = '<span class="g-tick" aria-hidden="true"></span><span><b></b><small></small><span class="sr"></span></span>';
   b.querySelector('b').textContent = it.t; b.querySelector('small').textContent = it.d;
-  b.addEventListener('click', () => { guideShow(false); $('help').focus(); it.go(); toast(it.t, [it.hint], 'w'); });
+  b.addEventListener('click', () => { guideShow(false); $('help').focus(); it.go(); toast(it.t, [it.hint], 'w', { ui: true }); });
   it.el = b; li.appendChild(b); gList.appendChild(li);
 }
 function renderTry() {

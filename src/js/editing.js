@@ -26,5 +26,5 @@ function deleteBody(b) {
   if (followId === b.id) followId = null;
   if (closeUpId === b.id) closeUpId = null;
   computeAccel();
-  toast('Removed', [`${describe(b)} taken out of the simulation`]);
+  toast('Removed', [`${describe(b)} taken out of the simulation`], '', { ui: true });
 }
