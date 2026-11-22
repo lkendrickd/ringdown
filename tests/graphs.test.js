@@ -54,7 +54,7 @@ test('a feeding hole\'s mass series rises and matches its real mass, from before
     const rd = window.__rd; rd.load('feeding', 1);
     const bh = rd.bodies.find(b => b.kind === 'bh'), m0 = bh.m;
     rd.step(900, FRAME, false);
-    const M = rd.graphs.mass(bh.id); let falls = 0;
+    const M = rd.graphs.mass(bh.id) || { t: [NaN], v: [NaN] }; let falls = 0;
     for (let i = 1; i < M.v.length; i++) if (M.v[i] < M.v[i - 1]) falls++;
     // a merger's remnant carries on the history of the heavier hole it came from
     rd.load('gw150914', 1); const big = rd.bodies.reduce((a, b) => (b.m > a.m ? b : a)), mBig = big.m;
