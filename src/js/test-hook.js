@@ -9,6 +9,7 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
   get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; }, get glLost() { return glLost; },
   get opt() { return opt; }, get glr() { return GLR; }, get gfx() { return GFX; }, get wallNow() { return wallNow; }, kerrShadow, addGas,
   events, eventHooks, frameHooks, sceneHooks, rewindHooks, logEvent, rewound,
+  graphs: graphsApi, ageStar,   // the light curve, mass and HR series, and the panel (graphs.js); aging a star
   explode, nova, magnetarFlare, addKilonova, flashes, scene, get fxN() { return fxN; },   // explosions: set one off, those in flight, the 2D effects canvas
   add(...bs) { bodies.push(...bs); computeAccel(); },
   // camera for the rendering tests: { x, y, zoom, tilt, yaw, follow: body id }; without follow the camera stays put
