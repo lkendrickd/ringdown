@@ -35,6 +35,7 @@
 /*@include css/capture.css*/
 /*@include css/onboarding.css*/
 /*@include css/settings.css*/
+/*@include css/graphs.css*/
 </style>
 <script>
 // Phone mode: narrow screens, and phones held sideways. Set before the first layout so the camera fits the phone overlays.
@@ -103,6 +104,21 @@
   <canvas id="scope"></canvas>
   <div class="legend mono"><span>strain</span><span class="f">frequency (log)</span><span class="x">infall glow</span></div>
   <div id="readouts" class="mono"></div>
+</section>
+<section class="graphs" id="graphs" aria-label="Graphs">
+  <button class="gr-head" id="grHead" type="button" aria-expanded="false" aria-controls="grBody" title="Graphs: light curve, mass over time, HR diagram (G)"><span class="lbl">Graphs</span><span class="gr-now mono" id="grNow" aria-hidden="true"></span></button>
+  <div class="gr-body" id="grBody" hidden>
+    <div class="gr-tabs" role="tablist" aria-label="Graph">
+      <button class="gr-tab" type="button" role="tab" id="grtab-light" aria-controls="grPanel" aria-selected="true">Light curve</button>
+      <button class="gr-tab" type="button" role="tab" id="grtab-mass" aria-controls="grPanel" aria-selected="false" tabindex="-1">Mass</button>
+      <button class="gr-tab" type="button" role="tab" id="grtab-hr" aria-controls="grPanel" aria-selected="false" tabindex="-1">HR diagram</button>
+    </div>
+    <div id="grPanel" role="tabpanel" aria-labelledby="grtab-light">
+      <canvas id="grCv" tabindex="0" role="slider" aria-label="Light curve" aria-describedby="grSum" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"></canvas>
+      <p class="gr-read mono" id="grRead"></p>
+      <p class="sr" id="grSum"></p>
+    </div>
+  </div>
 </section>
 
 <aside class="panel" id="panel" hidden aria-label="Settings">
@@ -210,6 +226,7 @@
         <tr><th scope="row">Share the setup</th><td>Share button (top right)</td><td>Share button</td></tr>
         <tr><th scope="row">Back to Move</th><td><kbd>Esc</kbd></td><td>Move chip</td></tr>
         <tr><th scope="row">Pause</th><td><kbd>Space</kbd></td><td>Pause button</td></tr>
+        <tr><th scope="row">Graphs</th><td><kbd>G</kbd>, or the Graphs strip under the scope; hover to read values</td><td>Tap the Graphs strip</td></tr>
         <tr><th scope="row">Hide the controls</th><td><kbd>H</kbd>, or the eye button</td><td>Eye button (tap it again to bring them back)</td></tr>
         <tr><th scope="row">Screenshot</th><td><kbd>P</kbd>, or the camera button</td><td>Camera menu → Screenshot</td></tr>
         <tr><th scope="row">Fullscreen</th><td><kbd>F</kbd>, or the fullscreen button</td><td>Camera menu → Fullscreen</td></tr>
@@ -255,6 +272,7 @@
 /*@include js/share.js*/
 /*@include js/onboarding.js*/
 /*@include js/settings.js*/
+/*@include js/graphs.js*/
 /*@include js/test-hook.js*/
 })();
 </script>
