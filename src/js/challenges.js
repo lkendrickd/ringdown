@@ -48,7 +48,7 @@ function snFate(b) {
    says which of those count; `won` is the line shown on passing (a function gets that event's data). */
 const CHAL = [
   { id: 'star', lvl: 'Easy', t: 'Light a star', goal: 'Pour out raw matter until a clump of it ignites as a star.',
-    hint: 'Matter is picked in the bar. Drag Flow up to about 0.1 M☉ a second, then hold the pointer down in the middle of the view for a second or two and let go.',
+    hint: 'Matter is picked in the bar. Drag Flow up to about 0.3 M☉ a second, then hold the pointer down in one spot for three or four seconds. Too little and it breaks up into brown dwarfs.',
     won: 'Past 0.075 M☉ a clump’s core gets hot and dense enough to fuse hydrogen. A little lighter and it would have stayed a brown dwarf; under 13 Jupiters, a planet.',
     scene: s => chalScene('empty', s, null, 0, 'matter'),
     check() {
@@ -57,7 +57,7 @@ const CHAL = [
       return { done: star, p: m / 0.075, text: m ? `Biggest clump: ${massStr(m)} · a star needs 0.075 M☉` : 'Nothing has gathered yet · a star needs 0.075 M☉' };
     } },
   { id: 'bhsn', lvl: 'Easy', t: 'A black hole from a supernova', goal: 'Make a star explode and leave a black hole behind, not a neutron star.',
-    hint: 'Stars born above about 20 M☉ leave a black hole; this Betelgeuse-like star is 18. Add an O star or a blue supergiant from the bar, click it, and press Go supernova.',
+    hint: 'Stars born above about 20 M☉ leave a black hole; this Betelgeuse-like star is 18. Add a blue supergiant (25 M☉) from the bar, click it, and press Go supernova. An O star, at 20, only just makes it.',
     won: 'In the heaviest stars most of the core falls back after the bounce and pushes past what neutron pressure can hold up, so it collapses into a black hole.',
     scene: s => chalScene('betelgeuse', s),
     ev: 'supernova', hit: d => d.rem === 'bh',
@@ -81,7 +81,7 @@ const CHAL = [
       return { p: 0.95 * Math.min(f, 1), text: f ? `Closest: ${(1 / f).toFixed(2)}× its Roche limit · needs to be inside it` : 'Nothing close to Saturn yet' };
     } },
   { id: 'ratio', lvl: 'Easy', t: 'A lopsided merger', goal: 'Merge a black hole into one at least 8 times heavier.',
-    hint: 'Black hole is picked in the bar. Drag Mass down to 10 M☉ or less, then click just outside the big hole’s black shadow (if it says Too close, a little farther out). They spiral together within a minute.',
+    hint: 'Black hole is picked in the bar. Drag Mass down to 8 M☉ or less, then click just outside the big hole’s black shadow (if it says Too close, a little farther out). They spiral together within a minute.',
     won: d => `The remnant spins at ${Math.abs(d.chi).toFixed(2)}; equal masses leave about 0.69. A light hole brings little orbital spin with it, and only ${(100 * (1 - d.mf / (d.m1 + d.m2))).toFixed(1)}% of the mass left as gravitational waves.`,
     scene: s => chalScene('empty', s, () => bodies.push(makeBH(0, 0, 0, 0, 80)), 150, 'bh'),
     ev: 'bh-merge', hit: d => d.m1 >= 8 * d.m2,
@@ -181,7 +181,7 @@ const CHAL = [
       return { p: 0.95 * clamp((2.75 - tot) / 0.4, 0, 1), text: `The pair: ${tot.toFixed(2)} M☉ · ${tot < 2.36 ? 'light enough to leave a neutron star' : 'heavy enough to collapse'}` };
     } },
   { id: 'moon', lvl: 'Hard', t: 'Make a Moon', goal: 'Pour matter round the young Earth until it gathers into a moon of 0.7 to 1.5 times the Moon’s mass.',
-    hint: 'Matter is picked. Set Flow to about 0.01 Earth masses a second and hold the pointer down five or six Earth radii from the planet for two seconds, then speed time up to 64×. Too little and the moonlets stay small; inside about three Earth radii matter stays a ring.',
+    hint: 'Matter is picked. Set Flow to about 0.013 Earth masses a second (about a Moon a second) and hold the pointer down six Earth radii from the planet for two seconds, then speed time up to 64×. Too little and the moonlets stay small; inside about three Earth radii matter stays a ring.',
     won: 'Beyond the Roche limit, about three Earth radii out, matter sticks together into moonlets, and moonlets that meet merge into one. The Moon is thought to have gathered like this from the debris of a giant impact.',
     scene: s => chalScene('theia', s, () => { bodies = [world('ROCK', 'Earth', 5.972e24, 6371, [118, 150, 196])]; }, 0, 'matter'),
     check() {

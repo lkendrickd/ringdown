@@ -7,6 +7,7 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
   presets: Object.keys(PRESETS), makeBH, makeStar, mergeWhiteDwarfs, snapshot, restore, encodeState, decodeState, rand, reseed,
   get seed() { return rngS; },
   get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; }, get glLost() { return glLost; },
+  get cam() { return [camX, camY, camZ, zoom]; },
   get opt() { return opt; }, get glr() { return GLR; }, get gfx() { return GFX; }, get wallNow() { return wallNow; }, kerrShadow, addGas,
   events, eventHooks, frameHooks, sceneHooks, rewindHooks, logEvent, rewound,
   graphs: graphsApi, ageStar,   // the light curve, mass and HR series, and the panel (graphs.js); aging a star
@@ -22,7 +23,11 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
     return { zoom, W: view.width, H: view.height, RS };
   },
   render() { drawScene(); composite(); },   // draw the current state again without advancing the simulation
-  prep() { manual = true; speedIdx = 2; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; gasCap = rdPin[0]; matCap = rdPin[1]; },
+  // the camera too: a scene with nothing in it (Empty space) is framed on com(), which is wherever the camera already was,
+  // so without this a run would start from whatever ran before (in a fresh page, the default scene after however many
+  // real-time frames it got), and a pour or a click at a fixed screen point lands somewhere slightly different each time
+  prep() { manual = true; speedIdx = 2; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; gasCap = rdPin[0]; matCap = rdPin[1];
+    camX = camY = camZ = 0; followId = null; followPos = null; opt.follow = true; },
   load(id, seed) { this.prep(); loadPreset(id, seed); },
   // challenges: start one on the same fixed clock as load(); state is null in free play
   chal: {
