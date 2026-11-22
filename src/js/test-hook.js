@@ -7,6 +7,7 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
   presets: Object.keys(PRESETS), makeBH, makeStar, mergeWhiteDwarfs, snapshot, restore, encodeState, decodeState, rand, reseed,
   get seed() { return rngS; },
   get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; }, get glLost() { return glLost; },
+  get cam() { return [camX, camY, camZ, zoom]; },
   get opt() { return opt; }, get glr() { return GLR; }, get gfx() { return GFX; }, get wallNow() { return wallNow; }, kerrShadow, addGas,
   events, eventHooks, frameHooks, sceneHooks, rewindHooks, logEvent, rewound,
   graphs: graphsApi, ageStar,   // the light curve, mass and HR series, and the panel (graphs.js); aging a star
@@ -22,7 +23,22 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
     return { zoom, W: view.width, H: view.height, RS };
   },
   render() { drawScene(); composite(); },   // draw the current state again without advancing the simulation
-  load(id, seed) { manual = true; speedIdx = 2; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; gasCap = rdPin[0]; matCap = rdPin[1]; loadPreset(id, seed); },
+  // the camera too: a scene with nothing in it (Empty space) is framed on com(), which is wherever the camera already was,
+  // so without this a run would start from whatever ran before (in a fresh page, the default scene after however many
+  // real-time frames it got), and a pour or a click at a fixed screen point lands somewhere slightly different each time
+  prep() { manual = true; speedIdx = 2; frameN = 0; mcDt = 0; mcWall = 0; mcHeavy = true; last = wallNow = 1e5; gasCap = rdPin[0]; matCap = rdPin[1];
+    camX = camY = camZ = 0; followId = null; followPos = null; opt.follow = true; },
+  load(id, seed) { this.prep(); loadPreset(id, seed); },
+  // challenges: start one on the same fixed clock as load(); state is null in free play
+  chal: {
+    get list() { return CHAL.map(d => ({ id: d.id, t: d.t, lvl: d.lvl, goal: d.goal })); },
+    start(id, seed) { window.__rd.prep(); return chalStart(id, seed); },
+    stop() { chalStop(); },
+    get state() { return chal ? { id: chal.def.id, won: chal.won, text: chal.text, p: chal.p } : null; },
+    get hooked() { return { frame: frameHooks.includes(chalFrame), event: eventHooks.includes(chalEvent) }; },
+    get done() { return Object.assign({}, chalDone); },
+    check: () => chalFrame,   // the per-frame check itself, for timing it
+  },
   open(st) { this.load('empty', 0); restore(st); },   // like a fresh page opening a share link
   step(n, ms = 1000 / 60, draw = true) {   // frame-time governor held still
     manual = true; simOnly = !draw; try { for (let i = 0; i < n; i++) { gasCap = rdPin[0]; matCap = rdPin[1]; frameBody(last + ms); } } finally { simOnly = false; }
@@ -50,6 +66,20 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
     rel.sort((a, b) => a - b);
     return { rms: Math.sqrt(e2 / a2), p99: rel[Math.floor(0.99 * n)], worst: dmax / Math.sqrt(a2 / n), direct: t1 - t0, tree: t2 - t1 };   // worst: largest error over the rms pull
   },
+  // what a person does with the interface, through the same code the interface runs (for the challenge proofs):
+  // place() is a click (or a drag of dx, dy screen pixels) with an object picked in the bar; act() presses an inspector
+  // button; edit() is the inspector's Edit → Set; pour() holds the Matter tool down at a world point for n frames
+  place(id, wx, wy, o = {}) {
+    if (o.mass != null) bhMass = o.mass; if (o.spin != null) bhSpin = o.spin;
+    setTool(id); const sx = toSX(wx, wy) - shX, sy = toSY(wx, wy, 0) - shY, n = bodies.length;   // the spot under the pointer (no camera shake)
+    commitPlace(sx, sy, sx + (o.dx || 0), sy + (o.dy || 0)); setTool('move');
+    return bodies.length > n ? bodies[bodies.length - 1] : null;
+  },
+  act(b, what) { if (what === 'sn') startSupernova(b); else if (what === 'age') ageStar(b); },
+  edit(b, m, chi) { applyEdit(b, m, chi); },
+  pour(wx, wy, rate, n, ms = 1000 / 60) { matterRate = rate; setTool('matter'); drag = { mode: 'spray', x: toSX(wx, wy) - shX, y: toSY(wx, wy, 0) - shY }; try { this.step(n, ms, false); } finally { drag = null; setTool('move'); } },
+  set gw(v) { gwBoost = v; },
+  get speedIdx() { return speedIdx; },
   state() {
     const f = (a, n) => Array.from(a.subarray(0, n));
     return { t: simTime, b: bodies.map(b => [b.kind, b.type ? b.type.id : '', b.m, b.x, b.y, b.vx, b.vy, b.chi || 0, b.R || 0, b.spinHz || 0]),

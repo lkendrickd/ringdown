@@ -66,3 +66,59 @@ test('the light curve ticks simulation notices, not notices about the interface'
   assert.deepEqual(errors, []);
   await close();
 });
+
+test('a real rewind during a challenge: the challenge stays on, a pass stays earned, and the readout follows the scene back', async () => {
+  const { page, errors, close } = await openPage(browser, server);
+  const r = await page.evaluate(() => {
+    const rd = window.__rd, out = {}, merged = () => rd.events.find(e => e.data && e.data.id === 'bh-merge');
+    const before = t => { const s = rd.timeline.info().snaps; let i = s.length - 1; while (i >= 0 && s[i].t >= t) i--; return i; };
+    // a merger that doesn't count, then back to before it
+    rd.chal.start('spin', 7); rd.place('bh', 0, 0, { mass: 30, spin: 0 }); rd.place('bh', 70, 0, { mass: 30, spin: 0 });
+    for (let f = 0; f < 3600 && !merged(); f += 30) rd.step(30, 1000 / 60, false);
+    rd.step(4, 1000 / 60, false);
+    out.lostText = rd.chal.state.text; out.holesAfter = rd.bodies.length;
+    out.went = rd.timeline.go(before(merged().t));   // no frame runs after it: the readout must follow at once, as when scrubbing while paused
+    out.back = rd.chal.state; out.holesBack = rd.bodies.length; out.hooked = rd.chal.hooked;
+    // a pass, then back to before it
+    rd.chal.start('msp', 7); rd.place('WD', 6, 0);
+    for (let f = 0; f < 3600 && !rd.chal.state.won; f += 30) rd.step(30, 1000 / 60, false);
+    out.won = rd.chal.state.won; const pass = rd.events.find(e => e.data && e.data.id === 'challenge');
+    out.went2 = rd.timeline.go(before(pass.t) - 2);
+    out.spinBack = rd.bodies.find(b => b.type && b.type.kind === 'ns').spinHz;
+    out.afterPass = rd.chal.state;
+    rd.chal.stop();
+    return out;
+  });
+  assert.match(r.lostText, /That merger left spin/);
+  assert.equal(r.holesAfter, 1);
+  assert.equal(r.went, true);
+  assert.equal(r.holesBack, 2);
+  assert.ok(r.back && r.back.id === 'spin' && !r.back.won, 'still in the challenge, not passed');
+  assert.doesNotMatch(r.back.text, /That merger left spin/);
+  assert.deepEqual(r.hooked, { frame: true, event: true });
+  assert.equal(r.won, true);
+  assert.equal(r.went2, true);
+  assert.ok(r.spinBack < 300, `the neutron star is back at ${r.spinBack} turns a second`);
+  assert.ok(r.afterPass && r.afterPass.id === 'msp' && r.afterPass.won, 'the pass is kept');
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test('the challenge card, the graphs and the timeline never sit on top of each other', async () => {
+  const { page, errors, close } = await openPage(browser, server);
+  const hit = (a, b) => a && b && a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+  for (const [w, h] of [[1280, 800], [1366, 650], [390, 844]]) for (const open of [false, true]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.evaluate(open => { const rd = window.__rd; rd.chal.start('nova', 7); rd.graphs.open(open); rd.step(3); }, open);
+    await page.waitForTimeout(250);   // the panels publish their edges on the next animation frame
+    const b = await page.evaluate(() => { const q = s => { const e = document.querySelector(s); if (!e || e.hidden) return null; const r = e.getBoundingClientRect(); return r.width && r.height ? [r.left, r.top, r.right, r.bottom] : null; };
+      return { scope: q('.scope'), graphs: q('#graphs'), card: q('.chal'), timeline: q('#tl') }; });
+    const at = `${w}×${h}, graphs ${open ? 'open' : 'closed'}`;
+    assert.ok(b.graphs && b.card && b.timeline && b.scope, `${at}: all four are on screen`);
+    for (const [x, y] of [['card', 'graphs'], ['card', 'scope'], ['card', 'timeline'], ['graphs', 'scope'], ['graphs', 'timeline']])
+      assert.ok(!hit(b[x], b[y]), `${at}: the ${x} overlaps the ${y} (${b[x].map(Math.round)} and ${b[y].map(Math.round)})`);
+  }
+  await page.evaluate(() => { window.__rd.chal.stop(); window.__rd.graphs.open(false); });
+  assert.deepEqual(errors, []);
+  await close();
+});

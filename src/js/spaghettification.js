@@ -35,7 +35,7 @@ function exposeCore(st) {
   retype(st, wr ? TYPE.WR : TYPE.HeWD);
   toast('Stripped to the core', wr
     ? [`The ${from}'s envelope is gone`, `Its ${fmtM(st.m)} M☉ helium core is left as a Wolf–Rayet star, still orbiting`]
-    : [`The ${from}'s envelope is gone`, `Its ${fmtM(st.m)} M☉ helium core is left as a white dwarf, still orbiting`], 'w');
+    : [`The ${from}'s envelope is gone`, `Its ${fmtM(st.m)} M☉ helium core is left as a white dwarf, still orbiting`], 'w', { id: 'stripped', m: st.m });
 }
 function becomeBrownDwarf(st) {
   const from = st.type.name;
@@ -111,7 +111,7 @@ function nova(wd) {
   if (wd.novae <= 3 || wd.novae % 5 === 0)
     toast(`Nova${wd.novae > 1 ? ' #' + wd.novae : ''}`, [`Hydrogen piled up on the white dwarf's surface and ignited in a thermonuclear flash`,
       `Most of it blew off; the white dwarf kept a little and is now ${fmtM(wd.m)} of 1.44 M☉`]);
-  if (wd.m >= M_CH && !wd.sn) { wd.sn = { t0: wallNow, mode: 'ia' }; toast('Over the Chandrasekhar limit', ['Feeding pushed the white dwarf past 1.44 M☉', 'Carbon is about to ignite']); }
+  if (wd.m >= M_CH && !wd.sn) { wd.sn = { t0: wallNow, mode: 'ia', via: 'nova' }; toast('Over the Chandrasekhar limit', ['Feeding pushed the white dwarf past 1.44 M☉', 'Carbon is about to ignite']); }
 }
 // gas mass m landing on accretor b; (px, py, rvx, rvy) = position and velocity relative to b
 function accrete(b, m, px, py, rvx, rvy) {

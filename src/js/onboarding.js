@@ -46,7 +46,7 @@ const TOUR = [
   { ev:'place', at:'#tools', near:'#dock', t:'Feed a star', b:'Pick a star in this bar, then click near a hole to put it in orbit, or drag to throw it. Close in, the hole strips it and feeds.',
     act:'Pick a red giant', go: () => setTool('RG'), need: () => !TYPE[tool] },
   { ev:'tilt', at:'#gizmo', t:'Tilt the view', b:(coarse ? 'Drag the view dial' : 'Drag the view dial, or right-drag or Shift-drag the scene,') + ' to see the orbit from the side: the disk brightens where it comes toward you, and jets show up.' },
-  { ev:'guide', at:'#help', t:'Things to try', b:'Kilonovae, supernovae, rings, the impact that made the Moon: open Things to try for one-click experiments. The controls are in there too.' },
+  { ev:'guide', at:'#help', t:'Things to try', b:'Kilonovae, supernovae, rings, the impact that made the Moon: open Things to try for one-click experiments, or Challenges for goals that tell you when you get there. The controls are in there too.' },
 ];
 const coach = $('coach'), ring = $('coachRing'), guide = $('guide');
 let tourStep = -1, tourTilt = 0, tourYaw = 0, coachRaf = 0, coachKey = '', gTab = 'try';
@@ -115,9 +115,10 @@ function renderTry() {
   for (const it of TRY) { const on = !!ob.done[it.id]; n += on; it.el.classList.toggle('done', on); it.el.querySelector('.sr').textContent = on ? ' (done)' : ''; }
   $('gDone').textContent = n; $('gAll').textContent = TRY.length; $('gMeter').style.width = (100 * n / TRY.length) + '%';
 }
+const G_TABS = ['try', 'chal', 'keys'];
 function guideTab(t) {
   gTab = t;
-  for (const k of ['try', 'keys']) { const tab = $('gtab-' + k), on = k === t; tab.setAttribute('aria-selected', String(on)); tab.tabIndex = on ? 0 : -1; $('gpane-' + k).hidden = !on; }
+  for (const k of G_TABS) { const tab = $('gtab-' + k), on = k === t; tab.setAttribute('aria-selected', String(on)); tab.tabIndex = on ? 0 : -1; $('gpane-' + k).hidden = !on; }
 }
 function guideShow(on, t) {
   if (t) guideTab(t);
@@ -127,10 +128,10 @@ function guideShow(on, t) {
 }
 $('help').addEventListener('click', () => guideShow(guide.hidden));
 $('guideX').addEventListener('click', () => { guideShow(false); $('help').focus(); });
-for (const k of ['try', 'keys']) $('gtab-' + k).addEventListener('click', () => guideTab(k));
+for (const k of G_TABS) $('gtab-' + k).addEventListener('click', () => guideTab(k));
 guide.querySelector('.g-tabs').addEventListener('keydown', e => {
   if ((e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || !e.target.matches('[role=tab]')) return;
-  const t = gTab === 'try' ? 'keys' : 'try'; guideTab(t); $('gtab-' + t).focus(); e.preventDefault();
+  const t = G_TABS[(G_TABS.indexOf(gTab) + (e.key === 'ArrowRight' ? 1 : G_TABS.length - 1)) % G_TABS.length]; guideTab(t); $('gtab-' + t).focus(); e.preventDefault();
 });
 $('gTour').addEventListener('click', () => { guideShow(false); tourGo(0, true); });
 $('gear').addEventListener('click', () => { if (!$('panel').hidden) guideShow(false); });

@@ -30,6 +30,7 @@ It ships as a single self-contained `index.html` with no dependencies beyond Goo
 - **How the Moon formed.** A Mars-sized world strikes the young Earth off-centre. Part of it is thrown into orbit, and the debris beyond the Roche limit gathers into moonlets that capture each other and merge. Given a few minutes (use 16× or 64×) it usually ends as one Moon of roughly 0.7 to 1.5 times the real one's mass, 3 to 4 Earth radii out.
 - **A solar nebula.** A disk of dust round a young star sticks together into a family of planets.
 - **Magnetars.** A neutron star with a field a thousand times a pulsar's. Every so often its crust cracks in a starquake and it lets off a giant flare that blows nearby gas and rubble outward and scorches any planet close by.
+- **Challenges.** Twelve short goals, from easy to hard, that tell you the moment you get there: light a star from raw matter, give Saturn a ring, push a white dwarf past the Chandrasekhar limit, spin a pulsar up to milliseconds, merge black holes into a fast spinner, make a Moon. Open them from the ? button (the Challenges tab). Each one sets up its scene and shows a small goal card with a live readout and a hint you can reveal; it passes on what the simulation actually does, not on a click. Passed challenges are ticked off next visit. Leave one with the card's × at any time, or by loading another scene.
 - **Tilt the view.** Seen from the side, the disk is brighter on the side coming toward you (Doppler beaming), spinning holes show their exact Kerr shadow, and jets show up.
 
 ## Controls
@@ -54,7 +55,7 @@ It ships as a single self-contained `index.html` with no dependencies beyond Goo
 | Record a clip (up to 60 s) | Record button; with sound when Listen is on | Camera menu → Record |
 | Photo mode | Photo button: pauses, hides everything, the camera stays free; Esc exits | Camera menu → Photo mode |
 | Fullscreen | F, or the fullscreen button | Camera menu → Fullscreen (not on iPhone) |
-| Help, the tour and things to try | ?, or the ? button | ? button |
+| Help, the tour, things to try and challenges | ?, or the ? button | ? button |
 
 On a phone (or a narrow window) the screenshot, record, photo-mode and fullscreen buttons fold into one camera menu in the top bar. On a phone the layout also tightens up on its own: the strain scope folds into a one-line strip (tap it to open), with the graphs as a second strip under it, the inspector and settings become sheets above the object bar (tap an inspected object's name for the full readout), and only the newest notice shows, small, at the top (tap to dismiss). It also works held sideways.
 

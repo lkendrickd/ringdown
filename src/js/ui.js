@@ -323,8 +323,9 @@ toolsEl.addEventListener('keydown', e => {
 
 const toastsEl = $('toasts');
 toastsEl.addEventListener('click', e => { const t = e.target.closest('.toast'); if (t) t.remove(); });
-// data goes to the event log with it: notices about the interface rather than the simulation (a screenshot saved, a link
-// loaded, an error) pass { ui: true }, so the timeline leaves them off its markers
+// data goes to the event log with it. Notices about the interface rather than the simulation (a screenshot saved, a link
+// loaded, an error) pass { ui: true }, so the timeline leaves them off its markers; notices something checks for carry a
+// stable id and the numbers, e.g. { id: 'typeia', ... }, so nothing has to match on their wording
 function toast(title, lines, kind, data) {
   logEvent(title, kind, data);
   const el = document.createElement('div'); el.className = 'toast';
