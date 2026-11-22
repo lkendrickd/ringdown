@@ -11,6 +11,48 @@ const JET_B = 0.92, JET_G = 1 / Math.sqrt(1 - JET_B * JET_B), SH_B = 0.3, SH_G =
 const doppler = (b, g, cs) => 1 / (g * (1 - b * cs));
 // apparent speed (in units of c) of knots on the jet aimed toward the viewer at the current tilt
 function apparentJetSpeed() { return JET_B * sinI / (1 - JET_B * cosI); }
+// What both drawings of a jet share: where it is, how long and wide, and how bright each side looks from here.
+// sides: [direction down the screen (-1: the one aimed toward you, up the screen), spine, sheath, brightness, knot speed px/s]
+function jetShape(b) {
+  const J = jetPower(b); if (J < 0.03) return null;
+  const X = toSX(b.x, b.y), Y = toSY(b.x, b.y, b.z), rsPx = rsOf(b.m) * zoom;
+  const Lfull = Math.min(Math.max(70 + 260 * J, (40 + 110 * J) * rsPx), 1.2 * Math.max(vw, vh));
+  const L = Lfull * sinI, w0 = Math.max(1.5, rsPx * 0.45), sides = [];
+  for (const [dir, cs] of [[-1, cosI], [1, -cosI]]) {
+    const spine = Math.min(1, J * doppler(JET_B, JET_G, cs) ** 3 / 6);
+    const sheath = Math.min(0.85, J * 0.9 * doppler(SH_B, SH_G, cs) ** 3);
+    const br = Math.min(1, sheath + spine);
+    if (br >= 0.02 && L >= 4) sides.push([dir, spine, sheath, br, JET_B * sinI / (1 - JET_B * cs) * C * zoom]);
+  }
+  const coreB = Math.min(1, J * doppler(JET_B, JET_G, cosI) ** 3 / 6) * Math.max(0, cosI - 0.25) * 0.9;
+  return { J, X, Y, rsPx, L, w0, sides, coreB };
+}
+// GPU path: the jets as instances of the jet shader (FS_JET), in device pixels with y up. jetFlow is how far the stream
+// inside them has moved: it runs with simulation time, at a pace the eye can follow.
+const JET_MAX = 16, jetInst = new Float32Array(JET_MAX * 3 * 12);
+let jetFlow = 0, jetFlowT = 0;
+function packJets(s, H) {
+  jetFlow += clamp((simTime - jetFlowT) / Math.max(warp, 1e-9), 0, 0.1) * 150; jetFlowT = simTime;
+  if (jetFlow > 4e4) jetFlow -= 4e4;
+  let n = 0; const f = jetInst;
+  for (const b of bodies) {
+    if (b.kind !== 'bh' || n >= JET_MAX * 3 - 3) continue;
+    const j = jetShape(b); if (!j) continue;
+    const seed = (b.id * 0.6180339887) % 1, x = j.X * s, y = H - j.Y * s;
+    for (const [dir, spine, sheath, , pxs] of j.sides) {
+      const o = n++ * 12, spacing = Math.max(26, j.L / 4.5);
+      f[o] = x; f[o + 1] = y; f[o + 2] = j.L * s; f[o + 3] = -dir;
+      f[o + 4] = j.w0 * s; f[o + 5] = (j.w0 + j.L * 0.07) * s; f[o + 6] = dir > 0 ? 2.6 * j.rsPx * s : 0; f[o + 7] = seed + (dir > 0 ? 0.37 : 0);
+      f[o + 8] = spine; f[o + 9] = sheath; f[o + 10] = (((simTime * pxs) % spacing + spacing) % spacing) * s; f[o + 11] = spacing * s;
+    }
+    if (j.coreB > 0.02) {
+      const o = n++ * 12; f.fill(0, o, o + 12);
+      f[o] = x; f[o + 1] = y; f[o + 2] = (j.rsPx * (1.6 + 2.4 * j.J) + 8) * s; f[o + 8] = j.coreB;
+    }
+  }
+  return n;
+}
+// Fallback (no WebGL2): the same jets drawn flat on the 2D overlay.
 function drawJets(c) {
   c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
   for (const b of bodies) {
@@ -224,7 +266,7 @@ function ghost(c, sx, sy) {
 function drawOverlay() {
   const c = octx;
   c.setTransform(OD, 0, 0, OD, 0, 0); c.clearRect(0, 0, vw, vh);
-  if (opt.jets) drawJets(c);
+  if (opt.jets && !gl) drawJets(c);   // with WebGL2 they are drawn as light in the picture itself (packJets)
   if (opt.trails && PRESETS[currentPreset] && PRESETS[currentPreset].orbits) drawOrbits(c);
   if (opt.labels) drawLandmarks(c);
   const taken = [];

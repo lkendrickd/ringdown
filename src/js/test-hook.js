@@ -11,6 +11,7 @@ if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
   events, eventHooks, frameHooks, sceneHooks, rewindHooks, logEvent, rewound,
   graphs: graphsApi, ageStar,   // the light curve, mass and HR series, and the panel (graphs.js); aging a star
   timeline: tlHook,   // rewind: capture, go back, inspect the history, fingerprint the whole simulation
+  jetPower, jetShape, packJets, jetInst,   // jets: their power and shape, and the instances the GPU draws
   explode, nova, magnetarFlare, addKilonova, flashes, scene, get fxN() { return fxN; },   // explosions: set one off, those in flight, the 2D effects canvas
   add(...bs) { bodies.push(...bs); computeAccel(); },
   // camera for the rendering tests: { x, y, zoom, tilt, yaw, follow: body id }; without follow the camera stays put

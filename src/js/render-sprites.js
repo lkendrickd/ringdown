@@ -652,6 +652,14 @@ function composite() {
       }
     } else gl.uniform4f(U.uGWa, 0, 0, 1, 0);
     tri();
+    // 3b. jets, as light on top of the lensed picture (they stand out of the disk plane, toward and away from the viewer)
+    const jetN = opt.jets ? packJets(s, H) : 0;
+    if (jetN) {
+      P = GLR.jet; gl.useProgram(P.p); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+      gl.uniform2f(P.u.uRes, W, H); gl.uniform1f(P.u.uFlow, jetFlow * s); gl.uniform1f(P.u.uDetail, GFX.surface ? 1 : 0); gl.uniform1f(P.u.uHDR, HDR ? 1 : 0);
+      instances(GLR.jetI, jetInst, jetN, 12);
+      gl.disable(gl.BLEND);
+    }
     // 4. bloom: shrink the bright parts down a pyramid, then add the levels back up
     const B = GLR.bloom, bloomOn = opt.bloom;
     if (bloomOn) {
