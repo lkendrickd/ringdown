@@ -49,3 +49,20 @@ test('rewinding past a merger takes the graphs back with it: the two holes get t
   assert.deepEqual(errors, []);
   await close();
 });
+
+test('the light curve ticks simulation notices, not notices about the interface', async () => {
+  const { page, errors, close } = await openPage(browser, server);
+  const r = await page.evaluate(() => {
+    const rd = window.__rd; rd.load('nova', 1); rd.graphs.open(true); rd.graphs.tab('light');
+    rd.step(60, 1000 / 60, false); const t = rd.simTime;
+    rd.logEvent('Screenshot saved', '', { ui: true }); rd.step(60, 1000 / 60, false);
+    rd.graphs.cursor(t); const ui = rd.graphs.read();
+    rd.logEvent('Made-up flare'); rd.step(60, 1000 / 60, false);
+    rd.graphs.cursor(rd.events[rd.events.length - 1].t); const sim = rd.graphs.read();
+    return { ui, sim };
+  });
+  assert.ok(!/Screenshot saved/.test(r.ui), `readout at an interface notice: ${r.ui}`);
+  assert.ok(/Made-up flare/.test(r.sim), `readout at a simulation notice: ${r.sim}`);
+  assert.deepEqual(errors, []);
+  await close();
+});

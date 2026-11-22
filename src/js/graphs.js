@@ -377,7 +377,7 @@ function drawLight() {
   c.fillStyle = 'rgba(255,179,106,0.55)';
   let evNear = null;
   for (const ev of events) {
-    if (ev.t < P.t0 || ev.t > P.t1) continue;
+    if (ev.t < P.t0 || ev.t > P.t1 || (ev.data && ev.data.ui)) continue;   // not notices about the interface (a screenshot saved...)
     const x = P.X(ev.t); c.fillRect(Math.round(x), P.F.y0, Math.max(1, d), 5 * d);
     if (grCur != null && Math.abs(x - P.X(grCur)) < 5 * d) evNear = ev;
   }
