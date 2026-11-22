@@ -301,6 +301,7 @@ function loadPreset(id, seed) {
   opt.follow = true; syncToggles();
   computeAccel();
   if (PRESETS[id].after) PRESETS[id].after();
+  sceneChanged();
 }
 // What the camera centers on. Automatic: the heaviest object, or the barycenter of it and any bound partner
 // with at least 30% of its mass (a true binary). Otherwise the object the viewer clicked.

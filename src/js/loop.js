@@ -111,6 +111,7 @@ function frameBody(now) {
     if (zOn) { camZ += c.vz * frameSim; camZ += (c.z - camZ) * k; }
   }
   { const t = wallNow - shake; const amp = reduceMotion || t > 700 ? 0 : 7 * (1 - t / 700) ** 2; shX = (Math.random() - 0.5) * 2 * amp; shY = (Math.random() - 0.5) * 2 * amp; }
+  for (const f of frameHooks) f(frameSim, wallDt);
   if (!simOnly) { drawScene(); composite(); drawOverlay(); drawScope(); }
   if (shotWant || rec) capFrame();   // same task as the draw: the view's buffer is still there to read
   renderMoveCtx(false);
