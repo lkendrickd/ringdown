@@ -66,6 +66,27 @@ vec3 cells(vec2 p, float t){
   }
   return vec3(sqrt(d1), sqrt(d2), id);
 }
+// value noise in three dimensions: sampled at a point on the sphere itself, so a world has no seam and no pinched poles
+float hash3(vec3 p){ p = fract(p * 0.3183099 + vec3(0.1, 0.17, 0.13)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vnoise3(vec3 p){
+  vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+float fbm3(vec3 p){
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 5; i++) { s += a * vnoise3(p); p = p * 2.03 + vec3(11.7, 3.1, 7.3); a *= 0.5; }
+  return s / 0.96875;
+}
+// one layer of craters: a bowl below the plain with a raised rim. keep: the share of the ground's cells that hold one
+float craters(vec2 sp, float keep){
+  vec3 w = cells(sp, 0.0); float rad = 0.1 + 0.34 * w.z * w.z, x = w.x / rad;
+  return step(fract(w.z * 13.7), keep) * (-0.11 * (1.0 - smoothstep(0.0, 0.85, x)) + 0.07 * smoothstep(0.7, 1.0, x) * (1.0 - smoothstep(1.0, 1.35, x))) * (0.5 + rad * 2.0);
+}
+// the height of the ground on an airless moon and on a dry rocky world. f fades the craters out toward the poles,
+// where the map they are laid out on is pinched
+float moonGround(vec3 p, vec2 sp, float f){ return 0.16 * (fbm3(p * 2.0) - 0.5) + f * (craters(sp, 0.55) + 0.6 * craters(sp * 2.7 + 5.0, 0.5) + 0.3 * craters(sp * 6.1 + 11.0, 0.45)); }
+float rockGround(vec3 p, vec2 sp, float f){ float h = fbm3(p); return h + 0.22 * (1.0 - abs(2.0 * fbm3(p * 2.3 + 5.0) - 1.0)) * h + f * (0.5 * craters(sp * 1.3 + 2.0, 0.22) + 0.25 * craters(sp * 3.7 + 8.0, 0.25)); }
 void main(){
   float R = vA.z, d = length(vL);
   float ca = cos(vB.w), sa = sin(vB.w);
@@ -82,46 +103,105 @@ void main(){
     vec2 n2 = vL / R; float r2 = dot(n2, n2);
     float dp = 1.0 - smoothstep(1.0 - aw, 1.0 + aw, sqrt(r2));
     vec3 nrm = vec3(n2, sqrt(max(1.0 - r2, 0.0)));
-    vec3 Ld = normalize(vec3(ca * 0.92 * vD.w, sa * 0.92 * vD.w, 0.4 + 0.6 * (1.0 - vD.w)));
-    float lam = max(dot(nrm, Ld), 0.0);
+    // with no star in the scene the light comes from the upper left, so a world still shows its roundness
+    vec3 Ld = vD.w > 0.5 ? normalize(vec3(ca * 0.92, sa * 0.92, 0.4)) : normalize(vec3(-0.5, 0.42, 0.76));
     // the surface, wrapped on the sphere and turning slowly; only drawn once the world is big enough to show it
-    float detail = smoothstep(4.0, 16.0, R) * uDetail, typ = -vD.y, tex = 1.0;
-    float lat = asin(clamp(nrm.y, -1.0, 1.0)), lon = atan(nrm.x, nrm.z) + uT * 0.05 + vD.z;
-    vec3 alb = col;
-    if (detail <= 0.0 || dp <= 0.0) {
-    } else if (typ > 3.5) {          // airless moons and asteroids: dusty plains pocked with craters, floors dark, rims bright
-      vec2 sp = vec2(lon, lat) * vD.x;
-      vec3 w = cells(sp, 0.0); float rad = 0.22 + 0.2 * w.z;
-      float crater = (1.0 - smoothstep(rad * 0.7, rad, w.x)) * -0.16 + smoothstep(rad * 0.75, rad, w.x) * (1.0 - smoothstep(rad, rad * 1.3, w.x)) * 0.14;
-      vec3 w2 = cells(sp * 2.7 + 5.0, 0.0); float r2c = 0.2 + 0.15 * w2.z;
-      crater += (1.0 - smoothstep(r2c * 0.7, r2c, w2.x)) * -0.08;
-      alb = col * (0.82 + 0.3 * fbm(vec2(lon, lat) * 2.2 + vD.z) + crater);
-    } else if (typ > 2.5) {   // ice giants: almost featureless, faint bands
-      alb = col * (0.96 + 0.05 * sin(lat * vD.x + 1.2 * vnoise(vec2(lon * 2.0, lat * 6.0) + vD.z)));
-    } else if (typ > 1.5) {   // gas giants: light zones and dark belts sheared by turbulence, and a long-lived storm
-      float tw = fbm(vec2(lon * 1.3, lat * 9.0) + vD.z);
-      float bands = sin(lat * vD.x + 2.4 * tw);
-      alb = col * (0.88 + 0.15 * bands) * mix(vec3(1.0), vec3(1.0, 0.86, 0.72), smoothstep(0.2, 1.0, -bands) * 0.55);
-      vec2 so = vec2((mod(lon + 3.14159, 6.28318) - 3.14159) * 1.4, (lat + 0.38) * 5.0);
-      alb = mix(alb, col * vec3(1.15, 0.72, 0.58), (1.0 - smoothstep(0.55, 1.0, length(so))) * 0.75);
-    } else if (col.b > col.r) { // an ocean world: seas, land where the ground is high, drifting cloud, ice at the poles
-      float h = fbm(vec2(lon, lat) * vD.x * 0.7 + vD.z);
-      alb = mix(col * 0.8, vec3(0.45, 0.43, 0.3), smoothstep(0.53, 0.57, h));
-      alb = mix(alb, vec3(0.94), smoothstep(0.52, 0.74, fbm(vec2(lon * 1.6 + uT * 0.02, lat * 3.2) + vD.z * 1.7)) * 0.85);
-      alb = mix(alb, vec3(0.95), smoothstep(1.12, 1.25, abs(lat)));
-    } else {                  // rocky: uneven ground
-      alb = col * (0.74 + 0.5 * fbm(vec2(lon, lat) * vD.x * 0.7 + vD.z));
+    float detail = smoothstep(4.0, 16.0, R) * uDetail, typ = -vD.y;
+    float rot = uT * 0.05 + vD.z, cr = cos(rot), sr = sin(rot);
+    vec3 P = vec3(nrm.x * cr + nrm.z * sr, nrm.y, nrm.z * cr - nrm.x * sr), sd = vec3(vD.z * 1.7, vD.z * 0.9, vD.z * 2.3);
+    float lat = asin(clamp(nrm.y, -1.0, 1.0)), lon = atan(nrm.x, nrm.z) + rot;
+    vec3 alb = col, nb = nrm; float spec = 0.0, air = 0.0, cloud = 0.0;
+    if (detail > 0.0 && dp > 0.0) {
+      // two directions along the surface, to feel the slope of the ground and tilt the light with it
+      vec3 t1 = normalize(cross(vec3(0.0, 1.0, 0.0), nrm) + vec3(1e-4, 0.0, 0.0)), t2 = cross(nrm, t1);
+      vec3 T1 = vec3(t1.x * cr + t1.z * sr, t1.y, t1.z * cr - t1.x * sr), T2 = vec3(t2.x * cr + t2.z * sr, t2.y, t2.z * cr - t2.x * sr);
+      float e = 0.03, sc = vD.x * 0.55;
+      if (typ > 3.5) {          // airless moons and asteroids: dusty highlands, dark lava plains, craters with raised rims
+        vec2 sp = vec2(lon, lat) * vD.x;
+        float pf = 1.0 - smoothstep(0.95, 1.3, abs(lat));
+        float h0 = moonGround(P * sc + sd, sp, pf), h1 = moonGround((P + T1 * e) * sc + sd, sp + vec2(e, 0.0) * vD.x, pf), h2 = moonGround((P + T2 * e) * sc + sd, sp + vec2(0.0, e) * vD.x, pf);
+        nb = normalize(nrm - (t1 * (h1 - h0) + t2 * (h2 - h0)) * (0.45 / e));
+        float mare = smoothstep(0.5, 0.62, fbm3(P * 1.25 + sd + 4.0));
+        alb = col * (0.8 + 0.34 * fbm3(P * 3.0 + sd)) * mix(1.0, 0.56, mare) * (1.0 + 1.6 * h0);
+        alb *= 0.92 + 0.16 * vnoise3(P * 22.0 + sd);
+      } else if (typ > 2.5) {   // ice giants: a deep haze, faint bands and the odd bright streak of methane cloud
+        float tw = fbm3(vec3(P.x * 1.2, lat * 5.0, P.z * 1.2) + sd);
+        alb = col * (0.93 + 0.07 * sin(lat * vD.x + 2.0 * tw));
+        alb = mix(alb, vec3(0.95, 0.98, 1.0), smoothstep(0.66, 0.8, fbm3(vec3(P.x * 2.0, lat * 14.0, P.z * 2.0) + sd)) * 0.22);
+        air = 0.5;
+      } else if (typ > 1.5) {   // gas giants: light zones and dark belts sheared by turbulence, fine streaks, storms
+        float tw = fbm3(vec3(P.x * 1.4, lat * 8.0, P.z * 1.4) + sd);
+        float fine = fbm3(vec3(P.x * 3.2, lat * 30.0, P.z * 3.2) + sd * 0.5);
+        float bands = sin(lat * vD.x + 2.6 * tw + 0.5 * sin(lat * 31.0 + vD.z));
+        alb = col * (0.8 + 0.17 * bands + 0.2 * (fine - 0.5)) * mix(vec3(1.0), vec3(1.0, 0.84, 0.68), smoothstep(0.1, 1.0, -bands) * 0.6);
+        alb *= 1.0 + 0.1 * (fbm3(P * 9.0 + sd) - 0.5) * smoothstep(-0.3, 0.6, -bands);   // curdled belts
+        float wl = mod(lon + 3.14159, 6.28318) - 3.14159;
+        vec2 so = vec2(wl * 1.4, (lat + 0.38) * 5.0); float sw = length(so);
+        alb = mix(alb, col * vec3(1.16, 0.7, 0.55) * (0.85 + 0.3 * sin(sw * 9.0 - atan(so.y, so.x) * 2.0)), (1.0 - smoothstep(0.55, 1.0, sw)) * 0.8);
+        vec2 s2 = vec2((mod(lon * 1.0 + 5.2, 6.28318) - 3.14159) * 3.2, (lat - 0.52) * 11.0);
+        alb = mix(alb, vec3(1.0, 0.97, 0.9) * (0.7 + 0.3 * col), (1.0 - smoothstep(0.5, 1.0, length(s2))) * 0.6);
+        alb *= 1.0 - 0.3 * smoothstep(1.0, 1.45, abs(lat));   // darker, bluer poles
+        air = 0.35;
+      } else if (col.b > col.r) { // an ocean world: deep and shallow seas, bare land with mountains, weather, ice at the poles
+        float h0 = fbm3(P * sc + sd), h1 = fbm3((P + T1 * e) * sc + sd), h2 = fbm3((P + T2 * e) * sc + sd);
+        float land = smoothstep(0.515, 0.535, h0), up = smoothstep(0.535, 0.72, h0);
+        vec3 sea = mix(col * 0.34, col * 0.9, smoothstep(0.3, 0.52, h0));
+        float dry = fbm3(P * 3.1 + sd + 7.0);
+        vec3 ground = mix(vec3(0.46, 0.4, 0.27), vec3(0.62, 0.5, 0.33), dry);
+        ground = mix(ground, vec3(0.34, 0.3, 0.26), up);
+        ground *= 0.86 + 0.28 * vnoise3(P * 17.0 + sd);
+        alb = mix(sea, ground, land);
+        nb = normalize(nrm - (t1 * (h1 - h0) + t2 * (h2 - h0)) * (land * 0.9 / e));
+        float cap = smoothstep(1.02, 1.16, abs(lat) + 0.22 * (dry - 0.5));
+        alb = mix(alb, vec3(0.9, 0.94, 0.97), cap);
+        // weather: one layer of cloud drifting a little faster than the ground, swirled, with its shadow on the surface
+        vec3 Pc = vec3(P.x * cos(uT * 0.012) + P.z * sin(uT * 0.012), P.y, P.z * cos(uT * 0.012) - P.x * sin(uT * 0.012));
+        vec3 wq = Pc * vec3(2.2, 3.6, 2.2) + sd * 1.3; wq += 0.9 * vec3(fbm3(wq + 3.1), 0.0, fbm3(wq - 5.2));
+        cloud = smoothstep(0.5, 0.74, fbm3(wq)) * 0.92;
+        vec3 Ls = vec3(Ld.x * cr + Ld.z * sr, Ld.y, Ld.z * cr - Ld.x * sr), ws = (Pc + Ls * 0.05) * vec3(2.2, 3.6, 2.2) + sd * 1.3;
+        float shadow = smoothstep(0.5, 0.74, fbm3(ws + 0.9 * vec3(fbm3(ws + 3.1), 0.0, fbm3(ws - 5.2))));
+        alb *= 1.0 - 0.32 * shadow * (1.0 - cloud);
+        spec = (1.0 - land) * (1.0 - cap) * (1.0 - cloud);
+        air = 1.0;
+      } else {                  // rocky and dry: ochre plains, dark provinces, old craters, a little frost at the poles
+        vec2 sp = vec2(lon, lat) * vD.x;
+        float pf = 1.0 - smoothstep(0.95, 1.3, abs(lat));
+        float h0 = rockGround(P * sc + sd, sp, pf), h1 = rockGround((P + T1 * e) * sc + sd, sp + vec2(e, 0.0) * vD.x, pf), h2 = rockGround((P + T2 * e) * sc + sd, sp + vec2(0.0, e) * vD.x, pf);
+        nb = normalize(nrm - (t1 * (h1 - h0) + t2 * (h2 - h0)) * (0.4 / e));
+        float dark = smoothstep(0.5, 0.64, fbm3(P * 1.5 + sd + 9.0));
+        alb = col * (0.62 + 0.75 * h0) * mix(vec3(1.0), vec3(0.7, 0.67, 0.7), dark);
+        alb *= 0.9 + 0.2 * vnoise3(P * 19.0 + sd);
+        alb = mix(alb, vec3(0.9, 0.9, 0.92), smoothstep(1.12, 1.24, abs(lat) + 0.2 * (h0 - 0.5)) * 0.8);
+        air = 0.18;
+      }
+      alb = mix(col, alb, detail); nb = normalize(mix(nrm, nb, detail));
     }
-    alb = mix(col, alb, detail);
     float lit = smoothstep(2.5, 7.0, R);   // a world only a few pixels across is drawn as a plain bright dot
-    vec3 shade = alb * mix(1.0, 0.035 + 1.1 * lam, lit);
-    if (typ > 1.5 && typ < 3.5 || typ < 1.5 && col.b > col.r)   // an atmosphere: a thin bright rim on the day side
-      shade += col * pow(1.0 - nrm.z, 3.0) * smoothstep(-0.1, 0.5, dot(nrm, Ld)) * 0.35 * lit * detail;
-    float crust = vnoise(n2 * 5.0 + vD.z * 1.7);
-    shade += vec3(1.0, 0.36 + 0.3 * crust, 0.08) * vC.w * (0.35 + 0.6 * crust);       // molten after a giant impact
+    float day = dot(nrm, Ld), lam = max(dot(nb, Ld), 0.0) * smoothstep(-0.08, 0.22, day);
+    vec3 shade = alb * mix(1.0, 0.03 + 1.12 * lam, lit);
+    // cloud tops catch the light on the smooth sphere, not on the ground's relief; the sea glints toward the star
+    float lamS = max(day, 0.0);
+    shade = mix(shade, vec3(0.97, 0.98, 1.0) * mix(1.0, 0.04 + 1.1 * lamS, lit), cloud * detail);
+    shade += vec3(1.0, 0.95, 0.85) * pow(max(dot(nrm, normalize(Ld + vec3(0.0, 0.0, 1.0))), 0.0), 70.0) * 0.75 * spec * detail * lit;
+    // an atmosphere: the limb brightens on the day side and reddens where the sun is setting
+    float rim = pow(1.0 - nrm.z, 3.0), haze = air * lit * detail;
+    vec3 sky = typ < 1.5 ? mix(vec3(0.42, 0.62, 1.0), col, 0.25) : col;
+    shade += sky * rim * smoothstep(-0.15, 0.5, day) * 0.5 * haze;
+    shade = mix(shade, shade * vec3(1.25, 0.8, 0.6), air * detail * (1.0 - smoothstep(0.0, 0.3, abs(day))) * 0.5);
+    // molten after a giant impact: a glowing magma ocean that skins over with dark crust, bright along the cracks
+    if (vC.w > 0.0) {
+      float hot = vC.w, big = smoothstep(4.0, 12.0, R);
+      float flow = fbm3(P * 2.4 + sd + vec3(0.0, uT * 0.02, 0.0));
+      float crack = pow(1.0 - abs(2.0 * fbm3(P * 3.6 + sd * 0.7) - 1.0), 7.0);
+      float temp = clamp(hot * (0.3 + 0.62 * flow) + crack * (0.2 + 0.5 * hot) - (1.0 - hot) * 0.4, 0.0, 1.0);
+      temp = mix(hot * 0.7, temp, big);
+      vec3 lava = vec3(1.0, 0.07 + 0.5 * temp * temp, 0.01 + 0.1 * pow(temp, 4.0)) * (0.04 + 0.95 * pow(temp, 1.4)) * (0.5 + 0.5 * nrm.z);
+      float crust = smoothstep(0.0, 0.35, hot);   // the old surface is gone: dark fresh rock wherever the glow has faded
+      shade = mix(shade, vec3(0.075, 0.06, 0.058) * (0.5 + 0.9 * fbm3(P * 6.0 + sd)) * (0.25 + lam), crust) + lava * crust;
+    }
     float t0 = d / vA.w;
-    float halo = (1.0 - smoothstep(0.55, 1.0, t0)) * (0.10 + 0.5 * vC.w);
-    o = vec4(shade * dp + mix(col, vec3(1.0, 0.5, 0.2), min(vC.w, 1.0)) * halo * (1.0 - dp) * max(lam + 0.25, 0.3), dp);
+    float halo = (1.0 - smoothstep(0.55, 1.0, t0)) * (0.10 + 0.5 * vC.w) + (1.0 - smoothstep(1.0, 1.0 + 0.09 * air + 1e-4, sqrt(r2))) * 0.45 * air * detail;
+    o = vec4(shade * dp + mix(mix(col, sky, air), vec3(1.0, 0.5, 0.2), min(vC.w, 1.0)) * halo * (1.0 - dp) * max(max(day, 0.0) + 0.25, 0.3), dp);
     return;
   }
   // A star. Its temperature, from its colour: 0 hot and blue, 1 cool and red.

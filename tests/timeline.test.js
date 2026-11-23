@@ -54,14 +54,14 @@ test('a star feeding a hole: rewound into the gas stream, it replays exactly', a
 });
 
 test('Moon-forming impact: rewound to before the impact, it strikes again the same way', async () => {
-  const r = await replay('theia', 42, 420, 540);   // they collide at frame 442
+  const r = await replay('theia', 42, 570, 690);   // they collide at about frame 604
   assert.ok(r.evB.includes('Giant impact'), `expected the impact between A and B, got ${r.evB}`);
   assert.ok(r.atB.qN > 100, `expected loose debris, got ${r.atB.qN}`);
   assertReplay(r, 'theia before the impact');
 });
 
-test('Moon-forming impact: rewound into the debris cloud, the loose matter replays exactly', async () => {
-  const r = await replay('theia', 42, 480, 600);
+test('Moon-forming impact: rewound into the debris cloud, the loose matter and the two flung pieces replay exactly', async () => {
+  const r = await replay('theia', 42, 630, 750);
   assert.ok(r.atA.qN > 100, `expected loose debris at the restored moment, got ${r.atA.qN}`);
   assertReplay(r, 'theia debris');
 });

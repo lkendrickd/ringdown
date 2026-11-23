@@ -30,7 +30,7 @@ const TRY = [
   { id:'supernova', t:'Make a star go supernova', d:'A Betelgeuse-like red supergiant', hint:'Press Go supernova in the inspector: the iron core collapses, bounces, and blows the envelope off.',
     go() { obScene('betelgeuse'); if (bodies[0]) { followId = bodies[0].id; renderMoveCtx(true); } } },
   { id:'rings', t:'Give a planet rings', d:'A moon strays inside Saturn’s Roche limit', hint:'Inside the Roche limit tides beat the moon’s own gravity, and its pieces spread into a ring.', go() { obScene('saturn'); } },
-  { id:'impact', t:'Replay the Moon-forming impact', d:'Theia strikes the young Earth', hint:'After the hit, try 16× or 64×: the debris can gather into one Moon in a few minutes.', go() { obScene('theia'); } },
+  { id:'impact', t:'Replay the Moon-forming impact', d:'Theia grazes the young Earth', hint:'A glancing hit: Theia’s remnant swings out and falls back, and slings a chunk into orbit on the way. Try 16× to watch that chunk settle as the Moon.', go() { obScene('theia'); } },
   { id:'star', t:'Build a star from raw matter', d:'Pour out gas and let it fall together', hint:'Hold and drag in the middle of the view. Past 0.075 M☉ a clump ignites as a star.',
     go() { matterRate = 0; obScene('empty', 'matter'); } },
   { id:'sgra', t:'Feed a star to Sgr A*', d:'The Milky Way’s 4.3 million M☉ hole', hint:'A Sun-like star is picked: drag from out past the S-stars toward the hole to throw it in, whole or torn apart.', go() { obScene('sgra', 'G'); } },

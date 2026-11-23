@@ -3,7 +3,7 @@
    step() run a scene on a fixed clock with a fixed frame time, so the same calls play out the same scene. */
 const rdPin = [3200, MAT0];
 if (/[?&]rdtest(=|&|$)/.test(location.search)) window.__rd = {
-  riscoM, eIsco, rocheFrac, ringFor, remnantFit, wdRadius, M_CH, KR, KM_PER_UNIT, SIM2REAL,
+  G, riscoM, eIsco, rocheFrac, ringFor, remnantFit, wdRadius, M_CH, KR, KM_PER_UNIT, SIM2REAL,
   presets: Object.keys(PRESETS), makeBH, makeStar, mergeWhiteDwarfs, snapshot, restore, encodeState, decodeState, rand, reseed,
   get seed() { return rngS; },
   get bodies() { return bodies; }, get gN() { return gN; }, get qN() { return qN; }, get simTime() { return simTime; }, get gl() { return gl; }, get glLost() { return glLost; },

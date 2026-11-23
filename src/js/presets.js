@@ -113,15 +113,19 @@ const PRESETS = {
       let px = 0, py = 0, pz = 0; for (const b of bodies) if (b !== sun) { px += b.m * b.vx; py += b.m * b.vy; pz += b.m * b.vz; }
       sun.vx = -px / sun.m; sun.vy = -py / sun.m; sun.vz = -pz / sun.m;
     } },
-  theia:    { name:'Giant impact · how the Moon formed', extent: 8.5 * 6371 / KM_PER_UNIT, real:true, orbits:true, warp: 600 / SIM2REAL,
-    // a Mars-sized world, Theia, strikes the young Earth off-centre at just over escape speed. One screen second is 10 minutes:
-    // the impact takes a few seconds, the disk a few minutes to gather (use the speed button).
+  theia:    { name:'Giant impact · how the Moon formed', extent: 9 * 6371 / KM_PER_UNIT, real:true, orbits:true, warp: 600 / SIM2REAL,
+    // a Mars-sized world, Theia, grazes the young Earth: 0.133 on 0.887 Earth masses, 45° off head-on, at their mutual escape
+    // speed (the base run of Kegerreis et al. 2022). One screen second is 10 minutes: the hit takes a few seconds, the
+    // remnant falls back within hours and the chunk it slings out settles on its orbit within a day (use the speed button).
+    // (Aimed 42.7° and 3.7% fast by the two-body formula: gravity here is softened at close range, which by first contact
+    // has added about 2° and taken that speed back off.)
     build() {
-      const e = world('ROCK', 'Proto-Earth', 0.9 * 5.972e24, 0, [118,150,196]), th = world('ROCK', 'Theia', 0.13 * 5.972e24, 0, [204,122,92]);
-      const Rc = e.R + th.R, GM = G * (e.m + th.m), vc = 1.08 * Math.sqrt(2 * GM / Rc), L = Rc * vc * Math.sin(40 * Math.PI / 180), r0 = 6.5 * e.R;
+      const e = world('ROCK', 'Proto-Earth', 0.887 * 5.972e24, 0, [118,150,196]), th = world('ROCK', 'Theia', 0.133 * 5.972e24, 0, [204,122,92]);
+      const Rc = e.R + th.R, GM = G * (e.m + th.m), vc = 1.037 * Math.sqrt(2 * GM / Rc), L = Rc * vc * Math.sin(42.7 * Math.PI / 180), r0 = 6.5 * e.R;
       const v0 = Math.sqrt(vc * vc - 2 * GM * (1 / Rc - 1 / r0)), vt = L / r0, vr = Math.sqrt(Math.max(0, v0 * v0 - vt * vt));
-      th.x = -r0; th.vx = vr; th.vy = vt;
-      e.vx = -th.vx * th.m / e.m; e.vy = -th.vy * th.m / e.m;
+      const fe = e.m / (e.m + th.m), ft = 1 - fe;   // vr and vt are Theia's speed relative to the Earth: share it out so the pair as a whole stays put
+      th.x = -r0; th.vx = vr * fe; th.vy = vt * fe;
+      e.vx = -vr * ft; e.vy = -vt * ft;
       bodies.push(e, th);
     } },
   saturn:   { name:'Rings · a moon strays inside the Roche limit', extent: 3.4 * 58232 / KM_PER_UNIT, real:true, orbits:true, tilt: 58, warp: 6000 / SIM2REAL,

@@ -441,7 +441,7 @@ function announceBirth(b) {
    Small solid bodies have some strength and survive a little deeper. The pieces keep the orbit: a ring. */
 function planetTides(dt) {
   for (const p of bodies.slice()) {
-    if (!isPlanet(p) || p.sn) continue;
+    if (!isPlanet(p) || p.sn || p.remnant || p.sling) continue;   // the two pieces of a grazing impact are still molten and in flight
     let host = null, best = 0;
     for (const o of bodies) {
       if (o === p || o.m < 3 * p.m) continue;
@@ -468,11 +468,11 @@ function planetPairs() {
   for (let i = 0; i < bodies.length; i++) {
     const a = bodies[i]; if (!isPlanet(a)) continue;
     for (let j = i + 1; j < bodies.length; j++) {
-      const b = bodies[j]; if (!isPlanet(b) || Math.min(a.m, b.m) < 0.02 * Math.max(a.m, b.m)) continue;   // peers only: a moon close to its planet is the Roche limit's business
+      const b = bodies[j]; if (!isPlanet(b) || Math.min(a.m, b.m) < 0.02 * Math.max(a.m, b.m) || a.remnant || a.sling || b.remnant || b.sling) continue;   // peers only: a moon close to its planet is the Roche limit's business
       const d = sepOf(a, b);
       if (d > 3 * (a.R + b.R)) continue;
       const vx = b.vx - a.vx, vy = b.vy - a.vy, vz = b.vz - a.vz;
-      if (0.5 * (vx * vx + vy * vy + vz * vz) - G * (a.m + b.m) / d >= 0) continue;
+      if (0.5 * (vx * vx + vy * vy + vz * vz) - G * (a.m + b.m) / d >= -0.1 * G * (a.m + b.m) / d) continue;   // clearly bound: not two worlds meeting for the first time at about escape speed
       const big = a.m >= b.m ? a : b, small = big === a ? b : a, M = a.m + b.m;
       zmix(big, a, b);
       big.x = (a.x * a.m + b.x * b.m) / M; big.y = (a.y * a.m + b.y * b.m) / M;
@@ -490,10 +490,11 @@ function nameTheMoon() {
   if (currentPreset !== 'theia' || bodies.some(b => b.label === 'Moon')) return;
   const earth = bodies.find(b => b.label === 'Proto-Earth'); if (!earth) return;
   const moons = bodies.filter(b => isPlanet(b) && b !== earth && !b.label).sort((p, q) => q.m - p.m);
-  if (!moons.length || moons[0].m < 0.5 * 3.694e-8 || (moons[1] && moons[1].m > 0.25 * moons[0].m)) return;
-  const m = moons[0]; m.label = 'Moon'; m.moonOf = earth.id; m.col = [200, 196, 188];
+  if (!moons.length || moons[0].sling || moons[0].m < 0.5 * 3.694e-8 || (moons[1] && moons[1].m > 0.25 * moons[0].m)) return;
+  const m = moons[0], flung = m.flung; m.label = 'Moon'; m.moonOf = earth.id; m.col = [200, 196, 188];
   toast('A Moon', [`${(m.m / 3.694e-8).toFixed(2)} times the mass of the real Moon, ${(Math.hypot(m.x - earth.x, m.y - earth.y) * KM_PER_UNIT / 6371).toFixed(1)} Earth radii out`,
-    'The real one is thought to have gathered at 3 to 5 Earth radii within months to years, and has been drifting outward ever since, 3.8 cm a year today.'], 'w');
+    flung ? 'It came out of the impact in one piece and was on this orbit within a day, as in the 2022 supercomputer runs. The older picture has the Moon gather from a debris disk at 3 to 5 Earth radii over months to years. Either way it has drifted outward ever since, 3.8 cm a year today.'
+      : 'The real one is thought to have gathered at 3 to 5 Earth radii within months to years (or, in recent supercomputer runs, to have been flung out whole within hours), and has been drifting outward ever since, 3.8 cm a year today.'], 'w');
 }
 function ringFrom(p, host, r) {
   const N = Math.min(Math.round(clamp(500 + 160 * Math.log10(p.m / 1e-12), 300, 1500)) * qScale, Q.mat - qN);
@@ -511,8 +512,31 @@ function ringFrom(p, host, r) {
   computeAccel();
 }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+/* The chunk a grazing impact slings out (see planetImpact). In the full fluid simulations the impactor's remnant, swinging
+   past underneath, pulls the chunk forward and so lifts it onto a wide orbit; later the pull reverses and rounds the orbit
+   off. A few thousand grains cannot resolve that, so it is done by hand here: a forward push until the chunk has the
+   angular momentum of a circular orbit 7.5 planet radii out, then its in-and-out motion is damped away. */
+function slingshots(dt) {
+  if (dt <= 0) return;
+  for (const b of bodies) {
+    const s = b.sling; if (!s) continue;
+    const h = bodies.find(o => o.id === s.host); if (!h) { b.sling = null; continue; }
+    const dx = b.x - h.x, dy = b.y - h.y, r = Math.hypot(dx, dy) || 1e-9, ux = dx / r, uy = dy / r;
+    const vx = b.vx - h.vx, vy = b.vy - h.vy, GM = G * (h.m + b.m), hz = s.sg * (dx * vy - dy * vx);
+    if (!s.up && hz < s.h) { const dv = 0.2 * GM / (r * r) * dt * s.sg; b.vx -= uy * dv; b.vy += ux * dv; continue; }
+    s.up = 1;
+    const vr = vx * ux + vy * uy, k = 1 - Math.exp(-dt / (0.8 * Math.sqrt(r * r * r / GM)));
+    b.vx -= ux * vr * k; b.vy -= uy * vr * k;
+    const E = 0.5 * (vx * vx + vy * vy) - GM / r;
+    if (E < 0 && 1 - hz * hz * -2 * E / (GM * GM) < 0.05 * 0.05) b.sling = null;   // eccentricity under 0.05: it has arrived
+  }
+}
 /* Two planets collide. Slow or head-on, they simply merge. Fast or glancing, part of the smaller one is thrown
-   off as molten debris, some of it into orbit: this is how the Moon is thought to have formed. */
+   off as molten debris, some of it into orbit: this is how the Moon is thought to have formed.
+   One case is special: a world about a tenth of the planet's mass grazing it near 45 degrees at about escape speed.
+   Supercomputer runs of that hit (Kegerreis et al. 2022, 100 million particles) do not end in a disk alone. The
+   impactor is drawn out into an arm that gathers into two pieces: an inner remnant that swings out and falls back onto
+   the planet within hours, and an outer chunk of about 0.7 lunar masses that the remnant slings onto a wide orbit. */
 function planetImpact(a, b) {
   const big = a.m >= b.m ? a : b, small = big === a ? b : a, M = a.m + b.m;
   const dx = small.x - big.x, dy = small.y - big.y, dz = small.z - big.z, r = (zOn ? Math.hypot(dx, dy, dz) : Math.hypot(dx, dy)) || 1e-9;
@@ -524,14 +548,16 @@ function planetImpact(a, b) {
   const kms = vc * KM_PER_UNIT / SIM2REAL;
   let f = clamp(sinT * (0.3 + 0.5 * x) + 0.1 * x * x, 0, 0.9);
   f *= big.real ? clamp((kms - 3) / 4, 0, 1) : 0.5;   // gentle bumps between small bodies just stick
-  let N = Math.min(Math.round(80 + 900 * f), Q.mat - qN);   // never more grains on a bigger budget: four times as many gather into a smaller Moon
-  const md = f * small.m;
+  const graze = big.real && !small.remnant && small.m > 0.05 * big.m && small.m < 0.3 * big.m && sinT > 0.6 && sinT < 0.8 && vc > 0.9 * vesc && vc < 1.15 * vesc;
+  let N = Math.min(Math.round(graze ? 260 : 80 + 900 * f), Q.mat - qN);   // never more grains on a bigger budget: four times as many gather into a smaller Moon
+  const md = graze ? 0.045 * small.m : f * small.m;   // a grazing hit keeps most of what it throws off in the two pieces
   if (md < 2e-4 * M || N < 12) { N = 0; }
-  const keep = small.m - (N ? md : 0), Mn = big.m + keep;
+  const mRem = graze ? 0.2 * small.m : 0, mSat = graze ? 0.064 * small.m : 0;   // of Theia: a remnant of 2.2 lunar masses, a chunk of 0.69
+  const keep = small.m - (N ? md : 0) - mRem - mSat, Mn = big.m + keep;
   const cx = (big.x * big.m + small.x * keep) / Mn, cy = (big.y * big.m + small.y * keep) / Mn;
   const cvx = (big.vx * big.m + small.vx * keep) / Mn, cvy = (big.vy * big.m + small.vy * keep) / Mn;
   const cz = (big.z * big.m + small.z * keep) / Mn, cvz = (big.vz * big.m + small.vz * keep) / Mn;   // debris spreads level with the impact, parallel to the plane
-  const names = [cap(bodyName(small)), bodyName(big)];
+  const names = [cap(bodyName(small)), bodyName(big)], was = small.label, wasCol = small.col;
   big.x = cx; big.y = cy; big.vx = cvx; big.vy = cvy; big.z = cz; big.vz = cvz; big.m = Mn;
   bodies = bodies.filter(o => o !== small);
   if (followId === small.id) followId = big.id;
@@ -541,9 +567,21 @@ function planetImpact(a, b) {
     reached('impact');
     big.hot = wallNow;
     const sg = Lz >= 0 ? 1 : -1, phi = Math.atan2(dy, dx), Rm = big.R, GM = G * Mn;
+    // a piece of the impactor, launched downrange: distance (planet radii), angle past the point of impact, speed outward and round
+    const piece = (m, rho, da, vrK, vtK) => {
+      const ang = phi + sg * da, ux = Math.cos(ang), uy = Math.sin(ang), vK = Math.sqrt(GM / (rho * Rm));
+      const p = makeStar('MOON', cx + ux * rho * Rm, cy + uy * rho * Rm, cvx + ux * vrK * vK - uy * vtK * vK * sg, cvy + uy * vrK * vK + ux * vtK * vK * sg, m);
+      p.z = cz; p.vz = cvz; p.hot = wallNow; bodies.push(p); return p;
+    };
+    if (graze) {
+      const rem = piece(mRem, 2.0, 1.0, 0.72, 0.72); rem.remnant = true; rem.col = wasCol; if (was) rem.label = was + ' remnant';   // out to 3.5 radii, then back down onto the planet
+      const sat = piece(mSat, 3.0, 1.45, 0.5, 0.95); sat.flung = true; sat.col = [226, 170, 120];
+      sat.sling = { host: big.id, h: Math.sqrt(GM * 7.5 * Rm), sg, up: 0 };
+    }
     for (let k = 0; k < N; k++) {
-      const rho = Rm * (1.25 + 2.3 * Math.pow(rand(), 1.3));
-      const ang = phi + sg * (-0.3 + 2.6 * rand());
+      const u = rand();
+      const rho = Rm * (graze ? 1.15 + 2.3 * u + 0.25 * (rand() - 0.5) : 1.25 + 2.3 * Math.pow(u, 1.3));   // a grazing hit draws the debris out into an arm, from the planet to the two pieces
+      const ang = phi + sg * (graze ? -0.1 + 1.7 * u + 0.35 * (rand() - 0.5) : -0.3 + 2.6 * rand());
       const ux = Math.cos(ang), uy = Math.sin(ang), vc = Math.sqrt(GM / rho);
       const vt = vc * (0.82 + 0.36 * rand()) * sg, vr = vc * 0.2 * (rand() - 0.3);
       if (addMatter(cx + ux * rho, cy + uy * rho, cvx - uy * vt + ux * vr, cvy + ux * vt + uy * vr, md / N, 1, 0, cz, cvz)) qk[qN - 1] = qScale;   // each counts as qScale grains
@@ -551,7 +589,8 @@ function planetImpact(a, b) {
     flashes.push({ x: cx, y: cy, z: cz, t0: wallNow, dur: 2600, scale: big.R / 30 });
     shake = wallNow;
     toast('Giant impact', [`${names[0]} struck ${names[1]} at ${kms >= 1 && big.real ? kms.toFixed(1) + ' km/s' : (vc / vesc).toFixed(1) + '× escape speed'}, ${Math.round(Math.asin(sinT) * 57.3)}° off head-on`,
-      `${Math.round(f * 100)}% of it was thrown off as molten debris. What falls back rejoins the planet; what stays in orbit beyond the Roche limit can gather into a moon.`], 'w');
+      graze ? `A grazing hit at about escape speed. Most of ${names[0]} sinks into the planet; the rest is drawn out into an arm. Its inner piece will fall back within hours, and on the way it slings the outer chunk (${(mSat / 3.694e-8).toFixed(2)} lunar masses) onto a wide orbit.`
+        : `${Math.round(f * 100)}% of it was thrown off as molten debris. What falls back rejoins the planet; what stays in orbit beyond the Roche limit can gather into a moon.`], 'w', graze ? { id: 'graze' } : undefined);
   } else toast('Worlds merge', [`${names[0]} merged into ${names[1]} · now ${massStr(Mn)}`]);
 }
 /* Magnetars. A neutron star with a field near 10^11 tesla, a thousand times a pulsar's. The field strains the crust
