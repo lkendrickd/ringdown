@@ -182,9 +182,9 @@ void main(){
     // cloud tops catch the light on the smooth sphere, not on the ground's relief; the sea glints toward the star
     float lamS = max(day, 0.0);
     shade = mix(shade, vec3(0.97, 0.98, 1.0) * mix(1.0, 0.04 + 1.1 * lamS, lit), cloud * detail);
-    shade += vec3(1.0, 0.95, 0.85) * pow(max(dot(nrm, normalize(Ld + vec3(0.0, 0.0, 1.0))), 0.0), 70.0) * 0.75 * spec * detail * lit;
+    shade += vec3(1.0, 0.95, 0.85) * pow(max(dot(nrm, normalize(Ld + vec3(0.0, 0.0, 1.0))), 1e-6), 70.0) * 0.75 * spec * detail * lit;
     // an atmosphere: the limb brightens on the day side and reddens where the sun is setting
-    float rim = pow(1.0 - nrm.z, 3.0), haze = air * lit * detail;
+    float rz = 1.0 - nrm.z, rim = rz * rz * rz, haze = air * lit * detail;
     vec3 sky = typ < 1.5 ? mix(vec3(0.42, 0.62, 1.0), col, 0.25) : col;
     shade += sky * rim * smoothstep(-0.15, 0.5, day) * 0.5 * haze;
     shade = mix(shade, shade * vec3(1.25, 0.8, 0.6), air * detail * (1.0 - smoothstep(0.0, 0.3, abs(day))) * 0.5);
@@ -192,10 +192,13 @@ void main(){
     if (vC.w > 0.0) {
       float hot = vC.w, big = smoothstep(4.0, 12.0, R);
       float flow = fbm3(P * 2.4 + sd + vec3(0.0, uT * 0.02, 0.0));
-      float crack = pow(1.0 - abs(2.0 * fbm3(P * 3.6 + sd * 0.7) - 1.0), 7.0);
+      // no pow() on these: some drivers (AMD on Linux, seen on a Radeon 780M) let the clamped temperature come out a
+      // hair below zero, pow() of that is NaN, and the bloom smears each NaN pixel into a flashing black square
+      float cb = 1.0 - abs(2.0 * fbm3(P * 3.6 + sd * 0.7) - 1.0), cb2 = cb * cb, crack = cb2 * cb2 * cb2 * cb;
       float temp = clamp(hot * (0.3 + 0.62 * flow) + crack * (0.2 + 0.5 * hot) - (1.0 - hot) * 0.4, 0.0, 1.0);
       temp = mix(hot * 0.7, temp, big);
-      vec3 lava = vec3(1.0, 0.07 + 0.5 * temp * temp, 0.01 + 0.1 * pow(temp, 4.0)) * (0.04 + 0.95 * pow(temp, 1.4)) * (0.5 + 0.5 * nrm.z);
+      float t2 = temp * temp, glowT = exp2(1.4 * log2(max(temp, 1e-6)));   // temp^1.4 with the base kept positive
+      vec3 lava = vec3(1.0, 0.07 + 0.5 * t2, 0.01 + 0.1 * t2 * t2) * (0.04 + 0.95 * glowT) * (0.5 + 0.5 * nrm.z);
       float crust = smoothstep(0.0, 0.35, hot);   // the old surface is gone: dark fresh rock wherever the glow has faded
       shade = mix(shade, vec3(0.075, 0.06, 0.058) * (0.5 + 0.9 * fbm3(P * 6.0 + sd)) * (0.25 + lam), crust) + lava * crust;
     }
